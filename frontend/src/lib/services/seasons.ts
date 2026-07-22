@@ -28,15 +28,39 @@ export async function createSeason(input: { name: string; startDate: string; end
   if (!input.startDate || !input.endDate) throw new Error("Season start and end dates are required.")
   if (input.endDate < input.startDate) throw new Error("Season end date must be on or after the start date.")
 
-  const { data, error } = await supabase.rpc("create_season", {
-    p_name: name,
-    p_start_date: input.startDate,
-    p_end_date: input.endDate,
-    p_make_active: input.makeActive,
-  })
-  if (error) throw error
-  if (!data) throw new Error("The season was not created. Supabase returned no season ID.")
-  return data as string
+  const { organizationId, userId, role } = await getCurrentOrganizationContext()
+  if (role !== "owner" && role !== "admin") {
+    throw new Error(`Your organization role is '${role}'. Only an owner or administrator can create a season.`)
+  }
+
+  if (input.makeActive) {
+    const { error: closeError } = await supabase
+      .from("seasons")
+      .update({ status: "closed", closed_at: new Date().toISOString(), closed_by: userId })
+      .eq("organization_id", organizationId)
+      .eq("status", "active")
+    if (closeError) throw closeError
+  }
+
+  const { data, error } = await supabase
+    .from("seasons")
+    .insert({
+      organization_id: organizationId,
+      name,
+      start_date: input.startDate,
+      end_date: input.endDate,
+      status: input.makeActive ? "active" : "planning",
+      created_by: userId,
+    })
+    .select("id")
+    .single()
+
+  if (error) {
+    if (error.code === "23505") throw new Error(`A season named '${name}' already exists.`)
+    throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}`)
+  }
+  if (!data?.id) throw new Error("The season was not created. Supabase returned no season ID.")
+  return data.id as string
 }
 
 export async function activateSeason(id: string) {

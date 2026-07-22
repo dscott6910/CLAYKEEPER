@@ -28,6 +28,7 @@ export function SeasonImportPage() {
   const [skeetEntryFee, setSkeetEntryFee] = useState("130")
   const [sportingEntryFee, setSportingEntryFee] = useState("130")
   const [organizationFee, setOrganizationFee] = useState("0")
+  const [seasonError, setSeasonError] = useState("")
 
   async function refresh() {
     setLoading(true)
@@ -71,6 +72,7 @@ export function SeasonImportPage() {
 
   async function handleCreateSeason() {
     setBusy(true)
+    setSeasonError("")
     try {
       const id = await createSeason({ name: seasonName, startDate: seasonStart, endDate: seasonEnd, makeActive: makeSeasonActive })
       const updated = await listSeasons()
@@ -78,7 +80,9 @@ export function SeasonImportPage() {
       setSeasonId(id)
       toast.success(`${seasonName} created`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to create season")
+      const message = error instanceof Error ? error.message : "Unable to create season"
+      setSeasonError(message)
+      toast.error(message)
     } finally { setBusy(false) }
   }
 
@@ -138,6 +142,11 @@ export function SeasonImportPage() {
               <input type="checkbox" checked={makeSeasonActive} onChange={(e) => setMakeSeasonActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
               Make this the active season immediately
             </label>
+            {seasonError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <strong>Season creation failed:</strong> {seasonError}
+              </div>
+            )}
             <div className="mt-5 grid gap-3 lg:grid-cols-3">
               {loading ? <p className="text-sm text-slate-500">Loading seasons…</p> : seasons.length === 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-3">No seasons are available yet. Create one above. If creation fails, ClayKeeper will now show the exact Supabase error.</div> : seasons.map((season) => (
                 <div key={season.id} className="rounded-xl border border-slate-200 p-4">
