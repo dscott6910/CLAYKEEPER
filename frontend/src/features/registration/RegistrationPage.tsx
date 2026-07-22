@@ -53,8 +53,11 @@ type AthleteRecord = {
   first_name: string | null
   last_name: string | null
   preferred_name: string | null
-  membership_number: string | null
-  status: string | null
+  class_id: string | null
+  cyssa_number: string | null
+  ata_number: string | null
+  nssa_number: string | null
+  active: boolean | null
 }
 
 type TeamRecord = {
@@ -67,8 +70,15 @@ type ClassRecord = {
   id: string
   organization_id: string
   code: string
-  name: string
-  sort_order?: number | null
+  display_name: string
+  display_order: number | null
+}
+
+type AthleteTeamRecord = {
+  athlete_id: string
+  team_id: string
+  is_primary: boolean
+  end_date: string | null
 }
 
 type RegistrationRecord = {
@@ -231,6 +241,7 @@ export function RegistrationPage() {
   const [athletes, setAthletes] = useState<AthleteRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
+  const [athleteTeams, setAthleteTeams] = useState<AthleteTeamRecord[]>([])
 
   const [registrations, setRegistrations] = useState<
     RegistrationRecord[]
@@ -326,8 +337,14 @@ export function RegistrationPage() {
         ? athleteDisplayName(athlete).toLowerCase()
         : ""
 
-      const membershipNumber =
-        athlete?.membership_number?.toLowerCase() ?? ""
+      const membershipNumber = [
+        athlete?.cyssa_number,
+        athlete?.ata_number,
+        athlete?.nssa_number,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
 
       const registrationNumber =
         registration.registration_number?.toLowerCase() ?? ""
@@ -451,6 +468,7 @@ export function RegistrationPage() {
         athletesResponse,
         teamsResponse,
         classesResponse,
+        athleteTeamsResponse,
       ] = await Promise.all([
         supabase
           .from("events")
@@ -473,9 +491,17 @@ export function RegistrationPage() {
 
         supabase
           .from("classes")
-          .select("*")
+          .select("id,organization_id,code,display_name,display_order")
           .eq("organization_id", currentOrganizationId)
-          .order("code", { ascending: true }),
+          .eq("active", true)
+          .order("display_order", { ascending: true }),
+
+        supabase
+          .from("athlete_teams")
+          .select("athlete_id,team_id,is_primary,end_date")
+          .eq("organization_id", currentOrganizationId)
+          .eq("is_primary", true)
+          .is("end_date", null),
       ])
 
       if (eventsResponse.error) {
@@ -498,6 +524,14 @@ export function RegistrationPage() {
         throw new Error(
           `Teams could not be loaded: ${getErrorMessage(
             teamsResponse.error,
+          )}`,
+        )
+      }
+
+      if (athleteTeamsResponse.error) {
+        throw new Error(
+          `Athlete teams could not be loaded: ${getErrorMessage(
+            athleteTeamsResponse.error,
           )}`,
         )
       }
@@ -526,6 +560,9 @@ export function RegistrationPage() {
       setAthletes(athleteRows)
       setTeams(teamRows)
       setClasses(classRows)
+      setAthleteTeams(
+        (athleteTeamsResponse.data ?? []) as AthleteTeamRecord[],
+      )
 
       setSelectedEventId((currentEventId) => {
         if (
@@ -646,6 +683,20 @@ export function RegistrationPage() {
     setForm((currentForm) => ({
       ...currentForm,
       [field]: value,
+    }))
+  }
+
+  function selectAthlete(athleteId: string) {
+    const athlete = athletes.find((row) => row.id === athleteId)
+    const primaryTeam = athleteTeams.find(
+      (row) => row.athlete_id === athleteId && row.is_primary && !row.end_date,
+    )
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      athleteId,
+      teamId: primaryTeam?.team_id ?? "",
+      classId: athlete?.class_id ?? "",
     }))
   }
 
@@ -1079,7 +1130,7 @@ export function RegistrationPage() {
                   <select
                     value={form.athleteId}
                     onChange={(event) => {
-                      updateForm("athleteId", event.target.value)
+                      selectAthlete(event.target.value)
                     }}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   >
@@ -1088,8 +1139,8 @@ export function RegistrationPage() {
                     {athletes.map((athlete) => (
                       <option key={athlete.id} value={athlete.id}>
                         {athleteDisplayName(athlete)}
-                        {athlete.membership_number
-                          ? ` — ${athlete.membership_number}`
+                        {athlete.cyssa_number
+                          ? ` — CYSSA ${athlete.cyssa_number}`
                           : ""}
                       </option>
                     ))}
@@ -1131,7 +1182,7 @@ export function RegistrationPage() {
                           value={competitionClass.id}
                         >
                           {competitionClass.code} —{" "}
-                          {competitionClass.name}
+                          {competitionClass.display_name}
                         </option>
                       ))}
                     </select>
@@ -1444,9 +1495,9 @@ export function RegistrationPage() {
                               : "Unknown athlete"}
                           </div>
 
-                          {athlete?.membership_number ? (
+                          {athlete?.cyssa_number ? (
                             <div className="text-xs text-muted-foreground">
-                              {athlete.membership_number}
+                              CYSSA {athlete.cyssa_number}
                             </div>
                           ) : null}
                         </td>
@@ -1456,7 +1507,7 @@ export function RegistrationPage() {
 
                           <div className="text-xs text-muted-foreground">
                             {competitionClass
-                              ? `${competitionClass.code} — ${competitionClass.name}`
+                              ? `${competitionClass.code} — ${competitionClass.display_name}`
                               : "No class"}
                           </div>
                         </td>
