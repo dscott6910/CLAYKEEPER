@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { Link } from "react-router-dom"
 
 import { PageContainer } from "@/components/layout/PageContainer"
 import { supabase } from "@/lib/supabase"
@@ -673,6 +674,12 @@ export function EventsPage() {
                     </div>
 
                     <div className="flex shrink-0 flex-wrap gap-2">
+                      <Link
+                        to={`/events/${event.id}`}
+                        className="inline-flex min-h-10 items-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                      >
+                        Open Workspace
+                      </Link>
                       <button
                         type="button"
                         onClick={() => openEditEditor(event)}
