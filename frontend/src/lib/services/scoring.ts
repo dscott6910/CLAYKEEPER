@@ -39,7 +39,7 @@ export async function loadScoringBaseData() {
 export async function loadShootScoringData(organizationId: string, eventId: string, shootId: string) {
   const [squads, members, enrollments, registrations, athletes, teams, classes, scores, shootOffRounds, shootOffScores] = await Promise.all([
     supabase.from("squads").select("id, shoot_id, squad_number, name, house_number, course_name, station_name, status, sort_order").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
-    supabase.from("squad_members").select("id, squad_id, registration_shoot_id, position, position_label, status").eq("organization_id", organizationId).eq("shoot_id", shootId).not("status", "in", "(withdrawn,no_show)").order("position"),
+    supabase.from("squad_members").select("id, squad_id, registration_shoot_id, position, position_label, status").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
     supabase.from("registration_shoots").select("id, registration_id").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("registrations").select("id, athlete_id, team_id, class_id").eq("organization_id", organizationId).eq("event_id", eventId),
     supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),

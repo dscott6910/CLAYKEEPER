@@ -155,7 +155,7 @@ export function LiveScoringPage() {
   }
 
   const completedScores = data.scores.filter((score) => score.score !== null).length
-  const expectedScores = data.members.length * (selectedShoot?.number_of_rounds ?? 0)
+  const expectedScores = squadMembers.length * (selectedShoot?.number_of_rounds ?? 0)
 
   return (
     <div className="min-h-screen">
@@ -171,7 +171,7 @@ export function LiveScoringPage() {
           {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Live scoring could not load.</strong><p>{error}</p></div></div> : null}
 
           <section className="grid gap-3 sm:grid-cols-3">
-            <Stat icon={Users} label="Participants" value={data.members.length} />
+            <Stat icon={Users} label="Participants" value={squadMembers.length} />
             <Stat icon={CheckCircle2} label="Scores entered" value={`${completedScores} / ${expectedScores}`} />
             <Stat icon={Trophy} label="Shoot-offs" value={data.shootOffRounds.length} />
           </section>
