@@ -3,6 +3,7 @@ import {
   BarChart3,
   CalendarDays,
   ClipboardList,
+  DatabaseBackup,
   LayoutDashboard,
   School,
   Settings,
@@ -85,6 +86,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Live Leaderboard",
         path: "/leaderboard",
         icon: Tv,
+      },
+      {
+        label: "Seasons & Imports",
+        path: "/operations",
+        icon: DatabaseBackup,
       },
       {
         label: "Settings",

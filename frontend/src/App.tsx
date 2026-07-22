@@ -14,6 +14,7 @@ const RegistrationPage = lazy(() => import("@/features/registration/Registration
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })))
 const LeaderboardPage = lazy(() => import("@/features/reports/LeaderboardPage").then((module) => ({ default: module.LeaderboardPage })))
 const LiveScoringPage = lazy(() => import("@/features/scoring/LiveScoringPage").then((module) => ({ default: module.LiveScoringPage })))
+const SeasonImportPage = lazy(() => import("@/features/operations/SeasonImportPage").then((module) => ({ default: module.SeasonImportPage })))
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })))
 const SquadsPage = lazy(() => import("@/features/squads/SquadsPage").then((module) => ({ default: module.SquadsPage })))
 const TeamsPage = lazy(() => import("@/features/teams/TeamsPage").then((module) => ({ default: module.TeamsPage })))
@@ -53,6 +54,7 @@ function App() {
               <Route path="scoring" element={<LazyRoute><LiveScoringPage /></LazyRoute>} />
               <Route path="reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
               <Route path="leaderboard" element={<LazyRoute><LeaderboardPage /></LazyRoute>} />
+              <Route path="operations" element={<LazyRoute><SeasonImportPage /></LazyRoute>} />
               <Route path="settings" element={<LazyRoute><SettingsPage /></LazyRoute>} />
             </Route>
           </Route>
