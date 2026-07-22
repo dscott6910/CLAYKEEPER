@@ -17,6 +17,7 @@ import {
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
+import { supabase } from "@/lib/supabase"
 import {
   assignEnrollment,
   createSquad,
@@ -211,7 +212,7 @@ export function SquadsPage() {
         let target = currentSquads.find((squad) => (occupiedBySquad.get(squad.id)?.size ?? 0) < squad.capacity)
         if (!target) {
           const squadNumber = String(nextNumber++)
-          const { data, error: insertError } = await (await import("@/lib/supabase")).supabase
+          const { data, error: insertError } = await supabase
             .from("squads")
             .insert({
               organization_id: organizationId,
