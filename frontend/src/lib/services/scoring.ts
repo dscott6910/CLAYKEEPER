@@ -63,7 +63,7 @@ export async function saveRoundScore(params: { organizationId: string; eventId: 
 }
 
 export async function createShootOffRound(params: { organizationId: string; eventId: string; shootId: string; roundNumber: number }) {
-  const { error } = await supabase.from("shoot_off_rounds").insert({ ...params, label: `SO${params.roundNumber}` })
+  const { error } = await supabase.from("shoot_off_rounds").insert({ organization_id: params.organizationId, event_id: params.eventId, shoot_id: params.shootId, round_number: params.roundNumber, label: `SO${params.roundNumber}` })
   throwIfError(error)
 }
 export async function deleteShootOffRound(roundId: string) { const { error } = await supabase.from("shoot_off_rounds").delete().eq("id", roundId); throwIfError(error) }

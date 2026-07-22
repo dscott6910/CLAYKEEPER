@@ -134,6 +134,10 @@ export function LiveScoringPage() {
 
   async function addShootOff() {
     if (!selectedShoot) return
+    if (squadMembers.length < 2) {
+      toast.info("Shoot-offs require at least two participants in the selected squad.")
+      return
+    }
     const roundNumber = Math.max(0, ...data.shootOffRounds.map((round) => round.round_number)) + 1
     try { await createShootOffRound({ organizationId, eventId, shootId, roundNumber }); await loadShoot(); toast.success(`Shoot-off ${roundNumber} added.`) }
     catch (err) { toast.error(err instanceof Error ? err.message : "Shoot-off could not be added.") }
