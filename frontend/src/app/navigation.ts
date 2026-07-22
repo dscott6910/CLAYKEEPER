@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ClipboardList,
   DatabaseBackup,
+  Landmark,
   LayoutDashboard,
   School,
   Settings,
@@ -81,6 +82,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Reports",
         path: "/reports",
         icon: BarChart3,
+      },
+      {
+        label: "Treasurer Center",
+        path: "/treasurer",
+        icon: Landmark,
       },
       {
         label: "Live Leaderboard",
