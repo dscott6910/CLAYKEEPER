@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
-import { Archive, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, Upload, XCircle } from "lucide-react"
+import { Archive, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Upload, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import { importUsOpenWorkbook, parseUsOpenWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
-import { activateSeason, closeSeason, createSeason, listSeasons, type Season } from "@/lib/services/seasons"
+import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
 const input = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -29,6 +29,12 @@ export function SeasonImportPage() {
   const [sportingEntryFee, setSportingEntryFee] = useState("130")
   const [organizationFee, setOrganizationFee] = useState("0")
   const [seasonError, setSeasonError] = useState("")
+  const [closingSeason, setClosingSeason] = useState<Season | null>(null)
+  const [createNextSeason, setCreateNextSeason] = useState(true)
+  const [nextSeasonName, setNextSeasonName] = useState("2027 Season")
+  const [nextSeasonStart, setNextSeasonStart] = useState("2027-01-01")
+  const [nextSeasonEnd, setNextSeasonEnd] = useState("2027-12-31")
+  const [closeoutSummary, setCloseoutSummary] = useState<SeasonCloseoutSummary | null>(null)
 
   async function refresh() {
     setLoading(true)
@@ -87,11 +93,33 @@ export function SeasonImportPage() {
   }
 
   async function handleClose(season: Season) {
-    if (!window.confirm(`Close ${season.name}? Its events will be archived and become read-only in normal event workflows.`)) return
+    setClosingSeason(season)
+    setCloseoutSummary(null)
+    const year = Number(season.end_date.slice(0, 4)) + 1
+    setNextSeasonName(`${year} Season`)
+    setNextSeasonStart(`${year}-01-01`)
+    setNextSeasonEnd(`${year}-12-31`)
+  }
+
+  async function confirmCloseout() {
+    if (!closingSeason) return
     setBusy(true)
-    try { await closeSeason(season.id); await refresh(); toast.success(`${season.name} closed`) }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Unable to close season") }
-    finally { setBusy(false) }
+    try {
+      const summary = await closeSeasonAndRollover({
+        seasonId: closingSeason.id,
+        createNext: createNextSeason,
+        nextName: nextSeasonName,
+        nextStartDate: nextSeasonStart,
+        nextEndDate: nextSeasonEnd,
+      })
+      setCloseoutSummary(summary)
+      await refresh()
+      if (summary.nextSeasonId) setSeasonId(summary.nextSeasonId)
+      toast.success(createNextSeason ? `${closingSeason.name} closed and ${nextSeasonName} created` : `${closingSeason.name} closed`)
+      setClosingSeason(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to close season")
+    } finally { setBusy(false) }
   }
 
   async function handleActivate(season: Season) {
@@ -145,6 +173,37 @@ export function SeasonImportPage() {
             {seasonError && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                 <strong>Season creation failed:</strong> {seasonError}
+              </div>
+            )}
+            {closingSeason && (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Close {closingSeason.name}</h3>
+                    <p className="mt-1 text-sm text-slate-600">Events will be archived and historical scores and financial records will remain available in reports.</p>
+                  </div>
+                  <RefreshCw className="h-5 w-5 text-amber-600" />
+                </div>
+                <label className="mt-4 flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={createNextSeason} onChange={(e) => setCreateNextSeason(e.target.checked)} />
+                  Create and activate the next season
+                </label>
+                {createNextSeason && <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <input className={input} value={nextSeasonName} onChange={(e) => setNextSeasonName(e.target.value)} />
+                  <input className={input} type="date" value={nextSeasonStart} onChange={(e) => setNextSeasonStart(e.target.value)} />
+                  <input className={input} type="date" value={nextSeasonEnd} onChange={(e) => setNextSeasonEnd(e.target.value)} />
+                </div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setClosingSeason(null)} disabled={busy}>Cancel</Button>
+                  <Button onClick={confirmCloseout} disabled={busy || (createNextSeason && (!nextSeasonName || !nextSeasonStart || !nextSeasonEnd))}>
+                    {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Close season{createNextSeason ? " and start next" : ""}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {closeoutSummary && (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                Closeout complete: {closeoutSummary.events} events, {closeoutSummary.shoots} shoots, {closeoutSummary.registrations} registrations, and {closeoutSummary.scores} score entries preserved.
               </div>
             )}
             <div className="mt-5 grid gap-3 lg:grid-cols-3">

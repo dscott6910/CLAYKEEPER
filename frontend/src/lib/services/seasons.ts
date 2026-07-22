@@ -72,3 +72,30 @@ export async function closeSeason(id: string) {
   const { error } = await supabase.rpc("close_season", { p_season_id: id })
   if (error) throw error
 }
+
+export type SeasonCloseoutSummary = {
+  events: number
+  shoots: number
+  registrations: number
+  scores: number
+  closedSeasonId: string
+  nextSeasonId: string | null
+}
+
+export async function closeSeasonAndRollover(input: {
+  seasonId: string
+  createNext: boolean
+  nextName?: string
+  nextStartDate?: string
+  nextEndDate?: string
+}): Promise<SeasonCloseoutSummary> {
+  const { data, error } = await supabase.rpc("close_season_and_rollover", {
+    p_season_id: input.seasonId,
+    p_create_next: input.createNext,
+    p_next_name: input.nextName || null,
+    p_next_start_date: input.nextStartDate || null,
+    p_next_end_date: input.nextEndDate || null,
+  })
+  if (error) throw new Error(error.message)
+  return data as SeasonCloseoutSummary
+}
