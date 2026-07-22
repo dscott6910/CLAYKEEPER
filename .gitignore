@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+
+# Supabase local files
+supabase/temp/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
