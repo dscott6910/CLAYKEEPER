@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { getCurrentOrganizationId } from "@/lib/services/organizationContext"
 
 export type ParticipantClass = {
   id: string
@@ -61,24 +62,8 @@ type AthleteRow = Omit<ParticipantRecord, "team_id" | "registration_count">
 type TeamAssignmentRow = { athlete_id: string; team_id: string }
 type RegistrationCountRow = { athlete_id: string }
 
-async function getOrganizationId(): Promise<string> {
-  const { data, error } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-  if (!data?.organization_id) {
-    throw new Error("No active organization membership was found for this account.")
-  }
-
-  return data.organization_id
-}
-
 export async function getParticipantDirectory() {
-  const organizationId = await getOrganizationId()
+  const organizationId = await getCurrentOrganizationId()
 
   const [athletesResult, classesResult, teamsResult, assignmentsResult, registrationsResult] = await Promise.all([
     supabase
@@ -138,10 +123,52 @@ export async function getParticipantDirectory() {
   }
 }
 
+async function validateParticipantReferences(
+  organizationId: string,
+  classId: string | null,
+  teamId: string | null,
+) {
+  const checks = []
+
+  if (classId) {
+    checks.push(
+      supabase
+        .from("classes")
+        .select("id")
+        .eq("id", classId)
+        .eq("organization_id", organizationId)
+        .maybeSingle(),
+    )
+  }
+
+  if (teamId) {
+    checks.push(
+      supabase
+        .from("teams")
+        .select("id")
+        .eq("id", teamId)
+        .eq("organization_id", organizationId)
+        .maybeSingle(),
+    )
+  }
+
+  const results = await Promise.all(checks)
+  for (const result of results) {
+    if (result.error) throw result.error
+    if (!result.data) {
+      throw new Error("The selected class or team does not belong to your current organization.")
+    }
+  }
+}
+
 export async function createParticipant(payload: ParticipantPayload, teamId: string | null) {
+  const organizationId = await getCurrentOrganizationId()
+  await validateParticipantReferences(organizationId, payload.class_id, teamId)
+  const safePayload = { ...payload, organization_id: organizationId }
+
   const { data, error } = await supabase
     .from("athletes")
-    .insert(payload)
+    .insert(safePayload)
     .select("id")
     .single()
 
@@ -149,7 +176,7 @@ export async function createParticipant(payload: ParticipantPayload, teamId: str
 
   if (teamId) {
     const { error: teamError } = await supabase.from("athlete_teams").insert({
-      organization_id: payload.organization_id,
+      organization_id: organizationId,
       athlete_id: data.id,
       team_id: teamId,
       start_date: new Date().toISOString().slice(0, 10),
@@ -167,10 +194,15 @@ export async function updateParticipant(
   previousTeamId: string | null,
   nextTeamId: string | null,
 ) {
+  const organizationId = await getCurrentOrganizationId()
+  await validateParticipantReferences(organizationId, payload.class_id, nextTeamId)
+  const safePayload = { ...payload, organization_id: organizationId }
+
   const { error } = await supabase
     .from("athletes")
-    .update(payload)
+    .update(safePayload)
     .eq("id", participantId)
+    .eq("organization_id", organizationId)
 
   if (error) throw error
 
@@ -190,7 +222,7 @@ export async function updateParticipant(
 
   if (nextTeamId) {
     const { error: insertError } = await supabase.from("athlete_teams").insert({
-      organization_id: payload.organization_id,
+      organization_id: organizationId,
       athlete_id: participantId,
       team_id: nextTeamId,
       start_date: new Date().toISOString().slice(0, 10),
@@ -202,10 +234,12 @@ export async function updateParticipant(
 }
 
 export async function setParticipantActive(participantId: string, active: boolean) {
+  const organizationId = await getCurrentOrganizationId()
   const { error } = await supabase
     .from("athletes")
     .update({ active })
     .eq("id", participantId)
+    .eq("organization_id", organizationId)
 
   if (error) throw error
 }

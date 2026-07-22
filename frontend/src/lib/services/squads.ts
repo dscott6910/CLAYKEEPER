@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { getCurrentOrganizationId } from "@/lib/services/organizationContext"
 
 export type SquadEvent = {
   id: string
@@ -101,22 +102,8 @@ function throwIfError(error: { message?: string } | null) {
 }
 
 export async function loadSquaddingBaseData(): Promise<Pick<SquaddingData, "events" | "shoots"> & { organizationId: string }> {
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-  throwIfError(userError)
-  const userId = userData.user?.id
-  if (!userId) throw new Error("You must be signed in to use squadding.")
+  const organizationId = await getCurrentOrganizationId()
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", userId)
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle()
-  throwIfError(membershipError)
-  if (!membership?.organization_id) throw new Error("No active organization membership was found.")
-
-  const organizationId = membership.organization_id as string
   const [{ data: events, error: eventsError }, { data: shoots, error: shootsError }] = await Promise.all([
     supabase.from("events").select("id, organization_id, name, start_date, end_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
     supabase.from("shoots").select("id, organization_id, event_id, name, discipline, competition_type, shoot_date, start_time, squad_size, status").eq("organization_id", organizationId).eq("active", true).order("shoot_date").order("start_time"),

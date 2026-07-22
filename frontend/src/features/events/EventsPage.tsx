@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 
 import { PageContainer } from "@/components/layout/PageContainer"
 import { supabase } from "@/lib/supabase"
+import { getCurrentOrganizationId } from "@/lib/services/organizationContext"
 
 type EventStatus =
   | "draft"
@@ -211,24 +212,7 @@ export function EventsPage() {
     setError(null)
 
     try {
-      const membershipResult = await supabase
-        .from("organization_members")
-        .select("organization_id")
-        .limit(1)
-        .maybeSingle()
-
-      if (membershipResult.error) {
-        throw membershipResult.error
-      }
-
-      if (!membershipResult.data?.organization_id) {
-        throw new Error(
-          "Your account is not assigned to an organization.",
-        )
-      }
-
-      const currentOrganizationId =
-        membershipResult.data.organization_id as string
+      const currentOrganizationId = await getCurrentOrganizationId()
 
       setOrganizationId(currentOrganizationId)
 

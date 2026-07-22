@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { getCurrentOrganizationId } from "@/lib/services/organizationContext"
 
 export type ScoringEvent = { id: string; organization_id: string; name: string; start_date: string | null; status: string | null }
 export type ScoringShoot = { id: string; organization_id: string; event_id: string; name: string; discipline: string; shoot_date: string | null; targets_per_round: number; number_of_rounds: number; allow_score_entry: boolean; status: string | null }
@@ -18,15 +19,7 @@ function throwIfError(error: { message?: string } | null) {
 }
 
 export async function loadScoringBaseData() {
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-  throwIfError(userError)
-  const userId = userData.user?.id
-  if (!userId) throw new Error("You must be signed in to use live scoring.")
-
-  const { data: membership, error: membershipError } = await supabase.from("organization_members").select("organization_id").eq("user_id", userId).eq("active", true).limit(1).maybeSingle()
-  throwIfError(membershipError)
-  if (!membership?.organization_id) throw new Error("No active organization membership was found.")
-  const organizationId = membership.organization_id as string
+  const organizationId = await getCurrentOrganizationId()
 
   const [eventsResult, shootsResult] = await Promise.all([
     supabase.from("events").select("id, organization_id, name, start_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
