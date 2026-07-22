@@ -20,6 +20,7 @@ export function SeasonImportPage() {
   const [seasonStart, setSeasonStart] = useState("2026-01-01")
   const [seasonEnd, setSeasonEnd] = useState("2026-12-31")
   const [seasonId, setSeasonId] = useState("")
+  const [makeSeasonActive, setMakeSeasonActive] = useState(true)
   const [eventName, setEventName] = useState("2026 US Open")
   const [shootDate, setShootDate] = useState("2026-01-01")
   const [locationName, setLocationName] = useState("")
@@ -71,8 +72,9 @@ export function SeasonImportPage() {
   async function handleCreateSeason() {
     setBusy(true)
     try {
-      const id = await createSeason({ name: seasonName, startDate: seasonStart, endDate: seasonEnd, makeActive: seasons.every((s) => s.status !== "active") })
-      await refresh()
+      const id = await createSeason({ name: seasonName, startDate: seasonStart, endDate: seasonEnd, makeActive: makeSeasonActive })
+      const updated = await listSeasons()
+      setSeasons(updated)
       setSeasonId(id)
       toast.success(`${seasonName} created`)
     } catch (error) {
@@ -132,8 +134,12 @@ export function SeasonImportPage() {
               <input className={input} type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} />
               <Button onClick={handleCreateSeason} disabled={busy || !seasonName || !seasonStart || !seasonEnd}><CalendarPlus className="mr-2 h-4 w-4" />Create season</Button>
             </div>
+            <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={makeSeasonActive} onChange={(e) => setMakeSeasonActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              Make this the active season immediately
+            </label>
             <div className="mt-5 grid gap-3 lg:grid-cols-3">
-              {loading ? <p className="text-sm text-slate-500">Loading seasons…</p> : seasons.map((season) => (
+              {loading ? <p className="text-sm text-slate-500">Loading seasons…</p> : seasons.length === 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-3">No seasons are available yet. Create one above. If creation fails, ClayKeeper will now show the exact Supabase error.</div> : seasons.map((season) => (
                 <div key={season.id} className="rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-3"><strong>{season.name}</strong><span className={`rounded-full px-2 py-1 text-xs font-semibold ${season.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{season.status}</span></div>
                   <p className="mt-2 text-xs text-slate-500">{season.start_date} through {season.end_date}</p>
@@ -171,7 +177,7 @@ export function SeasonImportPage() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <select className={input} value={seasonId} onChange={(e) => setSeasonId(e.target.value)}><option value="">Select season</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select>
+                <select className={input} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Select season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select>
                 <input className={input} value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Event name" />
                 <input className={input} type="date" value={shootDate} onChange={(e) => setShootDate(e.target.value)} />
                 <input className={input} value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location (optional)" />

@@ -23,25 +23,20 @@ export async function listSeasons(): Promise<Season[]> {
 }
 
 export async function createSeason(input: { name: string; startDate: string; endDate: string; makeActive: boolean }) {
-  const { organizationId, userId } = await getCurrentOrganizationContext()
-  const { data, error } = await supabase
-    .from("seasons")
-    .insert({
-      organization_id: organizationId,
-      name: input.name.trim(),
-      start_date: input.startDate,
-      end_date: input.endDate,
-      status: input.makeActive ? "planning" : "planning",
-      created_by: userId,
-    })
-    .select("id")
-    .single()
+  const name = input.name.trim()
+  if (!name) throw new Error("Season name is required.")
+  if (!input.startDate || !input.endDate) throw new Error("Season start and end dates are required.")
+  if (input.endDate < input.startDate) throw new Error("Season end date must be on or after the start date.")
+
+  const { data, error } = await supabase.rpc("create_season", {
+    p_name: name,
+    p_start_date: input.startDate,
+    p_end_date: input.endDate,
+    p_make_active: input.makeActive,
+  })
   if (error) throw error
-  if (input.makeActive) {
-    const { error: rpcError } = await supabase.rpc("activate_season", { p_season_id: data.id })
-    if (rpcError) throw rpcError
-  }
-  return data.id as string
+  if (!data) throw new Error("The season was not created. Supabase returned no season ID.")
+  return data as string
 }
 
 export async function activateSeason(id: string) {
