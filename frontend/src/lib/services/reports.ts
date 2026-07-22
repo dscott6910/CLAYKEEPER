@@ -40,6 +40,9 @@ export type ReportEnrollment = {
   status: string
   total_fee: number
   squad_assignment_status: string
+  historical_total_score: number | null
+  historical_first_100_total: number | null
+  result_note: string | null
 }
 
 export type ReportAthlete = {
@@ -89,7 +92,7 @@ export async function loadReportBaseData() {
 export async function loadShootReportData(organizationId: string, eventId: string, shootId: string) {
   const [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores] = await Promise.all([
     supabase.from("registrations").select("id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, checked_in, status").eq("organization_id", organizationId).eq("event_id", eventId),
-    supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status").eq("organization_id", organizationId).eq("shoot_id", shootId),
+    supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status, historical_total_score, historical_first_100_total, result_note").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId).order("display_order"),

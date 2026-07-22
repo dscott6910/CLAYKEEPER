@@ -161,9 +161,9 @@ export function ReportsPage() {
           squadLabel: squad ? `Squad ${squad.squad_number}${squad.house_number ? ` · House ${squad.house_number}` : ""}${squad.course_name ? ` · ${squad.course_name}` : ""}` : "Unassigned",
           positionLabel: member?.position_label || (member ? `Post ${member.position}` : "—"),
           rounds: roundScores,
-          total: roundScores.reduce<number>((sum, score) => sum + (score ?? 0), 0),
+          total: enrollment.historical_total_score ?? roundScores.reduce<number>((sum, score) => sum + (score ?? 0), 0),
           enteredRounds,
-          complete: rounds > 0 && enteredRounds === rounds,
+          complete: enrollment.historical_total_score !== null || (rounds > 0 && enteredRounds === rounds),
           shootOffs,
         }
       })
