@@ -8,6 +8,7 @@ import {
   Settings,
   Target,
   Trophy,
+  Tv,
   Users,
 } from "lucide-react"
 
@@ -79,6 +80,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Reports",
         path: "/reports",
         icon: BarChart3,
+      },
+      {
+        label: "Live Leaderboard",
+        path: "/leaderboard",
+        icon: Tv,
       },
       {
         label: "Settings",
