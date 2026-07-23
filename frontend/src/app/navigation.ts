@@ -16,6 +16,7 @@ import {
   Tv,
   Users,
   Globe2,
+  Smartphone,
 } from "lucide-react"
 
 export type NavigationItem = {
@@ -87,6 +88,11 @@ export const navigationSections: NavigationSection[] = [
   {
     label: "Management",
     items: [
+      {
+        label: "Mobile Operations",
+        path: "/mobile",
+        icon: Smartphone,
+      },
       {
         label: "Event Operations",
         path: "/event-operations",

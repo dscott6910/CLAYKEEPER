@@ -1,0 +1,10 @@
+{
+  "name": "ClayKeeper Mobile Operations",
+  "short_name": "ClayKeeper",
+  "description": "Mobile tournament check-in, squad lookup, and scoring access.",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f172a",
+  "icons": []
+}
