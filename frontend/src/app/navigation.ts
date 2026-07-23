@@ -5,6 +5,7 @@ import {
   ClipboardList,
   DatabaseBackup,
   Landmark,
+  RadioTower,
   Medal,
   LayoutDashboard,
   School,
@@ -85,6 +86,11 @@ export const navigationSections: NavigationSection[] = [
   {
     label: "Management",
     items: [
+      {
+        label: "Event Operations",
+        path: "/event-operations",
+        icon: RadioTower,
+      },
       {
         label: "Reports",
         path: "/reports",
