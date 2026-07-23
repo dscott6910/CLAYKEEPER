@@ -15,6 +15,7 @@ import {
   Trophy,
   Tv,
   Users,
+  Globe2,
 } from "lucide-react"
 
 export type NavigationItem = {
@@ -115,6 +116,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Seasons & Imports",
         path: "/operations",
         icon: DatabaseBackup,
+      },
+      {
+        label: "Public Portal",
+        path: "/public",
+        icon: Globe2,
       },
       {
         label: "Settings",

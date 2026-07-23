@@ -23,6 +23,7 @@ const SquadsPage = lazy(() => import("@/features/squads/SquadsPage").then((modul
 const TeamsPage = lazy(() => import("@/features/teams/TeamsPage").then((module) => ({ default: module.TeamsPage })))
 const CoachPortalPage = lazy(() => import("@/features/coaches/CoachPortalPage").then((module) => ({ default: module.CoachPortalPage })))
 const EventOperationsPage = lazy(() => import("@/features/operations/EventOperationsPage").then((module) => ({ default: module.EventOperationsPage })))
+const PublicPortalPage = lazy(() => import("@/features/public/PublicPortalPage").then((module) => ({ default: module.PublicPortalPage })))
 
 function RouteLoadingFallback() {
   return (
@@ -46,6 +47,8 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/public" element={<LazyRoute><PublicPortalPage /></LazyRoute>} />
+          <Route path="/public/:organizationSlug" element={<LazyRoute><PublicPortalPage /></LazyRoute>} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route index element={<LazyRoute><DashboardPage /></LazyRoute>} />
