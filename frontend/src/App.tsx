@@ -5,6 +5,7 @@ import { AppShell } from "@/app/AppShell"
 import { AuthProvider } from "@/features/auth/AuthProvider"
 import { LoginPage } from "@/features/auth/LoginPage"
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
+import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 
 const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage").then((module) => ({ default: module.DashboardPage })))
 const EventWorkspace = lazy(() => import("@/features/events/EventWorkspace").then((module) => ({ default: module.EventWorkspace })))
@@ -40,6 +41,7 @@ function LazyRoute({ children }: { children: ReactNode }) {
 
 function App() {
   return (
+    <AppErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -69,6 +71,7 @@ function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </AppErrorBoundary>
   )
 }
 

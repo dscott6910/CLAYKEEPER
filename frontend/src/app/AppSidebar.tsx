@@ -41,7 +41,7 @@ export function AppSidebar() {
       </nav>
 
       <div className="border-t border-slate-800 p-4">
-        <p className="text-xs text-slate-500">ClayKeeper v1.6.0</p>
+        <p className="text-xs text-slate-500">ClayKeeper v1.7.0</p>
       </div>
     </aside>
   )
