@@ -105,6 +105,11 @@ export const navigationSections: NavigationSection[] = [
         icon: BarChart3,
       },
       {
+        label: "Analytics",
+        path: "/analytics",
+        icon: BarChart3,
+      },
+      {
         label: "Awards & Results",
         path: "/awards",
         icon: Medal,
