@@ -5,6 +5,7 @@ import {
   ClipboardList,
   DatabaseBackup,
   Landmark,
+  Medal,
   LayoutDashboard,
   School,
   Settings,
@@ -82,6 +83,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Reports",
         path: "/reports",
         icon: BarChart3,
+      },
+      {
+        label: "Awards & Results",
+        path: "/awards",
+        icon: Medal,
       },
       {
         label: "Treasurer Center",

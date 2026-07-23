@@ -12,6 +12,7 @@ const EventsPage = lazy(() => import("@/features/events/EventsPage").then((modul
 const ParticipantsPage = lazy(() => import("@/features/participants/ParticipantsPage").then((module) => ({ default: module.ParticipantsPage })))
 const RegistrationPage = lazy(() => import("@/features/registration/RegistrationPage").then((module) => ({ default: module.RegistrationPage })))
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })))
+const AwardsPage = lazy(() => import("@/features/reports/AwardsPage").then((module) => ({ default: module.AwardsPage })))
 const TreasurerPage = lazy(() => import("@/features/reports/TreasurerPage").then((module) => ({ default: module.TreasurerPage })))
 const LeaderboardPage = lazy(() => import("@/features/reports/LeaderboardPage").then((module) => ({ default: module.LeaderboardPage })))
 const LiveScoringPage = lazy(() => import("@/features/scoring/LiveScoringPage").then((module) => ({ default: module.LiveScoringPage })))
@@ -54,6 +55,7 @@ function App() {
               <Route path="squads" element={<LazyRoute><SquadsPage /></LazyRoute>} />
               <Route path="scoring" element={<LazyRoute><LiveScoringPage /></LazyRoute>} />
               <Route path="reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
+              <Route path="awards" element={<LazyRoute><AwardsPage /></LazyRoute>} />
               <Route path="treasurer" element={<LazyRoute><TreasurerPage /></LazyRoute>} />
               <Route path="leaderboard" element={<LazyRoute><LeaderboardPage /></LazyRoute>} />
               <Route path="operations" element={<LazyRoute><SeasonImportPage /></LazyRoute>} />
