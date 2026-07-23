@@ -20,6 +20,7 @@ const SeasonImportPage = lazy(() => import("@/features/operations/SeasonImportPa
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })))
 const SquadsPage = lazy(() => import("@/features/squads/SquadsPage").then((module) => ({ default: module.SquadsPage })))
 const TeamsPage = lazy(() => import("@/features/teams/TeamsPage").then((module) => ({ default: module.TeamsPage })))
+const CoachPortalPage = lazy(() => import("@/features/coaches/CoachPortalPage").then((module) => ({ default: module.CoachPortalPage })))
 
 function RouteLoadingFallback() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route index element={<LazyRoute><DashboardPage /></LazyRoute>} />
               <Route path="participants" element={<LazyRoute><ParticipantsPage /></LazyRoute>} />
               <Route path="teams" element={<LazyRoute><TeamsPage /></LazyRoute>} />
+              <Route path="coach" element={<LazyRoute><CoachPortalPage /></LazyRoute>} />
               <Route path="events" element={<LazyRoute><EventsPage /></LazyRoute>} />
               <Route path="events/:eventId" element={<LazyRoute><EventWorkspace /></LazyRoute>} />
               <Route path="events/:eventId/shoots" element={<LazyRoute><EventWorkspace /></LazyRoute>} />
