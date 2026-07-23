@@ -17,6 +17,7 @@ import {
   Users,
   Globe2,
   Smartphone,
+  CreditCard,
 } from "lucide-react"
 
 export type NavigationItem = {
@@ -112,6 +113,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Treasurer Center",
         path: "/treasurer",
         icon: Landmark,
+      },
+      {
+        label: "Registration & Payments",
+        path: "/registration-payments",
+        icon: CreditCard,
       },
       {
         label: "Live Leaderboard",

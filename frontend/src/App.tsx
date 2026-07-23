@@ -25,6 +25,7 @@ const CoachPortalPage = lazy(() => import("@/features/coaches/CoachPortalPage").
 const EventOperationsPage = lazy(() => import("@/features/operations/EventOperationsPage").then((module) => ({ default: module.EventOperationsPage })))
 const PublicPortalPage = lazy(() => import("@/features/public/PublicPortalPage").then((module) => ({ default: module.PublicPortalPage })))
 const MobileOperationsPage = lazy(() => import("@/features/mobile/MobileOperationsPage").then((module) => ({ default: module.MobileOperationsPage })))
+const RegistrationPaymentCenterPage = lazy(() => import("@/features/payments/RegistrationPaymentCenterPage").then((module) => ({ default: module.RegistrationPaymentCenterPage })))
 
 function RouteLoadingFallback() {
   return (
@@ -66,6 +67,7 @@ function App() {
               <Route path="reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
               <Route path="awards" element={<LazyRoute><AwardsPage /></LazyRoute>} />
               <Route path="treasurer" element={<LazyRoute><TreasurerPage /></LazyRoute>} />
+              <Route path="registration-payments" element={<LazyRoute><RegistrationPaymentCenterPage /></LazyRoute>} />
               <Route path="leaderboard" element={<LazyRoute><LeaderboardPage /></LazyRoute>} />
               <Route path="event-operations" element={<LazyRoute><EventOperationsPage /></LazyRoute>} />
               <Route path="mobile" element={<LazyRoute><MobileOperationsPage /></LazyRoute>} />
