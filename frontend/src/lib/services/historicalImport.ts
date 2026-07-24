@@ -1027,19 +1027,46 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
           if (error) throw error
         }
         importedRows += 1
+
+        // Persist visible progress during long imports so the history table does not remain at 0/total.
+        if (importedRows % 10 === 0 || importedRows === validSheets.reduce((sum, current) => sum + current.rows.length, 0)) {
+          const { error: progressError } = await supabase
+            .from("historical_imports")
+            .update({ imported_row_count: importedRows })
+            .eq("id", importBatch.id)
+          if (progressError) throw new Error(`Unable to save import progress after ${importedRows} rows: ${progressError.message}`)
+        }
       }
     }
 
     throwIfImportCancelled(control)
-    control?.onProgress?.("Finalizing import…")
-    await supabase.from("historical_imports").update({
+    control?.onProgress?.(`Finalizing import after ${importedRows} entries…`)
+    const finalStatus = skippedRows.length || allRows.some((row) => row.warnings.length)
+      ? "completed_with_warnings"
+      : "completed"
+    const completedAt = new Date().toISOString()
+    const { error: finalizeError } = await supabase.from("historical_imports").update({
       event_id: eventId,
-      status: skippedRows.length || allRows.some((row) => row.warnings.length) ? "completed_with_warnings" : "completed",
+      status: finalStatus,
       imported_row_count: importedRows,
       import_summary: { eventId, shootIds, uniqueParticipants: athleteCache.size, teams: teamCache.size, classes: classCache.size, skippedRows: skippedRows.map((row) => ({ sheetName: row.sheetName, rowNumber: row.rowNumber, errors: row.errors })) },
-      completed_at: new Date().toISOString(),
+      completed_at: completedAt,
     }).eq("id", importBatch.id)
+    if (finalizeError) {
+      throw new Error(`All event data was imported, but ClayKeeper could not mark the import complete: ${finalizeError.message}`)
+    }
 
+    const { data: finalizedImport, error: verifyError } = await supabase
+      .from("historical_imports")
+      .select("status,imported_row_count,completed_at")
+      .eq("id", importBatch.id)
+      .single()
+    if (verifyError) throw new Error(`Import data was saved, but final status verification failed: ${verifyError.message}`)
+    if (!finalizedImport || finalizedImport.status !== finalStatus || finalizedImport.imported_row_count !== importedRows) {
+      throw new Error("Import data was saved, but the import history record did not finalize correctly. Use Cleanup import before trying again.")
+    }
+
+    control?.onProgress?.(`Import completed: ${importedRows} entries saved.`)
     return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size, skippedRows: skippedRows.length }
   } catch (error) {
     const cancelled = error instanceof ImportCancelledError
@@ -1079,6 +1106,49 @@ export async function listHistoricalImports(): Promise<HistoricalImportRecord[]>
     .limit(50)
   if (error) throw error
   return (data ?? []) as HistoricalImportRecord[]
+}
+
+
+export type FinalizeHistoricalImportResult = {
+  importId: string
+  importedRows: number
+  expectedRows: number
+  status: string
+}
+
+export async function finalizeHistoricalImport(importId: string): Promise<FinalizeHistoricalImportResult> {
+  const { organizationId } = await getCurrentOrganizationContext()
+  const { data: item, error: itemError } = await supabase
+    .from("historical_imports")
+    .select("id,event_id,row_count,error_count,warning_count,status")
+    .eq("organization_id", organizationId)
+    .eq("id", importId)
+    .single()
+  if (itemError) throw itemError
+  if (!item.event_id) throw new Error("This import has no linked event and cannot be finalized. Use Cleanup import instead.")
+
+  const { count, error: countError } = await supabase
+    .from("registration_shoots")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("event_id", item.event_id)
+  if (countError) throw countError
+
+  const importedRows = count ?? 0
+  const expectedRows = Math.max(0, item.row_count - item.error_count)
+  if (importedRows < expectedRows) {
+    throw new Error(`The import is not complete yet. ClayKeeper found ${importedRows} of ${expectedRows} expected entries. Use Cleanup import before trying again.`)
+  }
+
+  const status = item.error_count > 0 || item.warning_count > 0 ? "completed_with_warnings" : "completed"
+  const { error: updateError } = await supabase
+    .from("historical_imports")
+    .update({ status, imported_row_count: importedRows, completed_at: new Date().toISOString() })
+    .eq("organization_id", organizationId)
+    .eq("id", importId)
+  if (updateError) throw new Error(`The event data exists, but the import history could not be finalized: ${updateError.message}`)
+
+  return { importId, importedRows, expectedRows, status }
 }
 
 export type DeleteHistoricalImportResult = {

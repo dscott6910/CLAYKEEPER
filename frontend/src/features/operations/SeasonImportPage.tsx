@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
-import { deleteHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
+import { deleteHistoricalImport, finalizeHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
 import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -42,6 +42,7 @@ export function SeasonImportPage() {
   const [closeoutSummary, setCloseoutSummary] = useState<SeasonCloseoutSummary | null>(null)
   const [importHistory, setImportHistory] = useState<HistoricalImportRecord[]>([])
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null)
+  const [finalizingImportId, setFinalizingImportId] = useState<string | null>(null)
   const [deleteMessage, setDeleteMessage] = useState("")
   const [trapImportRunning, setTrapImportRunning] = useState(false)
   const [trapImportMessage, setTrapImportMessage] = useState("")
@@ -171,6 +172,24 @@ export function SeasonImportPage() {
     trapCancelRef.current = false
   }
 
+
+  async function handleFinalizeImport(item: HistoricalImportRecord) {
+    setFinalizingImportId(item.id)
+    setDeleteMessage(`Checking ${item.file_name} and finalizing its status...`)
+    try {
+      const result = await finalizeHistoricalImport(item.id)
+      setDeleteMessage(`Import completed with ${result.importedRows} entries.`)
+      toast.success(`${item.file_name} marked complete`)
+      await refresh()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to finalize import"
+      setDeleteMessage(`Finalize failed: ${message}`)
+      toast.error(message, { duration: 12000 })
+      window.alert(`Finish Import failed.\n\n${message}`)
+    } finally {
+      setFinalizingImportId(null)
+    }
+  }
 
   async function handleDeleteImport(item: HistoricalImportRecord) {
     const confirmed = window.confirm(`Delete the import from ${item.file_name}?\n\nThis permanently removes the imported event, shoots, registrations, squads, and scores. Participants, teams, classes, and locations are kept because they may be used elsewhere.`)
@@ -400,7 +419,7 @@ export function SeasonImportPage() {
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
               {importHistory.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">No workbook imports have been recorded yet.</div> : <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Imported</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
-                <tbody>{importHistory.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{item.file_name}</div><div className="max-w-xl truncate text-xs text-slate-500">{item.worksheet_name || "—"}</div></td><td className="px-3 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="px-3 py-3">{item.imported_row_count}/{item.row_count}{item.error_count ? <span className="ml-2 text-amber-700">({item.error_count} skipped)</span> : null}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{item.status.replaceAll("_", " ")}</span></td><td className="px-3 py-3 text-right"><Button variant="outline" onClick={() => void handleDeleteImport(item)} disabled={deletingImportId === item.id || item.status === "reversed"} className="text-red-600 hover:text-red-700">{deletingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{["failed", "cancelled", "importing"].includes(item.status) ? "Cleanup import" : "Delete import"}</Button></td></tr>)}</tbody>
+                <tbody>{importHistory.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{item.file_name}</div><div className="max-w-xl truncate text-xs text-slate-500">{item.worksheet_name || "—"}</div></td><td className="px-3 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="px-3 py-3">{item.imported_row_count}/{item.row_count}{item.error_count ? <span className="ml-2 text-amber-700">({item.error_count} skipped)</span> : null}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{item.status.replaceAll("_", " ")}</span></td><td className="px-3 py-3 text-right"><div className="flex justify-end gap-2">{item.status === "importing" ? <Button variant="outline" onClick={() => void handleFinalizeImport(item)} disabled={finalizingImportId === item.id || deletingImportId === item.id}>{finalizingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Finish import</Button> : null}<Button variant="outline" onClick={() => void handleDeleteImport(item)} disabled={deletingImportId === item.id || finalizingImportId === item.id || item.status === "reversed"} className="text-red-600 hover:text-red-700">{deletingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{["failed", "cancelled", "importing"].includes(item.status) ? "Cleanup import" : "Delete import"}</Button></div></td></tr>)}</tbody>
               </table>}
             </div>
           </section>
