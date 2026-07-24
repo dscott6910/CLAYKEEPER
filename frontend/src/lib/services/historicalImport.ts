@@ -677,3 +677,317 @@ export async function importUsOpenWorkbook(parsed: ParsedUsOpenWorkbook, options
     throw error
   }
 }
+
+export type TrapSeriesRow = ImportRow & {
+  sheetName: string
+}
+
+export type TrapSeriesSheet = {
+  sheetName: string
+  rows: TrapSeriesRow[]
+  hasSquadNumbers: boolean
+}
+
+export type ParsedTrapSeriesWorkbook = {
+  kind: "trap_series"
+  fileName: string
+  sheets: TrapSeriesSheet[]
+}
+
+export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSeriesWorkbook> {
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true })
+  const sheets: TrapSeriesSheet[] = []
+
+  for (const sheetName of workbook.SheetNames) {
+    const matrix = rawRowsForSheet(workbook.Sheets[sheetName])
+    const headerRow = matrix.findIndex((row) => row.some((cell) => norm(cell) === "lastname"))
+    if (headerRow < 0) continue
+
+    const headers = matrix[headerRow].map(text)
+    const indexOf = (...names: string[]) => headers.findIndex((header) => names.includes(norm(header)))
+    const lastIndex = indexOf("lastname", "last name")
+    const firstIndex = indexOf("firstname", "first name")
+    const teamIndex = indexOf("team short name", "team", "team name")
+    const squadIndex = indexOf("squad number", "squad", "squad #")
+    const classIndex = indexOf("class", "category")
+    const totalIndex = indexOf("totalscore", "total score", "total")
+    const roundIndexes = headers
+      .map((header, index) => ({ header, index, match: norm(header).match(/^trap\s*(\d+)$/) }))
+      .filter((item) => item.match)
+      .sort((a, b) => Number(a.match?.[1]) - Number(b.match?.[1]))
+
+    if (lastIndex < 0 || firstIndex < 0 || totalIndex < 0 || !roundIndexes.length) continue
+
+    const rows: TrapSeriesRow[] = []
+    for (let rowIndex = headerRow + 1; rowIndex < matrix.length; rowIndex += 1) {
+      const record = matrix[rowIndex]
+      const firstName = text(record[firstIndex])
+      const lastName = text(record[lastIndex])
+      const team = teamIndex >= 0 ? text(record[teamIndex]) : ""
+      const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
+      const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
+      const total = numberValue(record[totalIndex])
+      const scores = roundIndexes.map((item) => numberValue(record[item.index]))
+
+      if (!firstName && !lastName && !team && total === null && scores.every((score) => score === null)) continue
+
+      const warnings: string[] = []
+      const errors: string[] = []
+      if (!firstName || !lastName) errors.push("Participant name is missing")
+      if (!team) warnings.push("Team is blank")
+      if (!classCode) warnings.push("Class is blank")
+      if (!squadNumber) warnings.push("Squad number is blank; ClayKeeper will create an imported holding squad")
+      scores.forEach((score, index) => {
+        if (score !== null && (score < 0 || score > 25)) errors.push(`Round ${index + 1} score is outside 0-25`)
+      })
+      const calculated = scores.reduce<number>((sum, score) => sum + (score ?? 0), 0)
+      if (total === null) errors.push("Total score is missing")
+      else if (scores.some((score) => score !== null) && calculated !== total) warnings.push(`Total ${total} does not match rounds ${calculated}`)
+
+      rows.push({
+        rowNumber: rowIndex + 1,
+        firstName,
+        lastName,
+        team,
+        classCode,
+        squadNumber,
+        post: null,
+        scores,
+        total,
+        cyssaNumber: "",
+        amountPaid: 0,
+        paymentStatus: "",
+        warnings,
+        errors,
+        sheetName,
+      })
+    }
+
+    if (rows.length) sheets.push({ sheetName, rows, hasSquadNumbers: squadIndex >= 0 })
+  }
+
+  if (!sheets.length) throw new Error("No Trap Series worksheets were detected. Each shoot sheet must contain LASTNAME, FIRSTNAME, TOTALSCORE, and TRAP 1-4 columns.")
+  return { kind: "trap_series", fileName: file.name, sheets }
+}
+
+export type TrapSeriesImportOptions = {
+  seasonId: string
+  eventName: string
+  eventDate: string
+  entryFee: number
+  organizationFee: number
+}
+
+export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook, options: TrapSeriesImportOptions) {
+  const allRows = parsed.sheets.flatMap((sheet) => sheet.rows)
+  const invalid = allRows.filter((row) => row.errors.length)
+  if (invalid.length) throw new Error(`Resolve ${invalid.length} row(s) with errors before importing.`)
+
+  const { organizationId, userId } = await getCurrentOrganizationContext()
+  const { data: importBatch, error: batchError } = await supabase.from("historical_imports").insert({
+    organization_id: organizationId,
+    season_id: options.seasonId,
+    file_name: parsed.fileName,
+    worksheet_name: parsed.sheets.map((sheet) => sheet.sheetName).join(", "),
+    status: "importing",
+    row_count: allRows.length,
+    warning_count: allRows.reduce((count, row) => count + row.warnings.length, 0),
+    source_rows: parsed.sheets,
+    created_by: userId,
+  }).select("id").single()
+  if (batchError) throw batchError
+
+  try {
+    const eventId = await singleId("event", () => supabase.from("events").insert({
+      organization_id: organizationId,
+      season_id: options.seasonId,
+      name: options.eventName.trim(),
+      start_date: options.eventDate,
+      end_date: options.eventDate,
+      status: "completed",
+      external_id: `trap-series:${importBatch.id}`,
+      active: true,
+      created_by: userId,
+    }).select("id").single())
+
+    const teamCache = new Map<string, string>()
+    const classCache = new Map<string, string>()
+    const athleteCache = new Map<string, string>()
+    const registrationCache = new Map<string, string>()
+    const shootIds: Record<string, string> = {}
+    let importedRows = 0
+
+    for (const sheet of parsed.sheets) {
+      let locationId: string | null = null
+      const { data: existingLocation } = await supabase.from("locations").select("id").eq("organization_id", organizationId).ilike("name", sheet.sheetName).maybeSingle()
+      locationId = existingLocation?.id ?? await singleId("location", () => supabase.from("locations").insert({ organization_id: organizationId, name: sheet.sheetName }).select("id").single())
+
+      const shootId = await singleId("shoot", () => supabase.from("shoots").insert({
+        organization_id: organizationId,
+        event_id: eventId,
+        location_id: locationId,
+        name: sheet.sheetName,
+        discipline: "american_trap",
+        shoot_date: options.eventDate,
+        entry_fee: options.entryFee,
+        organization_fee: options.organizationFee,
+        targets_per_round: 25,
+        number_of_rounds: 4,
+        status: "completed",
+        allow_score_entry: false,
+        external_id: `trap-series:${importBatch.id}:${sheet.sheetName}`,
+        notes: `Imported from ${parsed.fileName}, worksheet ${sheet.sheetName}`,
+        created_by: userId,
+      }).select("id").single())
+      shootIds[sheet.sheetName] = shootId
+
+      const squadCache = new Map<string, string>()
+      const rowsBySquad = new Map<string, TrapSeriesRow[]>()
+      sheet.rows.forEach((row, index) => {
+        const effectiveSquad = row.squadNumber || `Imported ${Math.floor(index / 5) + 1}`
+        const list = rowsBySquad.get(effectiveSquad) ?? []
+        list.push(row)
+        rowsBySquad.set(effectiveSquad, list)
+      })
+
+      for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex += 1) {
+        const row = sheet.rows[rowIndex]
+        let teamId: string | null = null
+        if (row.team) {
+          const key = norm(row.team)
+          teamId = teamCache.get(key) ?? null
+          if (!teamId) {
+            const { data } = await supabase.from("teams").select("id").eq("organization_id", organizationId).ilike("name", row.team).maybeSingle()
+            teamId = data?.id ?? await singleId("team", () => supabase.from("teams").insert({ organization_id: organizationId, name: row.team }).select("id").single())
+            teamCache.set(key, teamId!)
+          }
+        }
+
+        let classId: string | null = null
+        if (row.classCode) {
+          const key = norm(row.classCode)
+          classId = classCache.get(key) ?? null
+          if (!classId) {
+            const { data } = await supabase.from("classes").select("id").eq("organization_id", organizationId).ilike("code", row.classCode).maybeSingle()
+            classId = data?.id ?? await singleId("class", () => supabase.from("classes").insert({ organization_id: organizationId, code: row.classCode, display_name: row.classCode, display_order: 99 }).select("id").single())
+            classCache.set(key, classId!)
+          }
+        }
+
+        const athleteKey = `${norm(row.firstName)}|${norm(row.lastName)}`
+        let athleteId = athleteCache.get(athleteKey)
+        if (!athleteId) {
+          const { data } = await supabase.from("athletes").select("id").eq("organization_id", organizationId).ilike("first_name", row.firstName).ilike("last_name", row.lastName).limit(1).maybeSingle()
+          athleteId = data?.id ?? await singleId("athlete", () => supabase.from("athletes").insert({
+            organization_id: organizationId,
+            class_id: classId,
+            first_name: row.firstName,
+            last_name: row.lastName,
+            notes: `Created from Trap Series import ${parsed.fileName}`,
+          }).select("id").single())
+          athleteCache.set(athleteKey, athleteId!)
+        }
+
+        let registrationId = registrationCache.get(athleteId!)
+        if (!registrationId) {
+          registrationId = await singleId("registration", () => supabase.from("registrations").insert({
+            organization_id: organizationId,
+            event_id: eventId,
+            athlete_id: athleteId,
+            team_id: teamId,
+            class_id: classId,
+            status: "completed",
+            registration_source: "historical_import",
+            external_source: "claykeeper_trap_series_excel",
+            external_id: `${importBatch.id}:${athleteKey}`,
+            checked_in: true,
+            checked_in_at: new Date().toISOString(),
+            payment_status: "not_required",
+            amount_paid: 0,
+            created_by: userId,
+          }).select("id").single())
+          registrationCache.set(athleteId!, registrationId!)
+        }
+
+        const registrationShootId = await singleId("registration shoot", () => supabase.from("registration_shoots").insert({
+          organization_id: organizationId,
+          event_id: eventId,
+          registration_id: registrationId,
+          shoot_id: shootId,
+          status: "completed",
+          entry_fee: options.entryFee,
+          organization_fee: options.organizationFee,
+          checked_in: true,
+          checked_in_at: new Date().toISOString(),
+          squad_assignment_status: "assigned",
+          historical_total_score: row.total,
+          source_sheet: row.sheetName,
+        }).select("id").single())
+
+        const effectiveSquad = row.squadNumber || `Imported ${Math.floor(rowIndex / 5) + 1}`
+        let squadId = squadCache.get(effectiveSquad)
+        if (!squadId) {
+          const memberCount = rowsBySquad.get(effectiveSquad)?.length ?? 5
+          squadId = await singleId("squad", () => supabase.from("squads").insert({
+            organization_id: organizationId,
+            shoot_id: shootId,
+            squad_number: effectiveSquad,
+            name: row.squadNumber ? `Squad ${effectiveSquad}` : effectiveSquad,
+            capacity: Math.max(5, memberCount),
+            assignment_method: "imported",
+            status: "completed",
+            created_by: userId,
+          }).select("id").single())
+          squadCache.set(effectiveSquad, squadId)
+        }
+
+        const position = sheet.rows.filter((candidate, candidateIndex) => {
+          const candidateSquad = candidate.squadNumber || `Imported ${Math.floor(candidateIndex / 5) + 1}`
+          return candidateSquad === effectiveSquad && candidateIndex <= rowIndex
+        }).length
+        const squadMemberId = await singleId("squad member", () => supabase.from("squad_members").insert({
+          organization_id: organizationId,
+          shoot_id: shootId,
+          squad_id: squadId,
+          registration_shoot_id: registrationShootId,
+          position,
+          position_label: `Post ${position}`,
+          assignment_method: "imported",
+          status: "completed",
+          checked_in: true,
+          checked_in_at: new Date().toISOString(),
+          assigned_by: userId,
+        }).select("id").single())
+
+        const scoreRows = row.scores.map((score, index) => ({
+          organization_id: organizationId,
+          event_id: eventId,
+          shoot_id: shootId,
+          squad_member_id: squadMemberId,
+          round_number: index + 1,
+          score,
+          status: "verified",
+          entered_by: userId,
+        })).filter((entry) => entry.score !== null)
+        if (scoreRows.length) {
+          const { error } = await supabase.from("score_entries").insert(scoreRows)
+          if (error) throw error
+        }
+        importedRows += 1
+      }
+    }
+
+    await supabase.from("historical_imports").update({
+      event_id: eventId,
+      status: allRows.some((row) => row.warnings.length) ? "completed_with_warnings" : "completed",
+      imported_row_count: importedRows,
+      import_summary: { eventId, shootIds, uniqueParticipants: athleteCache.size, teams: teamCache.size, classes: classCache.size },
+      completed_at: new Date().toISOString(),
+    }).eq("id", importBatch.id)
+
+    return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size }
+  } catch (error) {
+    await supabase.from("historical_imports").update({ status: "failed", error_count: 1, import_summary: { error: error instanceof Error ? error.message : String(error) }, completed_at: new Date().toISOString() }).eq("id", importBatch.id)
+    throw error
+  }
+}
