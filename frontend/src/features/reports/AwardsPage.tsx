@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Download, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Download, FileCheck2, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -145,6 +145,22 @@ export function AwardsPage() {
   const stateTeams = useMemo(() => calculateStateTeams(rows, discipline), [rows, discipline])
   const seriesTeams = useMemo(() => calculateSeriesTeamPoints(eventReports, discipline), [eventReports, discipline])
   const incompleteCount = rows.filter((row) => !row.complete).length
+  const unresolvedTieCount = useMemo(() => {
+    const individual = individualGroups.reduce((sum, group) => sum + group.rows.filter((row) => row.unresolvedTie).length, 0)
+    const squads = squadResults.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).length
+    const teams = stateTeams.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).length
+    const series = seriesTeams.filter((row) => row.unresolvedTie).length
+    return individual + squads + teams + series
+  }, [individualGroups, squadResults, stateTeams, seriesTeams])
+  const readinessChecks = [
+    { label: "A shoot is selected", ready: Boolean(selectedShoot) },
+    { label: "Participant results are available", ready: rows.length > 0 },
+    { label: "All participant scoring is complete", ready: rows.length > 0 && incompleteCount === 0 },
+    { label: "No unresolved award ties remain", ready: unresolvedTieCount === 0 },
+    { label: "Awards are published or locked", ready: publication?.status === "published" || publication?.status === "locked" },
+  ]
+  const readyToPublish = readinessChecks.slice(0, 4).every((check) => check.ready)
+  const fullyReady = readinessChecks.every((check) => check.ready)
 
   async function saveStatus(status: "draft" | "published" | "locked") {
     if (!organizationId || !eventId || !shootId) return
@@ -184,8 +200,8 @@ export function AwardsPage() {
     <div className={tvMode ? "min-h-screen bg-slate-950 text-white" : "min-h-screen"}>
       {!tvMode && <AppHeader title="CYSSA Awards & Results" description="Official individual, squad, state-team, and series-team calculations." />}
       <PageContainer className={tvMode ? "max-w-none px-8 py-8" : ""}>
-        <div className="space-y-6">
-          <section className={`rounded-2xl border p-5 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
+        <div className="space-y-6 awards-page">
+          <section className={`awards-controls rounded-2xl border p-5 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
             <div className="grid gap-4 xl:grid-cols-[1fr_1fr_220px_auto]">
               <label className="text-sm font-medium">Event<select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={eventId} onChange={(event) => { const next = event.target.value; setEventId(next); setShootId(shoots.find((shoot) => shoot.event_id === next)?.id || "") }}>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label>
               <label className="text-sm font-medium">Shoot<select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={shootId} onChange={(event) => setShootId(event.target.value)}>{eventShoots.map((shoot) => <option key={shoot.id} value={shoot.id}>{shoot.name}</option>)}</select></label>
@@ -200,7 +216,29 @@ export function AwardsPage() {
 
           {!tvMode && <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Rule preset: {disciplineLabel(discipline)} · {meetType === "state" ? "State" : "Series"}</p><p className="text-sm text-slate-500">Series individual awards are top 3. State individual awards are top 5 for IA/IE/R and top 3 for JV/VR/YA. Shoot-off rounds break individual ties.</p></div><div className="flex gap-2"><Button variant="outline" disabled={locked} onClick={() => void saveStatus("draft")}><Save className="mr-2 h-4 w-4" />Save</Button><Button disabled={locked} onClick={() => void saveStatus("published")}><Trophy className="mr-2 h-4 w-4" />Publish</Button><Button variant="outline" disabled={locked} onClick={() => void saveStatus("locked")}><Lock className="mr-2 h-4 w-4" />Lock</Button></div></div><p className="mt-3 text-xs text-slate-500">Status: <strong className="capitalize">{publication?.status || "unsaved draft"}</strong></p></section>}
 
-          <section className={`rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
+          {!tvMode && <section className="awards-controls rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FileCheck2 className={`h-6 w-6 ${fullyReady ? "text-emerald-600" : readyToPublish ? "text-blue-600" : "text-amber-600"}`} />
+                  <h2 className="text-lg font-bold">Event readiness</h2>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">ClayKeeper checks the selected shoot before awards are announced or printed.</p>
+              </div>
+              <div className={`rounded-full px-4 py-2 text-sm font-bold ${fullyReady ? "bg-emerald-100 text-emerald-800" : readyToPublish ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-900"}`}>
+                {fullyReady ? "READY TO ANNOUNCE" : readyToPublish ? "READY TO PUBLISH" : "ACTION REQUIRED"}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {readinessChecks.map((check) => <div key={check.label} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${check.ready ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                {check.ready ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                <span>{check.label}</span>
+              </div>)}
+            </div>
+            {unresolvedTieCount > 0 && <p className="mt-3 text-sm font-medium text-amber-800">{unresolvedTieCount} unresolved award tie{unresolvedTieCount === 1 ? " requires" : "s require"} review before publishing.</p>}
+          </section>}
+
+          <section className={`awards-print-area rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div><div className="flex gap-3"><Stat icon={<Users className="h-5 w-5" />} value={rows.length} label="Participants" /><Stat icon={<Medal className="h-5 w-5" />} value={rows.filter((row) => row.complete).length} label="Complete" /></div></div>
 
             {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['individual','Individual Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}

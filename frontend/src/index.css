@@ -128,3 +128,19 @@
     @apply font-sans;
     }
 }
+
+@media print {
+  body { background: white !important; }
+  .awards-page .awards-controls,
+  .awards-page header,
+  .awards-page nav,
+  .awards-page aside { display: none !important; }
+  .awards-print-area {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .awards-print-area .rounded-2xl,
+  .awards-print-area .rounded-3xl { break-inside: avoid; }
+  @page { size: letter portrait; margin: 0.5in; }
+}
