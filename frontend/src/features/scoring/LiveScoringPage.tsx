@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { AlertCircle, CheckCircle2, ClipboardList, Plus, RefreshCw, Save, Target, Trash2, Trophy, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 
@@ -43,6 +43,12 @@ type ShootData = {
 const emptyData: ShootData = { squads: [], members: [], enrollments: [], registrations: [], athletes: [], teams: [], classes: [], scores: [], shootOffRounds: [], shootOffScores: [] }
 
 export function LiveScoringPage() {
+  const [searchParams] = useSearchParams()
+  const requestedEventId = searchParams.get("eventId") || ""
+  const requestedShootId = searchParams.get("shootId") || ""
+  const requestedSquadId = searchParams.get("squadId") || ""
+  const requestedMemberId = searchParams.get("memberId") || ""
+  const requestedFocus = searchParams.get("focus") || ""
   const [organizationId, setOrganizationId] = useState("")
   const [events, setEvents] = useState<ScoringEvent[]>([])
   const [shoots, setShoots] = useState<ScoringShoot[]>([])
@@ -55,6 +61,7 @@ export function LiveScoringPage() {
   const [error, setError] = useState("")
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const deepLinkFocused = useRef(false)
 
   const eventShoots = useMemo(() => shoots.filter((shoot) => shoot.event_id === eventId), [shoots, eventId])
   const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
@@ -74,9 +81,9 @@ export function LiveScoringPage() {
     try {
       const base = await loadScoringBaseData()
       setOrganizationId(base.organizationId); setEvents(base.events); setShoots(base.shoots)
-      const nextEvent = eventId || base.events[0]?.id || ""
+      const nextEvent = requestedEventId || eventId || base.events[0]?.id || ""
       setEventId(nextEvent)
-      const nextShoot = shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
+      const nextShoot = requestedShootId || shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
       setShootId(nextShoot)
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load live scoring.") }
     finally { setLoading(false) }
@@ -88,14 +95,38 @@ export function LiveScoringPage() {
     try {
       const next = await loadShootScoringData(organizationId, eventId, shootId)
       setData(next)
-      setSquadId((current) => next.squads.some((s) => s.id === current) ? current : next.squads[0]?.id || "")
+      setSquadId((current) => {
+        if (requestedSquadId && next.squads.some((s) => s.id === requestedSquadId)) return requestedSquadId
+        return next.squads.some((s) => s.id === current) ? current : next.squads[0]?.id || ""
+      })
       setDrafts({})
+      deepLinkFocused.current = false
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to load scores. Apply the live-scoring migration in Supabase if this is the first run.") }
     finally { setLoading(false) }
   }
 
   useEffect(() => { void loadBase() }, [])
   useEffect(() => { void loadShoot() }, [organizationId, eventId, shootId])
+
+
+  useEffect(() => {
+    if (deepLinkFocused.current || !requestedMemberId || loading || squadId !== requestedSquadId) return
+    const member = data.members.find((row) => row.id === requestedMemberId)
+    if (!member) return
+
+    const focusKey = requestedFocus === "shootOff" && data.shootOffRounds.length > 0
+      ? `so:${requestedMemberId}:${data.shootOffRounds[0].id}`
+      : Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, index) => `${requestedMemberId}:${index + 1}`)
+          .find((key) => !scoreMap.has(key)) || `${requestedMemberId}:1`
+
+    window.setTimeout(() => {
+      const input = inputRefs.current[focusKey]
+      input?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+      input?.focus()
+      input?.select()
+      deepLinkFocused.current = true
+    }, 150)
+  }, [data.members, data.shootOffRounds, loading, requestedFocus, requestedMemberId, requestedSquadId, scoreMap, selectedShoot?.number_of_rounds, squadId])
 
   function participantFor(member: ScoringMember) {
     const enrollment = enrollmentById.get(member.registration_shoot_id)
@@ -197,7 +228,7 @@ export function LiveScoringPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[980px] border-collapse text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="sticky left-0 z-10 min-w-60 border-r bg-slate-50 px-4 py-3">Participant</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Class</th><th className="px-3 py-3">Squad #</th><th className="px-3 py-3">Post</th>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => <th key={i} className="px-2 py-3 text-center">R{i + 1}</th>)}<th className="px-3 py-3 text-center">Total</th>{data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-1"><span>{round.label || `SO${round.round_number}`}</span><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete shoot-off round" onClick={() => void removeShootOff(round)}><Trash2 className="h-3.5 w-3.5" /></button></div></th>)}</tr></thead><tbody>{squadMembers.map((member) => { const participant = participantFor(member); const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0); return <tr key={member.id} className="border-t hover:bg-slate-50/60"><td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.athlete?.cyssa_number ? `CYSSA ${participant.athlete.cyssa_number}` : "No CYSSA number"}</div></td><td className="px-3 py-3">{participant.team?.name || "—"}</td><td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td><td className="px-3 py-3">{selectedSquad?.squad_number || "—"}</td><td className="px-3 py-3">{member.position_label || `Post ${member.position}`}</td>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => { const round = i + 1; const key = `${member.id}:${round}`; return <td key={round} className="px-2 py-2"><div className="relative"><input ref={(node) => { inputRefs.current[key] = node }} inputMode="numeric" className="h-10 w-16 rounded-lg border px-2 text-center text-base font-semibold focus:border-slate-900 focus:ring-2 focus:ring-slate-200" value={scoreValue(member.id, round)} onChange={(e) => setDrafts((current) => ({ ...current, [key]: e.target.value.replace(/[^0-9]/g, "") }))} onBlur={() => void commitRound(member.id, round)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitRound(member.id, round, true) } }} maxLength={3} />{savingKey === key ? <Save className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-slate-500" /> : null}</div></td> })}<td className="px-3 py-3 text-center text-lg font-bold">{total}</td>{data.shootOffRounds.map((round) => { const current = shootOffScoreMap.get(`${member.id}:${round.id}`); return <td key={round.id} className="px-2 py-2"><input inputMode="numeric" defaultValue={current ?? ""} className="h-10 w-16 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-base font-semibold" onBlur={(e) => void commitShootOff(member.id, round, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} /></td> })}</tr> })}</tbody></table></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[980px] border-collapse text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="sticky left-0 z-10 min-w-60 border-r bg-slate-50 px-4 py-3">Participant</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Class</th><th className="px-3 py-3">Squad #</th><th className="px-3 py-3">Post</th>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => <th key={i} className="px-2 py-3 text-center">R{i + 1}</th>)}<th className="px-3 py-3 text-center">Total</th>{data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-1"><span>{round.label || `SO${round.round_number}`}</span><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete shoot-off round" onClick={() => void removeShootOff(round)}><Trash2 className="h-3.5 w-3.5" /></button></div></th>)}</tr></thead><tbody>{squadMembers.map((member) => { const participant = participantFor(member); const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0); return <tr key={member.id} className="border-t hover:bg-slate-50/60"><td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.athlete?.cyssa_number ? `CYSSA ${participant.athlete.cyssa_number}` : "No CYSSA number"}</div></td><td className="px-3 py-3">{participant.team?.name || "—"}</td><td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td><td className="px-3 py-3">{selectedSquad?.squad_number || "—"}</td><td className="px-3 py-3">{member.position_label || `Post ${member.position}`}</td>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => { const round = i + 1; const key = `${member.id}:${round}`; return <td key={round} className="px-2 py-2"><div className="relative"><input ref={(node) => { inputRefs.current[key] = node }} inputMode="numeric" className={`h-10 w-16 rounded-lg border px-2 text-center text-base font-semibold focus:border-slate-900 focus:ring-2 focus:ring-slate-200 ${requestedMemberId === member.id ? "ring-2 ring-emerald-400" : ""}`} value={scoreValue(member.id, round)} onChange={(e) => setDrafts((current) => ({ ...current, [key]: e.target.value.replace(/[^0-9]/g, "") }))} onBlur={() => void commitRound(member.id, round)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitRound(member.id, round, true) } }} maxLength={3} />{savingKey === key ? <Save className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-slate-500" /> : null}</div></td> })}<td className="px-3 py-3 text-center text-lg font-bold">{total}</td>{data.shootOffRounds.map((round) => { const current = shootOffScoreMap.get(`${member.id}:${round.id}`); return <td key={round.id} className="px-2 py-2"><input ref={(node) => { inputRefs.current[`so:${member.id}:${round.id}`] = node }} inputMode="numeric" defaultValue={current ?? ""} className={`h-10 w-16 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-base font-semibold ${requestedMemberId === member.id ? "ring-2 ring-emerald-400" : ""}`} onBlur={(e) => void commitShootOff(member.id, round, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} /></td> })}</tr> })}</tbody></table></div>
             )}
           </section>
           <p className="text-xs text-slate-500">Scores save automatically when you press Enter or leave a field. Pressing Enter advances from R1 to R2, then through the remaining rounds.</p>

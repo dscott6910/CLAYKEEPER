@@ -5,6 +5,8 @@ export type MeetType = "series" | "state"
 
 export type AwardParticipant = {
   enrollmentId: string
+  memberId?: string
+  squadId?: string
   name: string
   team: string
   classCode: string

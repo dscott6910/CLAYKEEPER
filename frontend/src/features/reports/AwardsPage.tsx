@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
@@ -52,6 +53,8 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
       const entered = scores.filter((score) => score.score !== null).length
       return {
         enrollmentId: enrollment.id,
+        memberId: member?.id,
+        squadId: squad?.id,
         name: participantName(athlete),
         team: teamById.get(registration?.team_id || "")?.name || "No team",
         classCode: (classById.get(registration?.class_id || "")?.code || "Unclassified").toUpperCase(),
@@ -69,6 +72,7 @@ function disciplineLabel(value: DisciplineKey) {
 }
 
 export function AwardsPage() {
+  const navigate = useNavigate()
   const [organizationId, setOrganizationId] = useState("")
   const [events, setEvents] = useState<ReportEvent[]>([])
   const [shoots, setShoots] = useState<ReportShoot[]>([])
@@ -153,21 +157,22 @@ export function AwardsPage() {
     return individual + squads + teams + series
   }, [individualGroups, squadResults, stateTeams, seriesTeams])
   const readinessIssues = useMemo(() => {
-    const issues: Array<{ id: string; title: string; detail: string; action: string; tab?: TabKey }> = []
+    const issues: Array<{ id: string; title: string; detail: string; action: string; tab?: TabKey; correctionUrl?: string }> = []
 
     rows.filter((row) => !row.complete).forEach((row) => issues.push({
       id: `incomplete-${row.enrollmentId}`,
       title: `Incomplete score: ${row.name}`,
       detail: `${row.classCode} · ${row.team} · ${row.squad}. Complete the remaining rounds in Live Scoring before publishing awards.`,
-      action: "Open Live Scoring",
+      action: "Open this participant in Live Scoring",
+      correctionUrl: `/scoring?eventId=${encodeURIComponent(eventId)}&shootId=${encodeURIComponent(shootId)}&squadId=${encodeURIComponent(row.squadId || "")}&memberId=${encodeURIComponent(row.memberId || "")}&focus=round`,
     }))
 
     individualGroups.forEach((group) => group.rows.filter((row) => row.unresolvedTie).forEach((row) => issues.push({
       id: `individual-${group.classCode}-${row.enrollmentId}`,
       title: `Individual tie: ${group.classCode} place ${row.place}`,
       detail: `${row.name} is tied at ${row.total}. Enter or verify the shoot-off score, then refresh this page.`,
-      action: "View Individual Awards",
-      tab: "individual",
+      action: "Enter this participant's shoot-off score",
+      correctionUrl: `/scoring?eventId=${encodeURIComponent(eventId)}&shootId=${encodeURIComponent(shootId)}&squadId=${encodeURIComponent(row.squadId || "")}&memberId=${encodeURIComponent(row.memberId || "")}&focus=shootOff`,
     })))
 
     squadResults.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).forEach((row) => issues.push({
@@ -202,7 +207,7 @@ export function AwardsPage() {
     })
 
     return issues
-  }, [rows, individualGroups, squadResults, stateTeams, seriesTeams, publication?.status])
+  }, [rows, individualGroups, squadResults, stateTeams, seriesTeams, publication?.status, eventId, shootId])
   const readinessChecks = [
     { label: "A shoot is selected", ready: Boolean(selectedShoot) },
     { label: "Participant results are available", ready: rows.length > 0 },
@@ -213,7 +218,11 @@ export function AwardsPage() {
   const readyToPublish = readinessChecks.slice(0, 4).every((check) => check.ready)
   const fullyReady = readinessChecks.every((check) => check.ready)
 
-  function openReadinessIssue(issue: { tab?: TabKey }) {
+  function openReadinessIssue(issue: { tab?: TabKey; correctionUrl?: string }) {
+    if (issue.correctionUrl) {
+      navigate(issue.correctionUrl)
+      return
+    }
     if (issue.tab) {
       setTab(issue.tab)
       window.setTimeout(() => document.getElementById("awards-report")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0)
