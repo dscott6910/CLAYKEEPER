@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ClipboardList,
   DatabaseBackup,
+  Wrench,
   Landmark,
   RadioTower,
   Medal,
@@ -133,6 +134,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Seasons & Imports",
         path: "/operations",
         icon: DatabaseBackup,
+      },
+      {
+        label: "Event Maintenance",
+        path: "/event-maintenance",
+        icon: Wrench,
       },
       {
         label: "Public Portal",

@@ -27,6 +27,7 @@ const PublicPortalPage = lazy(() => import("@/features/public/PublicPortalPage")
 const MobileOperationsPage = lazy(() => import("@/features/mobile/MobileOperationsPage").then((module) => ({ default: module.MobileOperationsPage })))
 const RegistrationPaymentCenterPage = lazy(() => import("@/features/payments/RegistrationPaymentCenterPage").then((module) => ({ default: module.RegistrationPaymentCenterPage })))
 const AnalyticsPage = lazy(() => import("@/features/analytics/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })))
+const EventMaintenancePage = lazy(() => import("@/features/maintenance/EventMaintenancePage").then((module) => ({ default: module.EventMaintenancePage })))
 
 function RouteLoadingFallback() {
   return (
@@ -74,6 +75,7 @@ function App() {
               <Route path="event-operations" element={<LazyRoute><EventOperationsPage /></LazyRoute>} />
               <Route path="mobile" element={<LazyRoute><MobileOperationsPage /></LazyRoute>} />
               <Route path="operations" element={<LazyRoute><SeasonImportPage /></LazyRoute>} />
+              <Route path="event-maintenance" element={<LazyRoute><EventMaintenancePage /></LazyRoute>} />
               <Route path="settings" element={<LazyRoute><SettingsPage /></LazyRoute>} />
             </Route>
           </Route>
