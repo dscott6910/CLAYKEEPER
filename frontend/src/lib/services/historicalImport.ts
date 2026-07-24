@@ -692,11 +692,13 @@ export type ParsedTrapSeriesWorkbook = {
   kind: "trap_series"
   fileName: string
   sheets: TrapSeriesSheet[]
+  workbookErrors: string[]
 }
 
 export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSeriesWorkbook> {
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true })
   const sheets: TrapSeriesSheet[] = []
+  const workbookErrors: string[] = []
 
   for (const sheetName of workbook.SheetNames) {
     const matrix = rawRowsForSheet(workbook.Sheets[sheetName])
@@ -716,7 +718,23 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       .filter((item) => item.match)
       .sort((a, b) => Number(a.match?.[1]) - Number(b.match?.[1]))
 
-    if (lastIndex < 0 || firstIndex < 0 || totalIndex < 0 || !roundIndexes.length) continue
+    const detectedRounds = new Set(roundIndexes.map((item) => Number(item.match?.[1])))
+    const missingColumns: string[] = []
+    if (lastIndex < 0) missingColumns.push("LASTNAME")
+    if (firstIndex < 0) missingColumns.push("FIRSTNAME")
+    if (totalIndex < 0) missingColumns.push("TOTALSCORE")
+    for (let round = 1; round <= 4; round += 1) {
+      if (!detectedRounds.has(round)) missingColumns.push(`TRAP ${round}`)
+    }
+    if (missingColumns.length) {
+      workbookErrors.push(`${sheetName}: missing required column${missingColumns.length === 1 ? "" : "s"} ${missingColumns.join(", ")}`)
+      continue
+    }
+
+    const requiredRoundIndexes = roundIndexes.filter((item) => {
+      const round = Number(item.match?.[1])
+      return round >= 1 && round <= 4
+    })
 
     const rows: TrapSeriesRow[] = []
     for (let rowIndex = headerRow + 1; rowIndex < matrix.length; rowIndex += 1) {
@@ -727,7 +745,7 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
       const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
       const total = numberValue(record[totalIndex])
-      const scores = roundIndexes.map((item) => numberValue(record[item.index]))
+      const scores = requiredRoundIndexes.map((item) => numberValue(record[item.index]))
 
       if (!firstName && !lastName && !team && total === null && scores.every((score) => score === null)) continue
 
@@ -766,8 +784,8 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
     if (rows.length) sheets.push({ sheetName, rows, hasSquadNumbers: squadIndex >= 0 })
   }
 
-  if (!sheets.length) throw new Error("No Trap Series worksheets were detected. Each shoot sheet must contain LASTNAME, FIRSTNAME, TOTALSCORE, and TRAP 1-4 columns.")
-  return { kind: "trap_series", fileName: file.name, sheets }
+  if (!sheets.length && !workbookErrors.length) throw new Error("No Trap Series worksheets were detected. Each shoot sheet must contain LASTNAME, FIRSTNAME, TOTALSCORE, and TRAP 1-4 columns.")
+  return { kind: "trap_series", fileName: file.name, sheets, workbookErrors }
 }
 
 export type TrapSeriesImportOptions = {
@@ -778,7 +796,28 @@ export type TrapSeriesImportOptions = {
   organizationFee: number
 }
 
-export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook, options: TrapSeriesImportOptions) {
+export type TrapSeriesImportControl = {
+  isCancelled?: () => boolean
+  onImportCreated?: (importId: string) => void
+  onProgress?: (message: string) => void
+}
+
+export class ImportCancelledError extends Error {
+  constructor() {
+    super("Import cancelled by user")
+    this.name = "ImportCancelledError"
+  }
+}
+
+function throwIfImportCancelled(control?: TrapSeriesImportControl) {
+  if (control?.isCancelled?.()) throw new ImportCancelledError()
+}
+
+export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook, options: TrapSeriesImportOptions, control?: TrapSeriesImportControl) {
+  if (parsed.workbookErrors.length) {
+    throw new Error(`Workbook structure must be corrected before importing:\n${parsed.workbookErrors.join("\n")}`)
+  }
+  throwIfImportCancelled(control)
   const allRows = parsed.sheets.flatMap((sheet) => sheet.rows)
   const validSheets = parsed.sheets
     .map((sheet) => ({ ...sheet, rows: sheet.rows.filter((row) => !row.errors.length) }))
@@ -800,6 +839,9 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     created_by: userId,
   }).select("id").single()
   if (batchError) throw batchError
+  control?.onImportCreated?.(importBatch.id)
+  control?.onProgress?.("Import record created. Creating event…")
+  throwIfImportCancelled(control)
 
   try {
     const eventId = await singleId("event", () => supabase.from("events").insert({
@@ -814,6 +856,9 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
       created_by: userId,
     }).select("id").single())
 
+    await supabase.from("historical_imports").update({ event_id: eventId }).eq("id", importBatch.id)
+    throwIfImportCancelled(control)
+
     const teamCache = new Map<string, string>()
     const classCache = new Map<string, string>()
     const athleteCache = new Map<string, string>()
@@ -822,6 +867,8 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     let importedRows = 0
 
     for (const sheet of validSheets) {
+      throwIfImportCancelled(control)
+      control?.onProgress?.(`Importing ${sheet.sheetName}…`)
       let locationId: string | null = null
       const { data: existingLocation } = await supabase.from("locations").select("id").eq("organization_id", organizationId).ilike("name", sheet.sheetName).maybeSingle()
       locationId = existingLocation?.id ?? await singleId("location", () => supabase.from("locations").insert({ organization_id: organizationId, name: sheet.sheetName }).select("id").single())
@@ -855,6 +902,8 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
       })
 
       for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex += 1) {
+        throwIfImportCancelled(control)
+        control?.onProgress?.(`Importing ${sheet.sheetName}: entry ${rowIndex + 1} of ${sheet.rows.length}`)
         const row = sheet.rows[rowIndex]
         let teamId: string | null = null
         if (row.team) {
@@ -981,6 +1030,8 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
       }
     }
 
+    throwIfImportCancelled(control)
+    control?.onProgress?.("Finalizing import…")
     await supabase.from("historical_imports").update({
       event_id: eventId,
       status: skippedRows.length || allRows.some((row) => row.warnings.length) ? "completed_with_warnings" : "completed",
@@ -991,7 +1042,13 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
 
     return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size, skippedRows: skippedRows.length }
   } catch (error) {
-    await supabase.from("historical_imports").update({ status: "failed", error_count: 1, import_summary: { error: error instanceof Error ? error.message : String(error) }, completed_at: new Date().toISOString() }).eq("id", importBatch.id)
+    const cancelled = error instanceof ImportCancelledError
+    await supabase.from("historical_imports").update({
+      status: cancelled ? "cancelled" : "failed",
+      error_count: cancelled ? skippedRows.length : Math.max(1, skippedRows.length),
+      import_summary: { error: error instanceof Error ? error.message : String(error), cancelled },
+      completed_at: new Date().toISOString(),
+    }).eq("id", importBatch.id)
     throw error
   }
 }
