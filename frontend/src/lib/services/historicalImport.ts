@@ -796,10 +796,18 @@ export type TrapSeriesImportOptions = {
   organizationFee: number
 }
 
+export type TrapSeriesImportProgress = {
+  message: string
+  completedRows: number
+  totalRows: number
+  percent: number
+  stage: "preparing" | "importing" | "finalizing" | "completed"
+}
+
 export type TrapSeriesImportControl = {
   isCancelled?: () => boolean
   onImportCreated?: (importId: string) => void
-  onProgress?: (message: string) => void
+  onProgress?: (progress: TrapSeriesImportProgress) => void
 }
 
 export class ImportCancelledError extends Error {
@@ -839,8 +847,14 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     created_by: userId,
   }).select("id").single()
   if (batchError) throw batchError
+  const totalValidRows = validSheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)
+  const reportProgress = (message: string, completedRows: number, stage: TrapSeriesImportProgress["stage"]) => {
+    const percent = stage === "completed" ? 100 : totalValidRows > 0 ? Math.min(99, Math.round((completedRows / totalValidRows) * 100)) : 0
+    control?.onProgress?.({ message, completedRows, totalRows: totalValidRows, percent, stage })
+  }
+
   control?.onImportCreated?.(importBatch.id)
-  control?.onProgress?.("Import record created. Creating event…")
+  reportProgress("Import record created. Creating event…", 0, "preparing")
   throwIfImportCancelled(control)
 
   try {
@@ -856,7 +870,11 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
       created_by: userId,
     }).select("id").single())
 
-    await supabase.from("historical_imports").update({ event_id: eventId }).eq("id", importBatch.id)
+    const { error: linkEventError } = await supabase
+      .from("historical_imports")
+      .update({ event_id: eventId, import_summary: { eventId, phase: "event_created" } })
+      .eq("id", importBatch.id)
+    if (linkEventError) throw new Error(`The event was created, but ClayKeeper could not link it to the import for cleanup: ${linkEventError.message}`)
     throwIfImportCancelled(control)
 
     const teamCache = new Map<string, string>()
@@ -868,7 +886,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
 
     for (const sheet of validSheets) {
       throwIfImportCancelled(control)
-      control?.onProgress?.(`Importing ${sheet.sheetName}…`)
+      reportProgress(`Importing ${sheet.sheetName}…`, importedRows, "importing")
       let locationId: string | null = null
       const { data: existingLocation } = await supabase.from("locations").select("id").eq("organization_id", organizationId).ilike("name", sheet.sheetName).maybeSingle()
       locationId = existingLocation?.id ?? await singleId("location", () => supabase.from("locations").insert({ organization_id: organizationId, name: sheet.sheetName }).select("id").single())
@@ -903,7 +921,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
 
       for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex += 1) {
         throwIfImportCancelled(control)
-        control?.onProgress?.(`Importing ${sheet.sheetName}: entry ${rowIndex + 1} of ${sheet.rows.length}`)
+        reportProgress(`Importing ${sheet.sheetName}: entry ${rowIndex + 1} of ${sheet.rows.length}`, importedRows, "importing")
         const row = sheet.rows[rowIndex]
         let teamId: string | null = null
         if (row.team) {
@@ -1027,9 +1045,10 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
           if (error) throw error
         }
         importedRows += 1
+        reportProgress(`Imported ${importedRows} of ${totalValidRows} entries`, importedRows, "importing")
 
         // Persist visible progress during long imports so the history table does not remain at 0/total.
-        if (importedRows % 10 === 0 || importedRows === validSheets.reduce((sum, current) => sum + current.rows.length, 0)) {
+        if (importedRows % 10 === 0 || importedRows === totalValidRows) {
           const { error: progressError } = await supabase
             .from("historical_imports")
             .update({ imported_row_count: importedRows })
@@ -1040,7 +1059,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     }
 
     throwIfImportCancelled(control)
-    control?.onProgress?.(`Finalizing import after ${importedRows} entries…`)
+    reportProgress(`Finalizing import after ${importedRows} entries…`, importedRows, "finalizing")
     const finalStatus = skippedRows.length || allRows.some((row) => row.warnings.length)
       ? "completed_with_warnings"
       : "completed"
@@ -1066,7 +1085,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
       throw new Error("Import data was saved, but the import history record did not finalize correctly. Use Cleanup import before trying again.")
     }
 
-    control?.onProgress?.(`Import completed: ${importedRows} entries saved.`)
+    reportProgress(`Import completed: ${importedRows} entries saved.`, importedRows, "completed")
     return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size, skippedRows: skippedRows.length }
   } catch (error) {
     const cancelled = error instanceof ImportCancelledError
@@ -1160,11 +1179,11 @@ export type DeleteHistoricalImportResult = {
 }
 
 export async function deleteHistoricalImport(importId: string): Promise<DeleteHistoricalImportResult> {
-  const { data, error } = await supabase.rpc("delete_historical_import_v3", { p_import_id: importId })
+  const { data, error } = await supabase.rpc("delete_historical_import_v4", { p_import_id: importId })
   if (error) {
     const message = error.message ?? "Unable to delete import"
-    if (message.includes("delete_historical_import_v3") || message.includes("schema cache")) {
-      throw new Error("The Delete Import database update has not been installed. Run RUN_THIS_SQL_FIRST_historical_import_delete_v3.sql in the Supabase SQL Editor, then try again.")
+    if (message.includes("delete_historical_import_v4") || message.includes("schema cache")) {
+      throw new Error("The cleanup database update has not been installed. Run RUN_THIS_SQL_FIRST_historical_import_cleanup_v4.sql in the Supabase SQL Editor, then try again.")
     }
     throw new Error(message)
   }

@@ -46,6 +46,7 @@ export function SeasonImportPage() {
   const [deleteMessage, setDeleteMessage] = useState("")
   const [trapImportRunning, setTrapImportRunning] = useState(false)
   const [trapImportMessage, setTrapImportMessage] = useState("")
+  const [trapImportProgress, setTrapImportProgress] = useState({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" as "preparing" | "importing" | "finalizing" | "completed" })
   const [activeTrapImportId, setActiveTrapImportId] = useState<string | null>(null)
   const trapCancelRef = useRef(false)
 
@@ -104,6 +105,7 @@ export function SeasonImportPage() {
     if (!file) return
     trapCancelRef.current = false
     setTrapImportMessage("")
+    setTrapImportProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
     setActiveTrapImportId(null)
     setBusy(true)
     try {
@@ -124,6 +126,7 @@ export function SeasonImportPage() {
     setTrapImportRunning(true)
     setBusy(true)
     setTrapImportMessage("Starting import…")
+    setTrapImportProgress({ completedRows: 0, totalRows: trapTotals.ready, percent: 0, stage: "preparing" })
     try {
       const result = await importTrapSeriesWorkbook(trapParsed, {
         seasonId,
@@ -134,10 +137,14 @@ export function SeasonImportPage() {
       }, {
         isCancelled: () => trapCancelRef.current,
         onImportCreated: setActiveTrapImportId,
-        onProgress: setTrapImportMessage,
+        onProgress: (progress) => {
+          setTrapImportMessage(progress.message)
+          setTrapImportProgress({ completedRows: progress.completedRows, totalRows: progress.totalRows, percent: progress.percent, stage: progress.stage })
+        },
       })
       toast.success(`${result.uniqueParticipants} participants and ${result.importedRows} Trap Series entries imported${result.skippedRows ? `; ${result.skippedRows} invalid row(s) skipped` : ""}`)
       setTrapImportMessage("Import completed successfully.")
+      setTrapImportProgress((current) => ({ ...current, completedRows: current.totalRows, percent: 100, stage: "completed" }))
       await refresh()
       setTrapParsed(null)
       setActiveTrapImportId(null)
@@ -168,6 +175,7 @@ export function SeasonImportPage() {
     if (trapImportRunning) return
     setTrapParsed(null)
     setTrapImportMessage("")
+    setTrapImportProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
     setActiveTrapImportId(null)
     trapCancelRef.current = false
   }
@@ -400,6 +408,26 @@ export function SeasonImportPage() {
                   <tbody>{trapParsed.sheets.flatMap((sheet) => sheet.rows.map((row) => <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2 font-medium">{sheet.sheetName}</td><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td><td className="px-3 py-2">{row.team || '—'}</td><td className="px-3 py-2">{row.classCode || '—'}</td><td className="px-3 py-2">{row.squadNumber || 'Auto'}</td><td className="px-3 py-2 whitespace-nowrap">{row.scores.map((score) => score ?? '—').join(' · ')}</td><td className="px-3 py-2 font-semibold">{row.total ?? '—'}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>))}</tbody>
                 </table>
               </div>
+              {(trapImportRunning || trapImportMessage) && (
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <div>
+                      <div className="font-medium text-slate-900">{trapImportMessage || "Preparing import…"}</div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {trapImportProgress.totalRows > 0
+                          ? `${trapImportProgress.completedRows} of ${trapImportProgress.totalRows} entries processed`
+                          : "Preparing workbook and database records"}
+                      </div>
+                    </div>
+                    <div className="text-lg font-semibold text-amber-700">{trapImportProgress.percent}%</div>
+                  </div>
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-amber-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={trapImportProgress.percent}>
+                    <div className="h-full rounded-full bg-amber-600 transition-[width] duration-300" style={{ width: `${trapImportProgress.percent}%` }} />
+                  </div>
+                  {activeTrapImportId ? <div className="mt-2 text-xs text-slate-500">Import recovery ID: {activeTrapImportId.slice(0, 8)}</div> : null}
+                </div>
+              )}
+
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={handleClearTrapWorkbook} disabled={trapImportRunning}>{trapParsed.workbookErrors.length ? <XCircle className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}{trapParsed.workbookErrors.length ? "Remove faulty spreadsheet" : "Clear spreadsheet"}</Button>
                 {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || !seasonId || !trapSeriesEventName || !trapSeriesDate}><Upload className="mr-2 h-4 w-4" />Import complete Trap Series</Button>}
@@ -419,7 +447,7 @@ export function SeasonImportPage() {
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
               {importHistory.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">No workbook imports have been recorded yet.</div> : <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Imported</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
-                <tbody>{importHistory.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{item.file_name}</div><div className="max-w-xl truncate text-xs text-slate-500">{item.worksheet_name || "—"}</div></td><td className="px-3 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="px-3 py-3">{item.imported_row_count}/{item.row_count}{item.error_count ? <span className="ml-2 text-amber-700">({item.error_count} skipped)</span> : null}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{item.status.replaceAll("_", " ")}</span></td><td className="px-3 py-3 text-right"><div className="flex justify-end gap-2">{item.status === "importing" ? <Button variant="outline" onClick={() => void handleFinalizeImport(item)} disabled={finalizingImportId === item.id || deletingImportId === item.id}>{finalizingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Finish import</Button> : null}<Button variant="outline" onClick={() => void handleDeleteImport(item)} disabled={deletingImportId === item.id || finalizingImportId === item.id || item.status === "reversed"} className="text-red-600 hover:text-red-700">{deletingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{["failed", "cancelled", "importing"].includes(item.status) ? "Cleanup import" : "Delete import"}</Button></div></td></tr>)}</tbody>
+                <tbody>{importHistory.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{item.file_name}</div><div className="max-w-xl truncate text-xs text-slate-500">{item.worksheet_name || "—"}</div></td><td className="px-3 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="px-3 py-3"><div>{item.imported_row_count}/{item.row_count}{item.error_count ? <span className="ml-2 text-amber-700">({item.error_count} skipped)</span> : null}</div>{item.status === "importing" ? <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-amber-500" style={{ width: `${item.row_count > 0 ? Math.min(100, Math.round((item.imported_row_count / item.row_count) * 100)) : 0}%` }} /></div> : null}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{item.status.replaceAll("_", " ")}</span></td><td className="px-3 py-3 text-right"><div className="flex justify-end gap-2">{item.status === "importing" ? <Button variant="outline" onClick={() => void handleFinalizeImport(item)} disabled={finalizingImportId === item.id || deletingImportId === item.id}>{finalizingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Finish import</Button> : null}<Button variant="outline" onClick={() => void handleDeleteImport(item)} disabled={deletingImportId === item.id || finalizingImportId === item.id || item.status === "reversed"} className="text-red-600 hover:text-red-700">{deletingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}{["failed", "cancelled", "importing"].includes(item.status) ? "Cleanup import" : "Delete import"}</Button></div></td></tr>)}</tbody>
               </table>}
             </div>
           </section>
