@@ -42,6 +42,7 @@ export function SeasonImportPage() {
   const [closeoutSummary, setCloseoutSummary] = useState<SeasonCloseoutSummary | null>(null)
   const [importHistory, setImportHistory] = useState<HistoricalImportRecord[]>([])
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null)
+  const [deleteMessage, setDeleteMessage] = useState("")
 
   async function refresh() {
     setLoading(true)
@@ -139,12 +140,18 @@ export function SeasonImportPage() {
     const confirmed = window.confirm(`Delete the import from ${item.file_name}?\n\nThis permanently removes the imported event, shoots, registrations, squads, and scores. Participants, teams, classes, and locations are kept because they may be used elsewhere.`)
     if (!confirmed) return
     setDeletingImportId(item.id)
+    setDeleteMessage(`Deleting ${item.file_name}...`)
     try {
       const result = await deleteHistoricalImport(item.id)
+      setDeleteMessage(`Deleted ${result.eventName || item.file_name}. Refreshing import history...`)
       await refresh()
+      setDeleteMessage(`Successfully deleted ${result.eventName || item.file_name}.`)
       toast.success(`Deleted ${result.eventName || item.file_name}`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to delete import")
+      const message = error instanceof Error ? error.message : "Unable to delete import"
+      setDeleteMessage(`Delete failed: ${message}`)
+      toast.error(message, { duration: 12000 })
+      window.alert(`Delete Import failed.\n\n${message}`)
     } finally {
       setDeletingImportId(null)
     }
@@ -346,6 +353,7 @@ export function SeasonImportPage() {
               </div>
               <Archive className="h-6 w-6 text-slate-500" />
             </div>
+            {deleteMessage ? <div className={`mt-5 rounded-xl border px-4 py-3 text-sm ${deleteMessage.startsWith("Delete failed") ? "border-red-200 bg-red-50 text-red-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>{deleteMessage}</div> : null}
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
               {importHistory.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">No workbook imports have been recorded yet.</div> : <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Imported</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
