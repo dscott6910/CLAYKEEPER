@@ -780,8 +780,11 @@ export type TrapSeriesImportOptions = {
 
 export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook, options: TrapSeriesImportOptions) {
   const allRows = parsed.sheets.flatMap((sheet) => sheet.rows)
-  const invalid = allRows.filter((row) => row.errors.length)
-  if (invalid.length) throw new Error(`Resolve ${invalid.length} row(s) with errors before importing.`)
+  const validSheets = parsed.sheets
+    .map((sheet) => ({ ...sheet, rows: sheet.rows.filter((row) => !row.errors.length) }))
+    .filter((sheet) => sheet.rows.length > 0)
+  const skippedRows = allRows.filter((row) => row.errors.length)
+  if (!validSheets.length) throw new Error("No valid Trap Series rows are available to import.")
 
   const { organizationId, userId } = await getCurrentOrganizationContext()
   const { data: importBatch, error: batchError } = await supabase.from("historical_imports").insert({
@@ -792,6 +795,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     status: "importing",
     row_count: allRows.length,
     warning_count: allRows.reduce((count, row) => count + row.warnings.length, 0),
+    error_count: skippedRows.length,
     source_rows: parsed.sheets,
     created_by: userId,
   }).select("id").single()
@@ -817,7 +821,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
     const shootIds: Record<string, string> = {}
     let importedRows = 0
 
-    for (const sheet of parsed.sheets) {
+    for (const sheet of validSheets) {
       let locationId: string | null = null
       const { data: existingLocation } = await supabase.from("locations").select("id").eq("organization_id", organizationId).ilike("name", sheet.sheetName).maybeSingle()
       locationId = existingLocation?.id ?? await singleId("location", () => supabase.from("locations").insert({ organization_id: organizationId, name: sheet.sheetName }).select("id").single())
@@ -979,15 +983,48 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
 
     await supabase.from("historical_imports").update({
       event_id: eventId,
-      status: allRows.some((row) => row.warnings.length) ? "completed_with_warnings" : "completed",
+      status: skippedRows.length || allRows.some((row) => row.warnings.length) ? "completed_with_warnings" : "completed",
       imported_row_count: importedRows,
-      import_summary: { eventId, shootIds, uniqueParticipants: athleteCache.size, teams: teamCache.size, classes: classCache.size },
+      import_summary: { eventId, shootIds, uniqueParticipants: athleteCache.size, teams: teamCache.size, classes: classCache.size, skippedRows: skippedRows.map((row) => ({ sheetName: row.sheetName, rowNumber: row.rowNumber, errors: row.errors })) },
       completed_at: new Date().toISOString(),
     }).eq("id", importBatch.id)
 
-    return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size }
+    return { eventId, shootIds, importedRows, uniqueParticipants: athleteCache.size, skippedRows: skippedRows.length }
   } catch (error) {
     await supabase.from("historical_imports").update({ status: "failed", error_count: 1, import_summary: { error: error instanceof Error ? error.message : String(error) }, completed_at: new Date().toISOString() }).eq("id", importBatch.id)
     throw error
   }
+}
+
+
+export type HistoricalImportRecord = {
+  id: string
+  event_id: string | null
+  file_name: string
+  worksheet_name: string | null
+  status: string
+  row_count: number
+  imported_row_count: number
+  warning_count: number
+  error_count: number
+  created_at: string
+  completed_at: string | null
+  import_summary: Record<string, unknown> | null
+}
+
+export async function listHistoricalImports(): Promise<HistoricalImportRecord[]> {
+  const { organizationId } = await getCurrentOrganizationContext()
+  const { data, error } = await supabase
+    .from("historical_imports")
+    .select("id,event_id,file_name,worksheet_name,status,row_count,imported_row_count,warning_count,error_count,created_at,completed_at,import_summary")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return (data ?? []) as HistoricalImportRecord[]
+}
+
+export async function deleteHistoricalImport(importId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_historical_import", { p_import_id: importId })
+  if (error) throw error
 }

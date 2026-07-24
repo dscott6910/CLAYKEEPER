@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
-import { Archive, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Upload, XCircle } from "lucide-react"
+import { Archive, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Trash2, Upload, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
-import { importTrapSeriesWorkbook, importUsOpenWorkbook, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
+import { deleteHistoricalImport, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
 import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -40,12 +40,15 @@ export function SeasonImportPage() {
   const [nextSeasonStart, setNextSeasonStart] = useState("2027-01-01")
   const [nextSeasonEnd, setNextSeasonEnd] = useState("2027-12-31")
   const [closeoutSummary, setCloseoutSummary] = useState<SeasonCloseoutSummary | null>(null)
+  const [importHistory, setImportHistory] = useState<HistoricalImportRecord[]>([])
+  const [deletingImportId, setDeletingImportId] = useState<string | null>(null)
 
   async function refresh() {
     setLoading(true)
     try {
-      const data = await listSeasons()
+      const [data, imports] = await Promise.all([listSeasons(), listHistoricalImports()])
       setSeasons(data)
+      setImportHistory(imports)
       setSeasonId((current) => current || data.find((s) => s.status === "active")?.id || data[0]?.id || "")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load seasons")
@@ -117,12 +120,33 @@ export function SeasonImportPage() {
         entryFee: Number(trapSeriesEntryFee) || 0,
         organizationFee: Number(trapSeriesOrganizationFee) || 0,
       })
-      toast.success(`${result.uniqueParticipants} participants and ${result.importedRows} Trap Series entries imported into ${trapSeriesEventName}`)
+      toast.success(`${result.uniqueParticipants} participants and ${result.importedRows} Trap Series entries imported${result.skippedRows ? `; ${result.skippedRows} invalid row(s) skipped` : ""}`)
+      await refresh()
       setTrapParsed(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Trap Series import failed")
     } finally {
       setBusy(false)
+    }
+  }
+
+
+  async function handleDeleteImport(item: HistoricalImportRecord) {
+    if (!item.event_id) {
+      toast.error("This import has no linked event to delete.")
+      return
+    }
+    const confirmed = window.confirm(`Delete the import from ${item.file_name}?\n\nThis permanently removes the imported event, shoots, registrations, squads, and scores. Participants, teams, classes, and locations are kept because they may be used elsewhere.`)
+    if (!confirmed) return
+    setDeletingImportId(item.id)
+    try {
+      await deleteHistoricalImport(item.id)
+      toast.success(`Deleted import from ${item.file_name}`)
+      await refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete import")
+    } finally {
+      setDeletingImportId(null)
     }
   }
 
@@ -302,14 +326,32 @@ export function SeasonImportPage() {
                 <input className={input} type="number" min="0" step="0.01" value={trapSeriesOrganizationFee} onChange={(e) => setTrapSeriesOrganizationFee(e.target.value)} placeholder="Organization/CYSSA fee" />
               </div>
 
+              {trapTotals.errors > 0 && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>{trapTotals.errors} invalid row(s) will be skipped.</strong> The remaining {trapTotals.ready} valid entries can still be imported. Review the red rows below for details.</div>}
+
               <div className="mt-5 max-h-[520px] overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
                   <tbody>{trapParsed.sheets.flatMap((sheet) => sheet.rows.map((row) => <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2 font-medium">{sheet.sheetName}</td><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td><td className="px-3 py-2">{row.team || '—'}</td><td className="px-3 py-2">{row.classCode || '—'}</td><td className="px-3 py-2">{row.squadNumber || 'Auto'}</td><td className="px-3 py-2 whitespace-nowrap">{row.scores.map((score) => score ?? '—').join(' · ')}</td><td className="px-3 py-2 font-semibold">{row.total ?? '—'}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>))}</tbody>
                 </table>
               </div>
-              <div className="mt-5 flex justify-end"><Button onClick={handleTrapSeriesImport} disabled={busy || trapTotals.errors > 0 || !seasonId || !trapSeriesEventName || !trapSeriesDate}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Import complete Trap Series</Button></div>
+              <div className="mt-5 flex justify-end"><Button onClick={handleTrapSeriesImport} disabled={busy || trapTotals.ready === 0 || !seasonId || !trapSeriesEventName || !trapSeriesDate}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Import complete Trap Series</Button></div>
             </>}
+          </section>
+
+          <section className={card}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Imported workbook history</h2>
+                <p className="mt-1 text-sm text-slate-600">Delete a completed import and all event data created by it. Shared participants, teams, classes, and locations are preserved.</p>
+              </div>
+              <Archive className="h-6 w-6 text-slate-500" />
+            </div>
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              {importHistory.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">No workbook imports have been recorded yet.</div> : <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Imported</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Action</th></tr></thead>
+                <tbody>{importHistory.map((item) => <tr key={item.id} className="border-t border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{item.file_name}</div><div className="max-w-xl truncate text-xs text-slate-500">{item.worksheet_name || "—"}</div></td><td className="px-3 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleString()}</td><td className="px-3 py-3">{item.imported_row_count}/{item.row_count}{item.error_count ? <span className="ml-2 text-amber-700">({item.error_count} skipped)</span> : null}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{item.status.replaceAll("_", " ")}</span></td><td className="px-3 py-3 text-right"><Button variant="outline" onClick={() => void handleDeleteImport(item)} disabled={deletingImportId === item.id || !item.event_id || item.status === "reversed"} className="text-red-600 hover:text-red-700">{deletingImportId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Delete import</Button></td></tr>)}</tbody>
+              </table>}
+            </div>
           </section>
 
           <section className={card}>
