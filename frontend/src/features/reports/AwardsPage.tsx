@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, CheckCircle2, Download, FileCheck2, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -152,6 +152,57 @@ export function AwardsPage() {
     const series = seriesTeams.filter((row) => row.unresolvedTie).length
     return individual + squads + teams + series
   }, [individualGroups, squadResults, stateTeams, seriesTeams])
+  const readinessIssues = useMemo(() => {
+    const issues: Array<{ id: string; title: string; detail: string; action: string; tab?: TabKey }> = []
+
+    rows.filter((row) => !row.complete).forEach((row) => issues.push({
+      id: `incomplete-${row.enrollmentId}`,
+      title: `Incomplete score: ${row.name}`,
+      detail: `${row.classCode} · ${row.team} · ${row.squad}. Complete the remaining rounds in Live Scoring before publishing awards.`,
+      action: "Open Live Scoring",
+    }))
+
+    individualGroups.forEach((group) => group.rows.filter((row) => row.unresolvedTie).forEach((row) => issues.push({
+      id: `individual-${group.classCode}-${row.enrollmentId}`,
+      title: `Individual tie: ${group.classCode} place ${row.place}`,
+      detail: `${row.name} is tied at ${row.total}. Enter or verify the shoot-off score, then refresh this page.`,
+      action: "View Individual Awards",
+      tab: "individual",
+    })))
+
+    squadResults.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).forEach((row) => issues.push({
+      id: `squad-${row.category}-${row.label}`,
+      title: `Squad tie: ${row.category} place ${row.place}`,
+      detail: `${row.label} is tied at ${row.total}. The current rules do not define an automatic squad tie-breaker; review the tied squads and record the official decision.`,
+      action: "View Squad Awards",
+      tab: "squad",
+    }))
+
+    stateTeams.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).forEach((row) => issues.push({
+      id: `team-${row.category}-${row.label}`,
+      title: `State team tie: ${row.category} place ${row.place}`,
+      detail: `${row.label} is tied at ${row.total}. Review the contributing shooters and tie-break score before publishing.`,
+      action: "View State Team Awards",
+      tab: "stateTeam",
+    }))
+
+    seriesTeams.filter((row) => row.unresolvedTie).forEach((row) => issues.push({
+      id: `series-${row.category}-${row.team}`,
+      title: `Series standings tie: ${row.category}`,
+      detail: `${row.team} is tied with ${row.points} points. A final series tie-break rule has not been configured, so an official decision is required.`,
+      action: "View Series Standings",
+      tab: "seriesTeam",
+    }))
+
+    if (publication?.status !== "published" && publication?.status !== "locked") issues.push({
+      id: "publication",
+      title: "Awards have not been published",
+      detail: "After all score and tie issues are resolved, use Publish. Use Lock only after the awards have been verified and are ready to announce.",
+      action: "Use Publish above",
+    })
+
+    return issues
+  }, [rows, individualGroups, squadResults, stateTeams, seriesTeams, publication?.status])
   const readinessChecks = [
     { label: "A shoot is selected", ready: Boolean(selectedShoot) },
     { label: "Participant results are available", ready: rows.length > 0 },
@@ -161,6 +212,15 @@ export function AwardsPage() {
   ]
   const readyToPublish = readinessChecks.slice(0, 4).every((check) => check.ready)
   const fullyReady = readinessChecks.every((check) => check.ready)
+
+  function openReadinessIssue(issue: { tab?: TabKey }) {
+    if (issue.tab) {
+      setTab(issue.tab)
+      window.setTimeout(() => document.getElementById("awards-report")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0)
+      return
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   async function saveStatus(status: "draft" | "published" | "locked") {
     if (!organizationId || !eventId || !shootId) return
@@ -235,10 +295,25 @@ export function AwardsPage() {
                 <span>{check.label}</span>
               </div>)}
             </div>
-            {unresolvedTieCount > 0 && <p className="mt-3 text-sm font-medium text-amber-800">{unresolvedTieCount} unresolved award tie{unresolvedTieCount === 1 ? " requires" : "s require"} review before publishing.</p>}
+            {readinessIssues.length > 0 && <div className="mt-5 overflow-hidden rounded-xl border border-amber-200">
+              <div className="bg-amber-50 px-4 py-3">
+                <p className="font-semibold text-amber-950">What needs attention</p>
+                <p className="text-sm text-amber-800">Each item below explains the problem and where to review it.</p>
+              </div>
+              <div className="divide-y divide-amber-100 bg-white">
+                {readinessIssues.map((issue) => <button key={issue.id} type="button" onClick={() => openReadinessIssue(issue)} className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left hover:bg-amber-50/60">
+                  <div>
+                    <p className="font-medium text-slate-900">{issue.title}</p>
+                    <p className="mt-1 text-sm text-slate-600">{issue.detail}</p>
+                    <p className="mt-1 text-xs font-semibold text-amber-800">{issue.action}</p>
+                  </div>
+                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-amber-700" />
+                </button>)}
+              </div>
+            </div>}
           </section>}
 
-          <section className={`awards-print-area rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
+          <section id="awards-report" className={`awards-print-area scroll-mt-6 rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div><div className="flex gap-3"><Stat icon={<Users className="h-5 w-5" />} value={rows.length} label="Participants" /><Stat icon={<Medal className="h-5 w-5" />} value={rows.filter((row) => row.complete).length} label="Complete" /></div></div>
 
             {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['individual','Individual Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}

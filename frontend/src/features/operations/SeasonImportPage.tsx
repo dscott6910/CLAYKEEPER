@@ -22,15 +22,15 @@ export function SeasonImportPage() {
   const [seasonEnd, setSeasonEnd] = useState("2026-12-31")
   const [seasonId, setSeasonId] = useState("")
   const [makeSeasonActive, setMakeSeasonActive] = useState(true)
-  const [eventName, setEventName] = useState("2026 US Open")
-  const [shootDate, setShootDate] = useState("2026-01-01")
+  const [eventName, setEventName] = useState("")
+  const [shootDate, setShootDate] = useState("")
   const [locationName, setLocationName] = useState("")
   const [trapEntryFee, setTrapEntryFee] = useState("140")
   const [skeetEntryFee, setSkeetEntryFee] = useState("130")
   const [sportingEntryFee, setSportingEntryFee] = useState("130")
   const [organizationFee, setOrganizationFee] = useState("0")
-  const [trapSeriesEventName, setTrapSeriesEventName] = useState("2026 Trap Series #1")
-  const [trapSeriesDate, setTrapSeriesDate] = useState("2026-01-01")
+  const [trapSeriesEventName, setTrapSeriesEventName] = useState("")
+  const [trapSeriesDate, setTrapSeriesDate] = useState("")
   const [trapSeriesEntryFee, setTrapSeriesEntryFee] = useState("0")
   const [trapSeriesOrganizationFee, setTrapSeriesOrganizationFee] = useState("2")
   const [seasonError, setSeasonError] = useState("")
@@ -56,7 +56,7 @@ export function SeasonImportPage() {
       const [data, imports] = await Promise.all([listSeasons(), listHistoricalImports()])
       setSeasons(data)
       setImportHistory(imports)
-      setSeasonId((current) => current || data.find((s) => s.status === "active")?.id || data[0]?.id || "")
+      setSeasonId((current) => current && data.some((season) => season.id === current) ? current : "")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load seasons")
     } finally {
@@ -100,6 +100,19 @@ export function SeasonImportPage() {
       errors: rows.reduce((sum, row) => sum + row.errors.length, 0),
     }
   }, [trapParsed])
+
+  const trapRequiredFields = [
+    { label: "Season", complete: Boolean(seasonId) },
+    { label: "Series name", complete: Boolean(trapSeriesEventName.trim()) },
+    { label: "Shoot date", complete: Boolean(trapSeriesDate) },
+  ]
+  const trapSetupComplete = trapRequiredFields.every((field) => field.complete)
+  const usOpenRequiredFields = [
+    { label: "Season", complete: Boolean(seasonId) },
+    { label: "Event name", complete: Boolean(eventName.trim()) },
+    { label: "Shoot date", complete: Boolean(shootDate) },
+  ]
+  const usOpenSetupComplete = usOpenRequiredFields.every((field) => field.complete)
 
   async function handleTrapSeriesFile(file: File | undefined) {
     if (!file) return
@@ -372,11 +385,19 @@ export function SeasonImportPage() {
               </div>
               <FileSpreadsheet className="h-6 w-6 text-amber-600" />
             </div>
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 px-6 py-10 text-center hover:border-amber-500 hover:bg-amber-50/40">
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="text-sm font-medium text-slate-700">Season <span className="text-red-600">*</span><select className={`${input} mt-1 ${!seasonId ? "border-red-300" : ""}`} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading || trapImportRunning}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Choose a season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select></label>
+                <label className="text-sm font-medium text-slate-700">Series name <span className="text-red-600">*</span><input className={`${input} mt-1 ${!trapSeriesEventName.trim() ? "border-red-300" : ""}`} value={trapSeriesEventName} onChange={(e) => setTrapSeriesEventName(e.target.value)} placeholder="Example: 2026 Trap Series Shoot 1" disabled={trapImportRunning} /></label>
+                <label className="text-sm font-medium text-slate-700">Shoot date <span className="text-red-600">*</span><input className={`${input} mt-1 ${!trapSeriesDate ? "border-red-300" : ""}`} type="date" value={trapSeriesDate} onChange={(e) => setTrapSeriesDate(e.target.value)} disabled={trapImportRunning} /></label>
+              </div>
+              {!trapSetupComplete && <p className="mt-3 text-sm font-medium text-red-700">Choose a season, enter a series name, and select a date before choosing a workbook.</p>}
+            </div>
+            <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${trapSetupComplete && !trapImportRunning ? "cursor-pointer border-slate-300 hover:border-amber-500 hover:bg-amber-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
               {busy ? <Loader2 className="h-8 w-8 animate-spin text-amber-600" /> : <Upload className="h-8 w-8 text-amber-600" />}
               <span className="mt-3 font-medium text-slate-800">Choose a Trap Series workbook</span>
               <span className="mt-1 text-xs text-slate-500">Example: 2026 Trap Series 1.xlsx. QR-code and blank worksheets are ignored automatically.</span>
-              <input className="hidden" type="file" accept=".xlsx,.xls" onChange={(e) => void handleTrapSeriesFile(e.target.files?.[0])} />
+              <input className="hidden" type="file" accept=".xlsx,.xls" disabled={!trapSetupComplete || trapImportRunning} onChange={(e) => void handleTrapSeriesFile(e.target.files?.[0])} />
             </label>
 
             {trapParsed && <>
@@ -388,10 +409,7 @@ export function SeasonImportPage() {
                 {trapParsed.sheets.map((sheet) => <div key={sheet.sheetName} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><strong>{sheet.sheetName}</strong><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">{sheet.rows.length} entries</span></div><p className="mt-2 text-xs text-slate-500">{sheet.hasSquadNumbers ? 'Squad numbers detected' : 'No squad column; imported holding squads will be created'}</p></div>)}
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <select className={input} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Select season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select>
-                <input className={input} value={trapSeriesEventName} onChange={(e) => setTrapSeriesEventName(e.target.value)} placeholder="Series event name" />
-                <input className={input} type="date" value={trapSeriesDate} onChange={(e) => setTrapSeriesDate(e.target.value)} />
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <input className={input} type="number" min="0" step="0.01" value={trapSeriesEntryFee} onChange={(e) => setTrapSeriesEntryFee(e.target.value)} placeholder="Entry fee per shoot" />
                 <input className={input} type="number" min="0" step="0.01" value={trapSeriesOrganizationFee} onChange={(e) => setTrapSeriesOrganizationFee(e.target.value)} placeholder="Organization/CYSSA fee" />
               </div>
@@ -430,7 +448,7 @@ export function SeasonImportPage() {
 
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={handleClearTrapWorkbook} disabled={trapImportRunning}>{trapParsed.workbookErrors.length ? <XCircle className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}{trapParsed.workbookErrors.length ? "Remove faulty spreadsheet" : "Clear spreadsheet"}</Button>
-                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || !seasonId || !trapSeriesEventName || !trapSeriesDate}><Upload className="mr-2 h-4 w-4" />Import complete Trap Series</Button>}
+                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || !trapSetupComplete}><Upload className="mr-2 h-4 w-4" />Import complete Trap Series</Button>}
               </div>
             </>}
           </section>
@@ -460,11 +478,20 @@ export function SeasonImportPage() {
               </div>
               <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
             </div>
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 px-6 py-10 text-center hover:border-emerald-500 hover:bg-emerald-50/40">
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="text-sm font-medium text-slate-700">Season <span className="text-red-600">*</span><select className={`${input} mt-1 ${!seasonId ? "border-red-300" : ""}`} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading || busy}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Choose a season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select></label>
+                <label className="text-sm font-medium text-slate-700">Event name <span className="text-red-600">*</span><input className={`${input} mt-1 ${!eventName.trim() ? "border-red-300" : ""}`} value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Example: 2026 US Open" disabled={busy} /></label>
+                <label className="text-sm font-medium text-slate-700">Shoot date <span className="text-red-600">*</span><input className={`${input} mt-1 ${!shootDate ? "border-red-300" : ""}`} type="date" value={shootDate} onChange={(e) => setShootDate(e.target.value)} disabled={busy} /></label>
+              </div>
+              {!usOpenSetupComplete && <p className="mt-3 text-sm font-medium text-red-700">Choose a season, enter an event name, and select a date before choosing a workbook.</p>}
+            </div>
+
+            <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${usOpenSetupComplete && !busy ? "cursor-pointer border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
               {busy ? <Loader2 className="h-8 w-8 animate-spin text-emerald-600" /> : <Upload className="h-8 w-8 text-emerald-600" />}
               <span className="mt-3 font-medium text-slate-800">Choose REVISED US OPEN 2026 SCORES.xlsx</span>
               <span className="mt-1 text-xs text-slate-500">ClayKeeper reads all three discipline worksheets and ignores the formatted blank rows.</span>
-              <input className="hidden" type="file" accept=".xlsx,.xls" onChange={(e) => void handleFile(e.target.files?.[0])} />
+              <input className="hidden" type="file" accept=".xlsx,.xls" disabled={!usOpenSetupComplete || busy} onChange={(e) => void handleFile(e.target.files?.[0])} />
             </label>
 
             {parsed && <>
@@ -477,9 +504,6 @@ export function SeasonImportPage() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <select className={input} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Select season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select>
-                <input className={input} value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Event name" />
-                <input className={input} type="date" value={shootDate} onChange={(e) => setShootDate(e.target.value)} />
                 <input className={input} value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location (optional)" />
                 <input className={input} type="number" min="0" step="0.01" value={trapEntryFee} onChange={(e) => setTrapEntryFee(e.target.value)} placeholder="Trap fee" />
                 <input className={input} type="number" min="0" step="0.01" value={skeetEntryFee} onChange={(e) => setSkeetEntryFee(e.target.value)} placeholder="Skeet fee" />
@@ -493,7 +517,7 @@ export function SeasonImportPage() {
                   <tbody>{parsed.sheets.flatMap((sheet) => sheet.rows.map((row) => <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2 font-medium">{sheet.sheetName}</td><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td><td className="px-3 py-2">{row.team || '—'}</td><td className="px-3 py-2">{row.classCode || '—'}</td><td className="px-3 py-2">{row.squadNumber || '—'}</td><td className="px-3 py-2 whitespace-nowrap">{row.scores.some((score) => score !== null) ? row.scores.map((score) => score ?? '—').join(' · ') : `Total ${row.total ?? '—'}`}</td><td className="px-3 py-2">{row.resultNote || '—'}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>))}</tbody>
                 </table>
               </div>
-              <div className="mt-5 flex justify-end"><Button onClick={handleImport} disabled={busy || totals.errors > 0 || !seasonId || !eventName || !shootDate}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Import complete US Open</Button></div>
+              <div className="mt-5 flex justify-end"><Button onClick={handleImport} disabled={busy || totals.errors > 0 || !usOpenSetupComplete}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Import complete US Open</Button></div>
             </>}
           </section>
         </div>
