@@ -1024,7 +1024,25 @@ export async function listHistoricalImports(): Promise<HistoricalImportRecord[]>
   return (data ?? []) as HistoricalImportRecord[]
 }
 
-export async function deleteHistoricalImport(importId: string): Promise<void> {
-  const { error } = await supabase.rpc("delete_historical_import", { p_import_id: importId })
-  if (error) throw error
+export type DeleteHistoricalImportResult = {
+  deleted: boolean
+  importId: string
+  eventId: string | null
+  eventName: string | null
+  fileName: string
+}
+
+export async function deleteHistoricalImport(importId: string): Promise<DeleteHistoricalImportResult> {
+  const { data, error } = await supabase.rpc("delete_historical_import_v2", { p_import_id: importId })
+  if (error) {
+    const message = error.message ?? "Unable to delete import"
+    if (message.includes("delete_historical_import_v2") || message.includes("schema cache")) {
+      throw new Error("The Delete Import database update has not been installed. Run RUN_THIS_SQL_FIRST_historical_import_delete_v2.sql in the Supabase SQL Editor, then try again.")
+    }
+    throw new Error(message)
+  }
+  if (!data || typeof data !== "object" || !(data as { deleted?: boolean }).deleted) {
+    throw new Error("Supabase did not confirm that the import was deleted.")
+  }
+  return data as DeleteHistoricalImportResult
 }

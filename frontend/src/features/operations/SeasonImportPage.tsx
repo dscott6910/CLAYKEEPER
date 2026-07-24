@@ -140,9 +140,9 @@ export function SeasonImportPage() {
     if (!confirmed) return
     setDeletingImportId(item.id)
     try {
-      await deleteHistoricalImport(item.id)
-      toast.success(`Deleted import from ${item.file_name}`)
+      const result = await deleteHistoricalImport(item.id)
       await refresh()
+      toast.success(`Deleted ${result.eventName || item.file_name}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to delete import")
     } finally {
