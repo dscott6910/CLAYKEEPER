@@ -27,16 +27,10 @@ ClayKeeper now includes a reusable ActiveNet registration importer on the Season
 - Records the import in Imported Workbook History.
 - Uses the existing Cleanup Import action to remove partial or incorrect ActiveNet imports while preserving shared athlete records.
 
-## Uploaded report verification
+## File handling and privacy
 
-The supplied 2025-2026 ActiveNet workbook contains:
-
-- 1,516 source rows
-- 900 unique participant names
-- 847 Trap rows
-- 282 Skeet rows
-- 224 Sporting Clays rows
-- 161 Bunker rows
-- 2 blank/non-registration rows that will be flagged and skipped
-
-The report does not contain team, class, CYSSA number, email, phone, address, or ActiveNet participant ID. ClayKeeper does not invent these values.
+- No sample ActiveNet spreadsheet is bundled with ClayKeeper.
+- The administrator selects an ActiveNet `.xlsx`, `.xls`, or `.csv` export from their own computer at import time.
+- ClayKeeper reads the selected file in the browser for validation, preview, and import.
+- The source spreadsheet itself is not stored in the project package.
+- Import History stores the filename, status, summary counts, warnings, errors, and linked imported records.
