@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Archive, Ban, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Trash2, Upload, XCircle } from "lucide-react"
+import { Archive, Ban, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, Pencil, RefreshCw, Trash2, Upload, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import { deleteHistoricalImport, finalizeHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
-import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
+import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, updateSeason, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
 const input = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -40,6 +40,10 @@ export function SeasonImportPage() {
   const [nextSeasonStart, setNextSeasonStart] = useState("2027-01-01")
   const [nextSeasonEnd, setNextSeasonEnd] = useState("2027-12-31")
   const [closeoutSummary, setCloseoutSummary] = useState<SeasonCloseoutSummary | null>(null)
+  const [editingSeason, setEditingSeason] = useState<Season | null>(null)
+  const [editSeasonName, setEditSeasonName] = useState("")
+  const [editSeasonStart, setEditSeasonStart] = useState("")
+  const [editSeasonEnd, setEditSeasonEnd] = useState("")
   const [importHistory, setImportHistory] = useState<HistoricalImportRecord[]>([])
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null)
   const [finalizingImportId, setFinalizingImportId] = useState<string | null>(null)
@@ -249,6 +253,37 @@ export function SeasonImportPage() {
     } finally { setBusy(false) }
   }
 
+  function beginEditSeason(season: Season) {
+    setEditingSeason(season)
+    setEditSeasonName(season.name)
+    setEditSeasonStart(season.start_date)
+    setEditSeasonEnd(season.end_date)
+    setSeasonError("")
+  }
+
+  async function saveSeasonChanges() {
+    if (!editingSeason) return
+    setBusy(true)
+    setSeasonError("")
+    try {
+      const updated = await updateSeason({
+        id: editingSeason.id,
+        name: editSeasonName,
+        startDate: editSeasonStart,
+        endDate: editSeasonEnd,
+      })
+      setSeasons((current) => current.map((season) => season.id === updated.id ? updated : season))
+      setEditingSeason(null)
+      toast.success(`${updated.name} updated`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update season"
+      setSeasonError(message)
+      toast.error(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleClose(season: Season) {
     setClosingSeason(season)
     setCloseoutSummary(null)
@@ -332,6 +367,28 @@ export function SeasonImportPage() {
                 <strong>Season creation failed:</strong> {seasonError}
               </div>
             )}
+            {editingSeason && (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Edit season</h3>
+                    <p className="mt-1 text-sm text-slate-600">Update the season name and date range. Events, scores, and reports linked to this season are preserved.</p>
+                  </div>
+                  <Pencil className="h-5 w-5 text-emerald-700" />
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <label className="text-sm font-medium text-slate-700">Season name<span className="text-red-600"> *</span><input className={`${input} mt-1`} value={editSeasonName} onChange={(e) => setEditSeasonName(e.target.value)} /></label>
+                  <label className="text-sm font-medium text-slate-700">Start date<span className="text-red-600"> *</span><input className={`${input} mt-1`} type="date" value={editSeasonStart} onChange={(e) => setEditSeasonStart(e.target.value)} /></label>
+                  <label className="text-sm font-medium text-slate-700">End date<span className="text-red-600"> *</span><input className={`${input} mt-1`} type="date" min={editSeasonStart || undefined} value={editSeasonEnd} onChange={(e) => setEditSeasonEnd(e.target.value)} /></label>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditingSeason(null)} disabled={busy}>Cancel</Button>
+                  <Button onClick={saveSeasonChanges} disabled={busy || !editSeasonName.trim() || !editSeasonStart || !editSeasonEnd || editSeasonEnd < editSeasonStart}>
+                    {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save changes
+                  </Button>
+                </div>
+              </div>
+            )}
             {closingSeason && (
               <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -368,7 +425,8 @@ export function SeasonImportPage() {
                 <div key={season.id} className="rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-3"><strong>{season.name}</strong><span className={`rounded-full px-2 py-1 text-xs font-semibold ${season.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{season.status}</span></div>
                   <p className="mt-2 text-xs text-slate-500">{season.start_date} through {season.end_date}</p>
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => beginEditSeason(season)} disabled={busy}><Pencil className="mr-1.5 h-3.5 w-3.5" />Edit</Button>
                     {season.status !== "active" && season.status !== "closed" && <Button variant="outline" size="sm" onClick={() => handleActivate(season)} disabled={busy}>Make active</Button>}
                     {season.status === "active" && <Button variant="outline" size="sm" onClick={() => handleClose(season)} disabled={busy}>Close season</Button>}
                   </div>

@@ -63,6 +63,34 @@ export async function createSeason(input: { name: string; startDate: string; end
   return data.id as string
 }
 
+
+export async function updateSeason(input: { id: string; name: string; startDate: string; endDate: string }) {
+  const name = input.name.trim()
+  if (!input.id) throw new Error("Season ID is required.")
+  if (!name) throw new Error("Season name is required.")
+  if (!input.startDate || !input.endDate) throw new Error("Season start and end dates are required.")
+  if (input.endDate < input.startDate) throw new Error("Season end date must be on or after the start date.")
+
+  const { organizationId, role } = await getCurrentOrganizationContext()
+  if (role !== "owner" && role !== "admin") {
+    throw new Error(`Your organization role is '${role}'. Only an owner or administrator can edit a season.`)
+  }
+
+  const { data, error } = await supabase
+    .from("seasons")
+    .update({ name, start_date: input.startDate, end_date: input.endDate })
+    .eq("organization_id", organizationId)
+    .eq("id", input.id)
+    .select("id,name,start_date,end_date,status,closed_at,notes")
+    .single()
+
+  if (error) {
+    if (error.code === "23505") throw new Error(`A season named '${name}' already exists.`)
+    throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}`)
+  }
+  return data as Season
+}
+
 export async function activateSeason(id: string) {
   const { error } = await supabase.rpc("activate_season", { p_season_id: id })
   if (error) throw error
