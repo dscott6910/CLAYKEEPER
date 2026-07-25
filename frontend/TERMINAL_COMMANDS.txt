@@ -1,0 +1,10 @@
+ClayKeeper v2.6.2 - Start Development Server
+
+If Terminal is already inside the frontend folder:
+
+npm install
+npm run dev
+
+For normal startup after dependencies are installed:
+
+npm run dev

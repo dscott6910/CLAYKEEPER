@@ -8,15 +8,12 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden min-h-screen w-64 shrink-0 flex-col bg-slate-950 text-white md:flex">
-      <div className="border-b border-slate-800 px-5 py-5">
+      <div className="flex min-h-[190px] items-center justify-center border-b border-slate-200 bg-white px-4 py-3">
         <img
           src={CLAYKEEPER_LOGO}
           alt="ClayKeeper TMK"
-          className="mx-auto h-40 w-full object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.38)]"
+          className="h-40 w-full object-contain"
         />
-        <p className="mt-2 text-center text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-          {brand.reportSubtitle}
-        </p>
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto p-4">
