@@ -144,3 +144,8 @@
   .awards-print-area .rounded-3xl { break-inside: avoid; }
   @page { size: letter portrait; margin: 0.5in; }
 }
+
+@media print {
+  .award-brand-header img { height: 0.72in !important; width: 1.1in !important; object-fit: contain !important; }
+  .award-brand-footer { display: block !important; }
+}

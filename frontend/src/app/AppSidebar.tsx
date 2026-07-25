@@ -1,47 +1,63 @@
 import { NavLink } from "react-router-dom"
 
-import { navigationItems } from "@/app/navigation"
+import { navigationSections } from "@/app/navigation"
+import { APP_VERSION, CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 
 export function AppSidebar() {
+  const brand = useBrandSettings()
+
   return (
     <aside className="hidden min-h-screen w-64 shrink-0 flex-col bg-slate-950 text-white md:flex">
-      <div className="border-b border-slate-800 px-6 py-6">
-        <h1 className="text-2xl font-bold tracking-tight">ClayKeeper</h1>
-
-        <p className="mt-1 text-sm text-slate-400">
-          Shooting event management
+      <div className="border-b border-slate-800 px-5 py-5">
+        <img
+          src={CLAYKEEPER_LOGO}
+          alt="ClayKeeper TMK"
+          className="mx-auto h-32 w-full object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+        />
+        <p className="mt-2 text-center text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+          {brand.reportSubtitle}
         </p>
       </div>
 
-      <nav className="flex-1 space-y-1 p-4">
-        {navigationItems.map((item) => {
-          const Icon = item.icon
-
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === "/"}
-              className={({ isActive }) =>
-                [
-                  "flex items-center gap-3 rounded-lg px-4 py-3",
-                  "text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-emerald-500 text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white",
-                ].join(" ")
-              }
-            >
-              <Icon className="h-5 w-5" />
-
-              <span>{item.label}</span>
-            </NavLink>
-          )
-        })}
+      <nav className="flex-1 space-y-5 overflow-y-auto p-4">
+        {navigationSections.map((section, sectionIndex) => (
+          <div key={section.label ?? `primary-${sectionIndex}`}>
+            {section.label ? (
+              <p className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {section.label}
+              </p>
+            ) : null}
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const Icon = item.icon
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/"}
+                    className={({ isActive }) =>
+                      [
+                        "flex items-center gap-3 rounded-lg px-4 py-2.5",
+                        "text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-emerald-500 text-white"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                      ].join(" ")
+                    }
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-slate-800 p-4">
-        <p className="text-xs text-slate-500">ClayKeeper v2.4.1</p>
+        <p className="truncate text-xs font-medium text-slate-300">{brand.organizationName}</p>
+        <p className="mt-1 text-xs text-slate-500">ClayKeeper v{APP_VERSION}</p>
       </div>
     </aside>
   )

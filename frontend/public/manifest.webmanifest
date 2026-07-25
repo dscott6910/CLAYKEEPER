@@ -1,10 +1,13 @@
 {
-  "name": "ClayKeeper Mobile Operations",
+  "name": "ClayKeeper TMK",
   "short_name": "ClayKeeper",
-  "description": "Mobile tournament check-in, squad lookup, and scoring access.",
-  "start_url": "/mobile",
+  "description": "Shooting event management for trap, skeet, and sporting clays",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#f1f5f9",
-  "theme_color": "#0f172a",
-  "icons": []
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    { "src": "/branding/claykeeper-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/branding/claykeeper-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
 }

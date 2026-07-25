@@ -1,10 +1,11 @@
 import { useState } from "react"
 import type { FormEvent } from "react"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
-import { LockKeyhole, Mail, Target } from "lucide-react"
+import { LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/useAuth"
+import { APP_VERSION, CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 
 type LoginLocationState = {
   from?: string
@@ -12,6 +13,7 @@ type LoginLocationState = {
 
 export function LoginPage() {
   const { session, signIn } = useAuth()
+  const brand = useBrandSettings()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -49,12 +51,9 @@ export function LoginPage() {
   return (
     <main className="grid min-h-screen bg-slate-950 lg:grid-cols-2">
       <section className="hidden flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-12 text-white lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-emerald-500 p-2">
-            <Target className="h-7 w-7" />
-          </div>
-
-          <span className="text-2xl font-bold">ClayKeeper</span>
+        <div>
+          <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="h-44 w-72 object-contain object-left" />
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">{brand.reportSubtitle}</p>
         </div>
 
         <div className="max-w-xl">
@@ -72,19 +71,13 @@ export function LoginPage() {
           </p>
         </div>
 
-        <p className="text-sm text-slate-500">ClayKeeper v0.1.0</p>
+        <p className="text-sm text-slate-500">ClayKeeper v{APP_VERSION}</p>
       </section>
 
       <section className="flex items-center justify-center bg-slate-100 p-6">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="rounded-xl bg-emerald-500 p-2 text-white">
-              <Target className="h-6 w-6" />
-            </div>
-
-            <span className="text-2xl font-bold text-slate-950">
-              ClayKeeper
-            </span>
+          <div className="mb-8 lg:hidden">
+            <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="h-28 w-52 object-contain object-left" />
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Lock, 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
+import { CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 import { loadAwardAdministration, saveAwardPublication, type AwardPublication } from "@/lib/services/awards"
 import {
   calculateSeriesTeamPoints,
@@ -73,6 +74,7 @@ function disciplineLabel(value: DisciplineKey) {
 
 export function AwardsPage() {
   const navigate = useNavigate()
+  const brand = useBrandSettings()
   const [organizationId, setOrganizationId] = useState("")
   const [events, setEvents] = useState<ReportEvent[]>([])
   const [shoots, setShoots] = useState<ReportShoot[]>([])
@@ -320,10 +322,24 @@ export function AwardsPage() {
                 </button>)}
               </div>
             </div>}
+            <footer className="award-brand-footer mt-8 border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
+              <p>{brand.reportFooter}</p>
+              {brand.supportEmail ? <p className="mt-1">{brand.supportEmail}</p> : null}
+            </footer>
           </section>}
 
           <section id="awards-report" className={`awards-print-area scroll-mt-6 rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div><div className="flex gap-3"><Stat icon={<Users className="h-5 w-5" />} value={rows.length} label="Participants" /><Stat icon={<Medal className="h-5 w-5" />} value={rows.filter((row) => row.complete).length} label="Complete" /></div></div>
+            <div className="award-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+              <div className="flex min-w-0 items-center gap-4">
+                <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="h-20 w-28 shrink-0 object-contain" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">{brand.organizationName}</p>
+                  <p className="mt-1 text-xs text-slate-500">{brand.reportSubtitle}</p>
+                </div>
+              </div>
+              <div className="flex gap-3"><Stat icon={<Users className="h-5 w-5" />} value={rows.length} label="Participants" /><Stat icon={<Medal className="h-5 w-5" />} value={rows.filter((row) => row.complete).length} label="Complete" /></div>
+            </div>
+            <div className="mb-6"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
 
             {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['individual','Individual Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 

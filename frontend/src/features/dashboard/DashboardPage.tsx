@@ -24,6 +24,7 @@ import { MetricCard } from "@/features/analytics/components/MetricCard"
 import { TrendChart } from "@/features/analytics/components/TrendChart"
 import { loadExecutiveAnalytics, type ExecutiveAnalytics } from "@/lib/services/analytics"
 import { loadDashboardSnapshot, type DashboardSnapshot } from "@/lib/services/dashboard"
+import { CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 
 function currency(value: number) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value)
@@ -39,6 +40,7 @@ function percent(part: number, total: number) {
 }
 
 export function DashboardPage() {
+  const brand = useBrandSettings()
   const [analytics, setAnalytics] = useState<ExecutiveAnalytics | null>(null)
   const [operations, setOperations] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -94,12 +96,15 @@ export function DashboardPage() {
         <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white shadow-sm">
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-400">Active season</p>
+              <div className="flex min-w-0 items-start gap-5">
+                <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="hidden h-28 w-36 shrink-0 object-contain sm:block" />
+                <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">{brand.organizationName} · Active season</p>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">{analytics?.activeSeason?.name ?? "No active season"}</h2>
                 <p className="mt-3 text-sm text-slate-300">
                   {analytics?.activeSeason ? `${dateLabel(analytics.activeSeason.startDate)} – ${dateLabel(analytics.activeSeason.endDate)}` : "Create or activate a season to organize events and analytics."}
                 </p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button variant="secondary" onClick={() => void refresh()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button>
