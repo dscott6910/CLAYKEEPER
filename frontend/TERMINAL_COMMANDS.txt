@@ -1,10 +1,12 @@
-ClayKeeper v2.6.2 - Start Development Server
+CLAYKEEPER 44 - ActiveNet Import v2.7.0
 
-If Terminal is already inside the frontend folder:
+From inside the frontend folder:
 
 npm install
 npm run dev
 
-For normal startup after dependencies are installed:
+Normal startup after dependencies are installed:
 
 npm run dev
+
+No new Supabase SQL migration is required for this release.

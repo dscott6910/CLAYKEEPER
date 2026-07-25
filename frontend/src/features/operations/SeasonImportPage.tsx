@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Archive, Ban, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, Pencil, RefreshCw, Trash2, Upload, XCircle } from "lucide-react"
+import { Archive, Ban, CalendarPlus, CheckCircle2, FileSpreadsheet, Loader2, Pencil, RefreshCw, Trash2, Upload, UsersRound, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import { deleteHistoricalImport, finalizeHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
+import { ActiveNetImportCancelledError, importActiveNetWorkbook, parseActiveNetWorkbook, type ParsedActiveNetWorkbook } from "@/lib/services/activenetImport"
 import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, updateSeason, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -53,6 +54,13 @@ export function SeasonImportPage() {
   const [trapImportProgress, setTrapImportProgress] = useState({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" as "preparing" | "importing" | "finalizing" | "completed" })
   const [activeTrapImportId, setActiveTrapImportId] = useState<string | null>(null)
   const trapCancelRef = useRef(false)
+  const [activeNetParsed, setActiveNetParsed] = useState<ParsedActiveNetWorkbook | null>(null)
+  const [activeNetEventName, setActiveNetEventName] = useState("")
+  const [activeNetRegistrationDate, setActiveNetRegistrationDate] = useState("")
+  const [activeNetImportRunning, setActiveNetImportRunning] = useState(false)
+  const [activeNetImportMessage, setActiveNetImportMessage] = useState("")
+  const [activeNetProgress, setActiveNetProgress] = useState({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" as "preparing" | "importing" | "finalizing" | "completed" })
+  const activeNetCancelRef = useRef(false)
 
   async function refresh() {
     setLoading(true)
@@ -117,6 +125,91 @@ export function SeasonImportPage() {
     { label: "Shoot date", complete: Boolean(shootDate) },
   ]
   const usOpenSetupComplete = usOpenRequiredFields.every((field) => field.complete)
+  const activeNetTotals = useMemo(() => {
+    const rows = activeNetParsed?.rows ?? []
+    return {
+      rows: rows.length,
+      ready: rows.filter((row) => !row.errors.length && row.discipline).length,
+      uniqueParticipants: new Set(rows.filter((row) => !row.errors.length).map((row) => `${row.firstName.toLowerCase()}|${row.lastName.toLowerCase()}`)).size,
+      warnings: rows.reduce((sum, row) => sum + row.warnings.length, 0),
+      errors: rows.filter((row) => row.errors.length).length,
+    }
+  }, [activeNetParsed])
+  const activeNetSetupComplete = Boolean(seasonId && activeNetEventName.trim() && activeNetRegistrationDate)
+
+  async function handleActiveNetFile(file: File | undefined) {
+    if (!file) return
+    activeNetCancelRef.current = false
+    setActiveNetImportMessage("")
+    setActiveNetProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
+    setBusy(true)
+    try {
+      const result = await parseActiveNetWorkbook(file)
+      setActiveNetParsed(result)
+      if (!activeNetEventName.trim()) {
+        const sourceSeason = result.rows.find((row) => row.seasonName)?.seasonName
+        setActiveNetEventName(sourceSeason ? `${sourceSeason} ActiveNet Registrations` : "ActiveNet Season Registrations")
+      }
+      toast.success(`${result.rows.length} ActiveNet rows and ${new Set(result.rows.map((row) => `${row.firstName.toLowerCase()}|${row.lastName.toLowerCase()}`)).size} participants found`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to read ActiveNet report")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleActiveNetImport() {
+    if (!activeNetParsed || !activeNetSetupComplete || activeNetParsed.workbookErrors.length) return
+    activeNetCancelRef.current = false
+    setActiveNetImportRunning(true)
+    setBusy(true)
+    setActiveNetImportMessage("Starting ActiveNet import…")
+    setActiveNetProgress({ completedRows: 0, totalRows: activeNetTotals.ready, percent: 0, stage: "preparing" })
+    try {
+      const result = await importActiveNetWorkbook(activeNetParsed, {
+        seasonId,
+        eventName: activeNetEventName,
+        registrationDate: activeNetRegistrationDate,
+      }, {
+        isCancelled: () => activeNetCancelRef.current,
+        onProgress: (progress) => {
+          setActiveNetImportMessage(progress.message)
+          setActiveNetProgress(progress)
+        },
+      })
+      toast.success(`${result.uniqueParticipants} participants and ${result.importedRows} discipline registrations imported`)
+      setActiveNetImportMessage("ActiveNet import completed successfully.")
+      setActiveNetProgress((current) => ({ ...current, percent: 100, stage: "completed" }))
+      setActiveNetParsed(null)
+      await refresh()
+    } catch (error) {
+      if (error instanceof ActiveNetImportCancelledError) {
+        setActiveNetImportMessage("Import stopped. Use Cleanup import in Imported workbook history to remove the partial data.")
+        toast.warning("ActiveNet import stopped and is ready for cleanup.")
+      } else {
+        const message = error instanceof Error ? error.message : "ActiveNet import failed"
+        setActiveNetImportMessage(`Import failed: ${message}`)
+        toast.error(message)
+      }
+      await refresh()
+    } finally {
+      setActiveNetImportRunning(false)
+      setBusy(false)
+    }
+  }
+
+  function handleCancelActiveNetImport() {
+    activeNetCancelRef.current = true
+    setActiveNetImportMessage("Stopping the ActiveNet import after the current database step…")
+  }
+
+  function handleClearActiveNetWorkbook() {
+    if (activeNetImportRunning) return
+    setActiveNetParsed(null)
+    setActiveNetImportMessage("")
+    setActiveNetProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
+    activeNetCancelRef.current = false
+  }
 
   async function handleTrapSeriesFile(file: File | undefined) {
     if (!file) return
@@ -344,7 +437,7 @@ export function SeasonImportPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AppHeader title="Seasons & Historical Import" description="Close completed seasons, start a new season, and populate past shoots from Excel." />
+      <AppHeader title="Seasons & Historical Import" description="Manage seasons and import ActiveNet registrations, Trap Series results, and historical competition workbooks." />
       <PageContainer>
         <div className="space-y-6">
           <section className={card}>
@@ -507,6 +600,57 @@ export function SeasonImportPage() {
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={handleClearTrapWorkbook} disabled={trapImportRunning}>{trapParsed.workbookErrors.length ? <XCircle className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}{trapParsed.workbookErrors.length ? "Remove faulty spreadsheet" : "Clear spreadsheet"}</Button>
                 {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || !trapSetupComplete}><Upload className="mr-2 h-4 w-4" />Import complete Trap Series</Button>}
+              </div>
+            </>}
+          </section>
+
+          <section className={card}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">ActiveNet registration import</h2>
+                <p className="mt-1 text-sm text-slate-600">Permanent importer for ActiveNet Excel or CSV reports. Participants are matched by name, new athletes are created when needed, and each ActiveNet session becomes a Trap, Skeet, Sporting Clays, or Bunker enrollment.</p>
+              </div>
+              <UsersRound className="h-6 w-6 text-orange-600" />
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="text-sm font-medium text-slate-700">ClayKeeper season <span className="text-red-600">*</span><select className={`${input} mt-1 ${!seasonId ? "border-red-300" : ""}`} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading || busy}><option value="">{loading ? "Loading seasons…" : "Choose a season"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select></label>
+                <label className="text-sm font-medium text-slate-700">Registration event name <span className="text-red-600">*</span><input className={`${input} mt-1 ${!activeNetEventName.trim() ? "border-red-300" : ""}`} value={activeNetEventName} onChange={(e) => setActiveNetEventName(e.target.value)} placeholder="2025-2026 ActiveNet Registrations" disabled={busy} /></label>
+                <label className="text-sm font-medium text-slate-700">Import/registration date <span className="text-red-600">*</span><input className={`${input} mt-1 ${!activeNetRegistrationDate ? "border-red-300" : ""}`} type="date" value={activeNetRegistrationDate} onChange={(e) => setActiveNetRegistrationDate(e.target.value)} disabled={busy} /></label>
+              </div>
+              {!activeNetSetupComplete && <p className="mt-3 text-sm font-medium text-red-700">Choose a season, enter a registration event name, and select a date before choosing an ActiveNet report.</p>}
+            </div>
+
+            <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${activeNetSetupComplete && !busy ? "cursor-pointer border-slate-300 hover:border-orange-500 hover:bg-orange-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
+              {busy ? <Loader2 className="h-8 w-8 animate-spin text-orange-600" /> : <Upload className="h-8 w-8 text-orange-600" />}
+              <span className="mt-3 font-medium text-slate-800">Choose an ActiveNet Excel or CSV report</span>
+              <span className="mt-1 text-xs text-slate-500">Recognizes Participant Name, Gender, Primary P/G, Season, Session, Age, and Balance columns.</span>
+              <input className="hidden" type="file" accept=".xlsx,.xls,.csv" disabled={!activeNetSetupComplete || busy} onChange={(e) => void handleActiveNetFile(e.target.files?.[0])} />
+            </label>
+
+            {activeNetParsed && <>
+              {activeNetParsed.workbookErrors.length > 0 && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"><strong>Required ActiveNet columns are missing.</strong><ul className="mt-2 list-disc pl-5">{activeNetParsed.workbookErrors.map((error) => <li key={error}>{error}</li>)}</ul></div>}
+              <div className="mt-5 grid gap-3 sm:grid-cols-5">
+                {[['Rows', activeNetTotals.rows], ['Participants', activeNetTotals.uniqueParticipants], ['Ready', activeNetTotals.ready], ['Warnings', activeNetTotals.warnings], ['Errors', activeNetTotals.errors]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-100 p-3"><div className="text-xs uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold">{value}</div></div>)}
+              </div>
+
+              {(activeNetImportRunning || activeNetImportMessage) && <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex items-center justify-between gap-4 text-sm"><strong className="text-blue-900">{activeNetImportMessage || "Preparing ActiveNet import…"}</strong><span className="font-semibold text-blue-800">{activeNetProgress.percent}%</span></div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${activeNetProgress.percent}%` }} /></div>
+                <p className="mt-2 text-xs text-blue-700">{activeNetProgress.completedRows} of {activeNetProgress.totalRows} valid discipline registrations processed</p>
+              </div>}
+
+              <div className="mt-5 max-h-[420px] overflow-auto rounded-xl border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Guardian</th><th className="px-3 py-2">Session</th><th className="px-3 py-2">Age</th><th className="px-3 py-2">Balance</th><th className="px-3 py-2">Status</th></tr></thead>
+                  <tbody>{activeNetParsed.rows.slice(0, 300).map((row) => <tr key={row.rowNumber} className="border-t border-slate-100"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.participantName}</td><td className="px-3 py-2">{row.guardianName || '—'}</td><td className="px-3 py-2">{row.sessionName || '—'}</td><td className="px-3 py-2">{row.age ?? '—'}</td><td className="px-3 py-2">{row.balance.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-700">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>)}</tbody>
+                </table>
+              </div>
+              {activeNetParsed.rows.length > 300 && <p className="mt-2 text-xs text-slate-500">Preview shows the first 300 rows. All {activeNetParsed.rows.length} rows will be processed.</p>}
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <Button variant="outline" onClick={handleClearActiveNetWorkbook} disabled={activeNetImportRunning}><Trash2 className="mr-2 h-4 w-4" />Clear report</Button>
+                {activeNetImportRunning ? <Button variant="destructive" onClick={handleCancelActiveNetImport} disabled={activeNetCancelRef.current}><Ban className="mr-2 h-4 w-4" />{activeNetCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleActiveNetImport} disabled={busy || activeNetParsed.workbookErrors.length > 0 || activeNetTotals.ready === 0 || !activeNetSetupComplete}><Upload className="mr-2 h-4 w-4" />Import ActiveNet registrations</Button>}
               </div>
             </>}
           </section>
