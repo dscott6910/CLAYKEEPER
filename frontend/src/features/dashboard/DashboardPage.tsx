@@ -97,7 +97,7 @@ export function DashboardPage() {
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 items-start gap-5">
-                <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="hidden h-28 w-36 shrink-0 object-contain sm:block" />
+                <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="hidden h-36 w-44 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)] sm:block" />
                 <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">{brand.organizationName} · Active season</p>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">{analytics?.activeSeason?.name ?? "No active season"}</h2>

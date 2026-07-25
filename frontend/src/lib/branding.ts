@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-export const APP_VERSION = "2.6.0"
+export const APP_VERSION = "2.6.1"
 export const CLAYKEEPER_LOGO = "/branding/claykeeper-logo.png"
 export const CLAYKEEPER_ICON = "/branding/claykeeper-icon-192.png"
 

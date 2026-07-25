@@ -12,7 +12,7 @@ export function AppSidebar() {
         <img
           src={CLAYKEEPER_LOGO}
           alt="ClayKeeper TMK"
-          className="mx-auto h-32 w-full object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+          className="mx-auto h-40 w-full object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.38)]"
         />
         <p className="mt-2 text-center text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
           {brand.reportSubtitle}
