@@ -19,6 +19,7 @@ import {
   Globe2,
   Smartphone,
   CreditCard,
+  FileInput,
 } from "lucide-react"
 
 export type NavigationItem = {
@@ -49,6 +50,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Participants",
         path: "/participants",
         icon: Users,
+      },
+      {
+        label: "ActiveNet Import",
+        path: "/participants/activenet",
+        icon: FileInput,
       },
       {
         label: "Teams",

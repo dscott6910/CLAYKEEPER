@@ -437,7 +437,7 @@ export function SeasonImportPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AppHeader title="Seasons & Historical Import" description="Manage seasons and import ActiveNet registrations, Trap Series results, and historical competition workbooks." />
+      <AppHeader title="Seasons & Historical Import" description="Manage seasons and import Trap Series results and historical competition workbooks. ActiveNet participant files have their own dedicated import page." />
       <PageContainer>
         <div className="space-y-6">
           <section className={card}>
@@ -604,6 +604,7 @@ export function SeasonImportPage() {
             </>}
           </section>
 
+          {activeNetParsed && false && (<>
           <section className={card}>
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -630,7 +631,7 @@ export function SeasonImportPage() {
             </label>
 
             {activeNetParsed && <>
-              {activeNetParsed.workbookErrors.length > 0 && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"><strong>Required ActiveNet columns are missing.</strong><ul className="mt-2 list-disc pl-5">{activeNetParsed.workbookErrors.map((error) => <li key={error}>{error}</li>)}</ul></div>}
+              {activeNetParsed!.workbookErrors.length > 0 && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"><strong>Required ActiveNet columns are missing.</strong><ul className="mt-2 list-disc pl-5">{activeNetParsed!.workbookErrors.map((error) => <li key={error}>{error}</li>)}</ul></div>}
               <div className="mt-5 grid gap-3 sm:grid-cols-5">
                 {[['Rows', activeNetTotals.rows], ['Participants', activeNetTotals.uniqueParticipants], ['Ready', activeNetTotals.ready], ['Warnings', activeNetTotals.warnings], ['Errors', activeNetTotals.errors]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-100 p-3"><div className="text-xs uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold">{value}</div></div>)}
               </div>
@@ -644,16 +645,18 @@ export function SeasonImportPage() {
               <div className="mt-5 max-h-[420px] overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Guardian</th><th className="px-3 py-2">Session</th><th className="px-3 py-2">Age</th><th className="px-3 py-2">Balance</th><th className="px-3 py-2">Status</th></tr></thead>
-                  <tbody>{activeNetParsed.rows.slice(0, 300).map((row) => <tr key={row.rowNumber} className="border-t border-slate-100"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.participantName}</td><td className="px-3 py-2">{row.guardianName || '—'}</td><td className="px-3 py-2">{row.sessionName || '—'}</td><td className="px-3 py-2">{row.age ?? '—'}</td><td className="px-3 py-2">{row.balance.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-700">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>)}</tbody>
+                  <tbody>{activeNetParsed!.rows.slice(0, 300).map((row) => <tr key={row.rowNumber} className="border-t border-slate-100"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.participantName}</td><td className="px-3 py-2">{row.guardianName || '—'}</td><td className="px-3 py-2">{row.sessionName || '—'}</td><td className="px-3 py-2">{row.age ?? '—'}</td><td className="px-3 py-2">{row.balance.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-700">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>)}</tbody>
                 </table>
               </div>
-              {activeNetParsed.rows.length > 300 && <p className="mt-2 text-xs text-slate-500">Preview shows the first 300 rows. All {activeNetParsed.rows.length} rows will be processed.</p>}
+              {activeNetParsed!.rows.length > 300 && <p className="mt-2 text-xs text-slate-500">Preview shows the first 300 rows. All {activeNetParsed!.rows.length} rows will be processed.</p>}
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 <Button variant="outline" onClick={handleClearActiveNetWorkbook} disabled={activeNetImportRunning}><Trash2 className="mr-2 h-4 w-4" />Clear report</Button>
-                {activeNetImportRunning ? <Button variant="destructive" onClick={handleCancelActiveNetImport} disabled={activeNetCancelRef.current}><Ban className="mr-2 h-4 w-4" />{activeNetCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleActiveNetImport} disabled={busy || activeNetParsed.workbookErrors.length > 0 || activeNetTotals.ready === 0 || !activeNetSetupComplete}><Upload className="mr-2 h-4 w-4" />Import ActiveNet registrations</Button>}
+                {activeNetImportRunning ? <Button variant="destructive" onClick={handleCancelActiveNetImport} disabled={activeNetCancelRef.current}><Ban className="mr-2 h-4 w-4" />{activeNetCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleActiveNetImport} disabled={busy || activeNetParsed!.workbookErrors.length > 0 || activeNetTotals.ready === 0 || !activeNetSetupComplete}><Upload className="mr-2 h-4 w-4" />Import ActiveNet registrations</Button>}
               </div>
             </>}
           </section>
+
+          </>)}
 
           <section className={card}>
             <div className="flex items-start justify-between gap-4">

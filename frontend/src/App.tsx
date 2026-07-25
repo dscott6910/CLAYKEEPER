@@ -11,6 +11,7 @@ const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage").th
 const EventWorkspace = lazy(() => import("@/features/events/EventWorkspace").then((module) => ({ default: module.EventWorkspace })))
 const EventsPage = lazy(() => import("@/features/events/EventsPage").then((module) => ({ default: module.EventsPage })))
 const ParticipantsPage = lazy(() => import("@/features/participants/ParticipantsPage").then((module) => ({ default: module.ParticipantsPage })))
+const ActiveNetImportPage = lazy(() => import("@/features/participants/ActiveNetImportPage").then((module) => ({ default: module.ActiveNetImportPage })))
 const RegistrationPage = lazy(() => import("@/features/registration/RegistrationPage").then((module) => ({ default: module.RegistrationPage })))
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage").then((module) => ({ default: module.ReportsPage })))
 const AwardsPage = lazy(() => import("@/features/reports/AwardsPage").then((module) => ({ default: module.AwardsPage })))
@@ -57,6 +58,7 @@ function App() {
             <Route element={<AppShell />}>
               <Route index element={<LazyRoute><DashboardPage /></LazyRoute>} />
               <Route path="participants" element={<LazyRoute><ParticipantsPage /></LazyRoute>} />
+              <Route path="participants/activenet" element={<LazyRoute><ActiveNetImportPage /></LazyRoute>} />
               <Route path="teams" element={<LazyRoute><TeamsPage /></LazyRoute>} />
               <Route path="coach" element={<LazyRoute><CoachPortalPage /></LazyRoute>} />
               <Route path="events" element={<LazyRoute><EventsPage /></LazyRoute>} />
