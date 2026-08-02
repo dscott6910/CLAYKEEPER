@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { Link } from "react-router-dom"
 import {
   ArchiveRestore,
   BadgeCheck,
@@ -304,7 +305,26 @@ export function ParticipantsPage() {
                       const participantClass = classMap[participant.class_id ?? ""]
                       const team = teamMap[participant.team_id ?? ""]
                       return <tr key={participant.id} className={!participant.active ? "bg-slate-50 opacity-70" : "hover:bg-slate-50/70"}>
-                        <td className="px-5 py-4"><div className="font-semibold text-slate-950">{displayName(participant)}</div>{participant.preferred_name ? <div className="text-xs text-slate-500">Legal: {participant.first_name} {participant.last_name}</div> : null}{participant.graduation_year ? <div className="mt-1 text-xs text-slate-500">Class of {participant.graduation_year}</div> : null}</td>
+                        <td className="px-5 py-4">
+                          <Link
+                            to={`/participants/${participant.id}`}
+                            className="font-semibold text-slate-950 hover:text-emerald-700 hover:underline"
+                          >
+                            {displayName(participant)}
+                          </Link>
+
+                          {participant.preferred_name ? (
+                            <div className="text-xs text-slate-500">
+                              Legal: {participant.first_name} {participant.last_name}
+                            </div>
+                          ) : null}
+
+                          {participant.graduation_year ? (
+                            <div className="mt-1 text-xs text-slate-500">
+                              Class of {participant.graduation_year}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-4 py-4 font-medium text-slate-700">{participant.cyssa_number || "—"}</td>
                         <td className="px-4 py-4">{participantClass ? <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700" title={participantClass.display_name}>{participantClass.code}</span> : <span className="text-slate-400">Not set</span>}</td>
                         <td className="px-4 py-4 text-slate-700">{team?.name ?? "Not assigned"}</td>
