@@ -13,8 +13,31 @@ export type CoachScore = { squad_member_id: string; round_number: number; score:
 export type CoachClass = { id: string; code: string; display_name: string }
 export type CoachAnnouncement = { id: string; title: string; message: string; severity: string; created_at: string; event_id: string | null }
 
-function assert(error: { message?: string } | null) {
+type QueryError = { message?: string } | null
+type PageResult<T> = { data: T[] | null; error: QueryError }
+
+const PAGE_SIZE = 1000
+
+function assert(error: QueryError) {
   if (error) throw new Error(error.message || "A database error occurred.")
+}
+
+async function loadAllPages<T>(
+  loadPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+): Promise<T[]> {
+  const rows: T[] = []
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const result = await loadPage(from, from + PAGE_SIZE - 1)
+    assert(result.error)
+
+    const page = result.data ?? []
+    rows.push(...page)
+
+    if (page.length < PAGE_SIZE) break
+  }
+
+  return rows
 }
 
 export async function loadCoachPortalData() {
@@ -22,47 +45,100 @@ export async function loadCoachPortalData() {
   const { data: { user } } = await supabase.auth.getUser()
   const email = user?.email?.trim().toLowerCase() || ""
 
-  const [coachResult, teamsResult, assignmentsResult, athleteTeamsResult, athletesResult, eventsResult, shootsResult, registrationsResult, enrollmentsResult, squadsResult, membersResult, scoresResult, classesResult, announcementsResult] = await Promise.all([
+  const [
+    coachResult,
+    teamsResult,
+    eventsResult,
+    shootsResult,
+    classesResult,
+    announcementsResult,
+    assignments,
+    athleteTeams,
+    athletes,
+    registrations,
+    enrollments,
+    squads,
+    members,
+    scores,
+  ] = await Promise.all([
     supabase.from("coaches").select("id, first_name, last_name, preferred_name, email, user_id").eq("organization_id", context.organizationId),
     supabase.from("teams").select("id, name, school_club_name, primary_color").eq("organization_id", context.organizationId).eq("active", true).order("name"),
-    supabase.from("team_coaches").select("coach_id, team_id, role, is_head_coach, start_date, end_date").eq("organization_id", context.organizationId),
-    supabase.from("athlete_teams").select("athlete_id, team_id, is_primary, start_date, end_date").eq("organization_id", context.organizationId),
-    supabase.from("athletes").select("id, first_name, last_name, preferred_name, class_id, cyssa_number, email, phone").eq("organization_id", context.organizationId).eq("active", true).order("last_name"),
     supabase.from("events").select("id, name, start_date, end_date, status").eq("organization_id", context.organizationId).order("start_date", { ascending: false }),
     supabase.from("shoots").select("id, event_id, name, discipline, shoot_date, number_of_rounds, targets_per_round").eq("organization_id", context.organizationId).eq("active", true).order("shoot_date", { ascending: false }),
-    supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, status, checked_in, payment_status").eq("organization_id", context.organizationId),
-    supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, squad_assignment_status, historical_total_score").eq("organization_id", context.organizationId),
-    supabase.from("squads").select("id, shoot_id, squad_number, house_number, course_name, start_time").eq("organization_id", context.organizationId),
-    supabase.from("squad_members").select("id, shoot_id, squad_id, registration_shoot_id, position, position_label, checked_in").eq("organization_id", context.organizationId),
-    supabase.from("score_entries").select("squad_member_id, round_number, score, status").eq("organization_id", context.organizationId),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", context.organizationId).order("display_order"),
     supabase.from("coach_announcements").select("id, title, message, severity, created_at, event_id").eq("organization_id", context.organizationId).eq("active", true).order("created_at", { ascending: false }).limit(20),
+
+    loadAllPages((from, to) =>
+      supabase.from("team_coaches").select("coach_id, team_id, role, is_head_coach, start_date, end_date").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages((from, to) =>
+      supabase.from("athlete_teams").select("athlete_id, team_id, is_primary, start_date, end_date").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachAthlete>((from, to) =>
+      supabase.from("athletes").select("id, first_name, last_name, preferred_name, class_id, cyssa_number, email, phone").eq("organization_id", context.organizationId).eq("active", true).order("last_name").range(from, to)
+    ),
+    loadAllPages<CoachRegistration>((from, to) =>
+      supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, status, checked_in, payment_status").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachEnrollment>((from, to) =>
+      supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, squad_assignment_status, historical_total_score").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachSquad>((from, to) =>
+      supabase.from("squads").select("id, shoot_id, squad_number, house_number, course_name, start_time").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachSquadMember>((from, to) =>
+      supabase.from("squad_members").select("id, shoot_id, squad_id, registration_shoot_id, position, position_label, checked_in").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachScore>((from, to) =>
+      supabase.from("score_entries").select("squad_member_id, round_number, score, status").eq("organization_id", context.organizationId).range(from, to)
+    ),
   ])
 
-  for (const result of [coachResult, teamsResult, assignmentsResult, athleteTeamsResult, athletesResult, eventsResult, shootsResult, registrationsResult, enrollmentsResult, squadsResult, membersResult, scoresResult, classesResult]) assert(result.error)
-  // The announcements table is introduced by the Sprint 16 migration. Keep the portal usable before migration is applied.
-  if (announcementsResult.error && !announcementsResult.error.message.toLowerCase().includes("coach_announcements")) assert(announcementsResult.error)
+  for (const result of [coachResult, teamsResult, eventsResult, shootsResult, classesResult]) {
+    assert(result.error)
+  }
+
+  if (
+    announcementsResult.error &&
+    !announcementsResult.error.message.toLowerCase().includes("coach_announcements")
+  ) {
+    assert(announcementsResult.error)
+  }
 
   const coaches = coachResult.data ?? []
-  const coach = coaches.find((row) => row.user_id === context.userId) ?? coaches.find((row) => (row.email || "").trim().toLowerCase() === email) ?? null
+  const coach =
+    coaches.find((row) => row.user_id === context.userId) ??
+    coaches.find((row) => (row.email || "").trim().toLowerCase() === email) ??
+    null
+
   const isManager = ["owner", "admin"].includes(context.role)
-  const assignedTeamIds = new Set((assignmentsResult.data ?? []).filter((row) => !coach || row.coach_id === coach.id).filter((row) => !row.end_date || row.end_date >= new Date().toISOString().slice(0, 10)).map((row) => row.team_id))
-  const teams = (teamsResult.data ?? []).filter((team) => isManager || assignedTeamIds.has(team.id)) as CoachTeam[]
+  const today = new Date().toISOString().slice(0, 10)
+
+  const assignedTeamIds = new Set(
+    assignments
+      .filter((row) => !coach || row.coach_id === coach.id)
+      .filter((row) => !row.end_date || row.end_date >= today)
+      .map((row) => row.team_id),
+  )
+
+  const teams = (teamsResult.data ?? []).filter(
+    (team) => isManager || assignedTeamIds.has(team.id),
+  ) as CoachTeam[]
 
   return {
     context,
     coach,
     isManager,
     teams,
-    athleteTeams: athleteTeamsResult.data ?? [],
-    athletes: (athletesResult.data ?? []) as CoachAthlete[],
+    athleteTeams,
+    athletes,
     events: (eventsResult.data ?? []) as CoachEvent[],
     shoots: (shootsResult.data ?? []) as CoachShoot[],
-    registrations: (registrationsResult.data ?? []) as CoachRegistration[],
-    enrollments: (enrollmentsResult.data ?? []) as CoachEnrollment[],
-    squads: (squadsResult.data ?? []) as CoachSquad[],
-    members: (membersResult.data ?? []) as CoachSquadMember[],
-    scores: (scoresResult.data ?? []) as CoachScore[],
+    registrations,
+    enrollments,
+    squads,
+    members,
+    scores,
     classes: (classesResult.data ?? []) as CoachClass[],
     announcements: (announcementsResult.data ?? []) as CoachAnnouncement[],
   }
