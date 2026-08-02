@@ -7,6 +7,8 @@ import {
   Mail,
   Phone,
   School,
+  Target,
+  Trophy,
   UserRound,
 } from "lucide-react"
 
@@ -37,6 +39,10 @@ function statusLabel(value: string | null | undefined) {
   return value
     .replaceAll("_", " ")
     .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function disciplineLabel(value: string) {
+  return statusLabel(value)
 }
 
 export function ParticipantProfilePage() {
@@ -92,12 +98,12 @@ export function ParticipantProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader
-          title="Participant Profile"
-          description="Loading participant details and history"
+          title="Athlete Dashboard"
+          description="Loading participant performance and history"
         />
         <PageContainer>
           <div className="py-24 text-center text-slate-500">
-            Loading participant profile…
+            Loading athlete dashboard…
           </div>
         </PageContainer>
       </div>
@@ -108,8 +114,8 @@ export function ParticipantProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader
-          title="Participant Profile"
-          description="Participant details and history"
+          title="Athlete Dashboard"
+          description="Participant performance and history"
         />
         <PageContainer>
           <div className="space-y-4 py-12">
@@ -123,16 +129,18 @@ export function ParticipantProfilePage() {
     )
   }
 
-  const { athlete } = data
+  const { athlete, statistics } = data
   const checkedInCount = data.registrations.filter(
     (registration) => registration.checked_in,
   ).length
 
+  const recentResults = data.shootResults.slice(0, 6)
+
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
-        title="Participant Profile"
-        description="Participant details, registrations, and team history"
+        title="Athlete Dashboard"
+        description="Career statistics, recent scores, registrations, and team history"
       />
 
       <PageContainer>
@@ -147,7 +155,7 @@ export function ParticipantProfilePage() {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">
-                  Participant
+                  Athlete Dashboard
                 </p>
 
                 <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
@@ -185,27 +193,86 @@ export function ParticipantProfilePage() {
             <MetricCard
               icon={CalendarDays}
               label="Registered Events"
-              value={data.registrations.length}
+              value={statistics.eventCount}
+            />
+            <MetricCard
+              icon={Target}
+              label="Rounds Recorded"
+              value={statistics.roundsShot}
             />
             <MetricCard
               icon={BadgeCheck}
-              label="Checked In"
-              value={checkedInCount}
+              label="Average Round"
+              value={statistics.averageRound.toFixed(2)}
             />
             <MetricCard
-              icon={School}
-              label="Team Assignments"
-              value={data.teamHistory.length}
-            />
-            <MetricCard
-              icon={UserRound}
-              label="Status"
-              value={athlete.active ? "Active" : "Archived"}
+              icon={Trophy}
+              label="Highest Round"
+              value={statistics.highestRound}
             />
           </section>
 
           <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
             <div className="space-y-5">
+              <InfoCard title="Career Statistics">
+                <InfoRow
+                  label="Shoots Recorded"
+                  value={String(statistics.shootCount)}
+                />
+                <InfoRow
+                  label="Rounds Recorded"
+                  value={String(statistics.roundsShot)}
+                />
+                <InfoRow
+                  label="Targets Hit"
+                  value={String(statistics.targetsHit)}
+                />
+                <InfoRow
+                  label="Average Round"
+                  value={statistics.averageRound.toFixed(2)}
+                />
+                <InfoRow
+                  label="Highest Round"
+                  value={String(statistics.highestRound)}
+                />
+                <InfoRow
+                  label="Highest Shoot Total"
+                  value={String(statistics.highestShootTotal)}
+                />
+              </InfoCard>
+
+              <InfoCard title="Discipline Averages">
+                {statistics.disciplineAverages.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No round-by-round scores are available yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {statistics.disciplineAverages.map((item) => (
+                      <div
+                        key={item.discipline}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-semibold text-slate-950">
+                              {disciplineLabel(item.discipline)}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {item.roundsShot} rounds · {item.targetsHit} targets hit
+                            </p>
+                          </div>
+
+                          <p className="text-2xl font-black text-slate-950">
+                            {item.averageRound.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InfoCard>
+
               <InfoCard title="Participant Information">
                 <InfoRow
                   label="Class"
@@ -300,6 +367,77 @@ export function ParticipantProfilePage() {
               <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-5">
                   <h2 className="text-lg font-bold text-slate-950">
+                    Recent Scores
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Most recent shoot totals and recorded rounds.
+                  </p>
+                </div>
+
+                {recentResults.length === 0 ? (
+                  <div className="p-10 text-center text-slate-500">
+                    No score history is available.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {recentResults.map((result) => (
+                      <div
+                        key={`${result.registration_id}-${result.shoot_id}`}
+                        className="p-5"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="font-bold text-slate-950">
+                              {result.event_name}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {result.shoot_name} · {disciplineLabel(result.discipline)}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {dateLabel(result.event_date)}
+                            </p>
+                          </div>
+
+                          <div className="text-left sm:text-right">
+                            <p className="text-3xl font-black text-slate-950">
+                              {result.total_score}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Total score
+                            </p>
+                          </div>
+                        </div>
+
+                        {result.round_scores.length > 0 ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {result.round_scores.map((score, index) => (
+                              <div
+                                key={`${result.shoot_id}-${index}`}
+                                className="min-w-14 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center"
+                              >
+                                <p className="text-xs text-slate-500">
+                                  R{index + 1}
+                                </p>
+                                <p className="text-lg font-bold text-slate-950">
+                                  {score}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : result.historical_total_score !== null ? (
+                          <p className="mt-3 text-xs text-slate-500">
+                            Historical total; individual round scores were not imported.
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 p-5">
+                  <h2 className="text-lg font-bold text-slate-950">
                     Registration History
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -356,6 +494,17 @@ export function ParticipantProfilePage() {
                   </div>
                 )}
               </section>
+
+              <InfoCard title="Attendance Summary">
+                <InfoRow
+                  label="Registered Events"
+                  value={String(statistics.eventCount)}
+                />
+                <InfoRow
+                  label="Checked In"
+                  value={String(checkedInCount)}
+                />
+              </InfoCard>
 
               {athlete.notes ? (
                 <InfoCard title="Notes">
@@ -432,7 +581,6 @@ function InfoRow({
         {Icon ? <Icon className="h-4 w-4" /> : null}
         {label}
       </div>
-
       <p className="text-right text-sm font-semibold text-slate-900">{value}</p>
     </div>
   )
@@ -457,4 +605,3 @@ function StatusBadge({
     </span>
   )
 }
-
