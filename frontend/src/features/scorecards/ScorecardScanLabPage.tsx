@@ -16,34 +16,43 @@ import {
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import {
-  analyzeOmrTemplate,
+  analyzeGridScorecard,
   detectRegistrationMarkers,
   warpUsingMarkerTemplate,
-  type BubbleReading,
-  type BubbleState,
+  type GridCellReading,
+  type GridCellState,
   type RegistrationMarker,
-} from "@/lib/scorecards/omrAutoDetector"
-
-/*
- * These values are measured from the V3 half-page card.
- * Finder centers and bubble centers are normalized to the complete card.
- */
-const MARKER_TEMPLATE = {
-  topLeft: { x: 0.058, y: 0.092 },
-  topRight: { x: 0.942, y: 0.092 },
-  bottomRight: { x: 0.942, y: 0.905 },
-  bottomLeft: { x: 0.058, y: 0.905 },
-}
+} from "@/lib/scorecards/gridScorecardDetector"
 
 const TEMPLATE = {
-  stationCount: 15,
-  birdsPerStation: 6,
-  firstBubbleX: 0.283,
-  lastBubbleX: 0.706,
-  firstBubbleY: 0.272,
-  lastBubbleY: 0.806,
-  sampleRadius: 0.007,
-  backgroundRadius: 0.017,
+  markerCenters: [
+    { x: 0.040, y: 0.060 },
+    { x: 0.960, y: 0.060 },
+    { x: 0.960, y: 0.940 },
+    { x: 0.040, y: 0.940 },
+  ] as const,
+  blocks: [
+    {
+      stations: [1, 2, 3, 4, 5, 6, 7, 8],
+      x: 0.055,
+      y: 0.430,
+      width: 0.435,
+      height: 0.420,
+      stationColumnWidth: 0.048,
+      totalColumnWidth: 0.055,
+      headerHeight: 0.043,
+    },
+    {
+      stations: [9, 10, 11, 12, 13, 14, 15],
+      x: 0.510,
+      y: 0.430,
+      width: 0.435,
+      height: 0.420,
+      stationColumnWidth: 0.048,
+      totalColumnWidth: 0.055,
+      headerHeight: 0.043,
+    },
+  ],
 }
 
 export function ScorecardScanLabPage() {
@@ -54,11 +63,13 @@ export function ScorecardScanLabPage() {
 
   const [imageUrl, setImageUrl] = useState("")
   const [markers, setMarkers] = useState<RegistrationMarker[]>([])
-  const [readings, setReadings] = useState<BubbleReading[]>([])
-  const [overrides, setOverrides] = useState<Record<string, BubbleState>>({})
-  const [threshold, setThreshold] = useState(0)
-  const [band, setBand] = useState(0)
-  const [status, setStatus] = useState("Ready for a scorecard photo")
+  const [readings, setReadings] = useState<GridCellReading[]>([])
+  const [overrides, setOverrides] = useState<
+    Record<string, GridCellState>
+  >({})
+  const [status, setStatus] = useState(
+    "Ready for a V4 grid scorecard photo",
+  )
   const [error, setError] = useState("")
 
   function loadFile(event: ChangeEvent<HTMLInputElement>) {
@@ -81,7 +92,7 @@ export function ScorecardScanLabPage() {
     setReadings([])
     setOverrides({})
     correctedImageRef.current = null
-    setStatus("Photo loaded — tap Scan Scorecard")
+    setStatus("Photo loaded - tap Scan Grid Scorecard")
     setError("")
   }
 
@@ -112,7 +123,13 @@ export function ScorecardScanLabPage() {
       )
 
       context.beginPath()
-      context.arc(marker.center.x, marker.center.y, 12, 0, Math.PI * 2)
+      context.arc(
+        marker.center.x,
+        marker.center.y,
+        12,
+        0,
+        Math.PI * 2,
+      )
       context.fillStyle = "#10b981"
       context.fill()
       context.fillStyle = "#ffffff"
@@ -136,32 +153,27 @@ export function ScorecardScanLabPage() {
     context.putImageData(corrected, 0, 0)
 
     for (const reading of nextReadings) {
-      const key = `${reading.stationIndex}-${reading.birdIndex}`
+      const key = `${reading.station}-${reading.bird}`
       const state = overrides[key] ?? reading.state
+      const x = reading.x * canvas.width
+      const y = reading.y * canvas.height
+      const width = reading.width * canvas.width
+      const height = reading.height * canvas.height
 
-      context.beginPath()
-      context.arc(
-        reading.x * canvas.width,
-        reading.y * canvas.height,
-        11,
-        0,
-        Math.PI * 2,
-      )
-
-      if (state === "filled") {
+      if (state === "hit") {
         context.strokeStyle = "#059669"
         context.fillStyle = "rgba(16, 185, 129, 0.20)"
-      } else if (state === "uncertain") {
+      } else if (state === "review") {
         context.strokeStyle = "#d97706"
         context.fillStyle = "rgba(245, 158, 11, 0.22)"
       } else {
         context.strokeStyle = "#64748b"
-        context.fillStyle = "rgba(255,255,255,0.03)"
+        context.fillStyle = "rgba(255, 255, 255, 0.03)"
       }
 
       context.lineWidth = 3
-      context.fill()
-      context.stroke()
+      context.fillRect(x + 2, y + 2, width - 4, height - 4)
+      context.strokeRect(x + 2, y + 2, width - 4, height - 4)
     }
   }
 
@@ -170,7 +182,7 @@ export function ScorecardScanLabPage() {
     const correctedCanvas = correctedCanvasRef.current
 
     if (!sourceCanvas || !correctedCanvas || !imageRef.current) {
-      setError("Take or upload a scorecard photo first.")
+      setError("Take or upload a V4 grid scorecard photo first.")
       return
     }
 
@@ -186,7 +198,7 @@ export function ScorecardScanLabPage() {
       sourceCanvas.height,
     )
 
-    setStatus("Finding registration markers…")
+    setStatus("Finding registration markers...")
 
     const foundMarkers = detectRegistrationMarkers(source)
 
@@ -195,7 +207,7 @@ export function ScorecardScanLabPage() {
       setReadings([])
       setStatus("Scan needs another photo")
       setError(
-        "Could not find all four registration markers. Keep the complete card visible and photograph it a little closer.",
+        "Could not find all four registration markers. Keep the complete half-card visible and photograph it a little closer.",
       )
       return
     }
@@ -204,12 +216,12 @@ export function ScorecardScanLabPage() {
     drawSource(foundMarkers)
 
     try {
-      setStatus("Aligning scorecard template…")
+      setStatus("Aligning V4 grid template...")
 
       const corrected = warpUsingMarkerTemplate(
         source,
         foundMarkers.map((marker) => marker.center),
-        MARKER_TEMPLATE,
+        TEMPLATE.markerCenters,
       )
 
       correctedImageRef.current = corrected
@@ -219,35 +231,33 @@ export function ScorecardScanLabPage() {
         .getContext("2d")
         ?.putImageData(corrected, 0, 0)
 
-      setStatus("Reading bubbles…")
+      setStatus("Recognizing X marks...")
 
-      const result = analyzeOmrTemplate(corrected, TEMPLATE)
+      const nextReadings = analyzeGridScorecard(corrected, TEMPLATE)
 
-      setReadings(result.readings)
-      setThreshold(result.threshold)
-      setBand(result.band)
+      setReadings(nextReadings)
       setOverrides({})
       setError("")
-      setStatus("Scan complete — review the result")
+      setStatus("Scan complete - review the X marks")
     } catch (nextError) {
       setStatus("Scan failed")
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to process the scorecard.",
+          : "Unable to process the grid scorecard.",
       )
     }
   }
 
-  function cycleReading(reading: BubbleReading) {
-    const key = `${reading.stationIndex}-${reading.birdIndex}`
+  function cycleReading(reading: GridCellReading) {
+    const key = `${reading.station}-${reading.bird}`
     const current = overrides[key] ?? reading.state
-    const next: BubbleState =
-      current === "empty"
-        ? "filled"
-        : current === "filled"
-          ? "uncertain"
-          : "empty"
+    const next: GridCellState =
+      current === "blank"
+        ? "hit"
+        : current === "hit"
+          ? "review"
+          : "blank"
 
     setOverrides((currentOverrides) => ({
       ...currentOverrides,
@@ -260,10 +270,8 @@ export function ScorecardScanLabPage() {
     setReadings([])
     setOverrides({})
     correctedImageRef.current = null
-    setThreshold(0)
-    setBand(0)
     setError("")
-    setStatus("Ready for a scorecard photo")
+    setStatus("Ready for a V4 grid scorecard photo")
 
     const correctedCanvas = correctedCanvasRef.current
     if (correctedCanvas) {
@@ -300,7 +308,7 @@ export function ScorecardScanLabPage() {
   const interpretedReadings = useMemo(
     () =>
       readings.map((reading) => {
-        const key = `${reading.stationIndex}-${reading.birdIndex}`
+        const key = `${reading.station}-${reading.bird}`
 
         return {
           ...reading,
@@ -311,53 +319,50 @@ export function ScorecardScanLabPage() {
   )
 
   const summary = useMemo(() => {
-    const filled = interpretedReadings.filter(
-      (reading) => reading.state === "filled",
+    const hits = interpretedReadings.filter(
+      (reading) => reading.state === "hit",
     ).length
-    const uncertain = interpretedReadings.filter(
-      (reading) => reading.state === "uncertain",
+    const review = interpretedReadings.filter(
+      (reading) => reading.state === "review",
     ).length
 
     return {
-      filled,
-      uncertain,
+      hits,
+      review,
       total: interpretedReadings.length,
       percentage:
         interpretedReadings.length > 0
-          ? (filled / interpretedReadings.length) * 100
+          ? (hits / interpretedReadings.length) * 100
           : 0,
     }
   }, [interpretedReadings])
 
   const stationTotals = useMemo(
     () =>
-      Array.from(
-        { length: TEMPLATE.stationCount },
-        (_, stationIndex) => {
-          const stationReadings = interpretedReadings.filter(
-            (reading) => reading.stationIndex === stationIndex,
-          )
+      Array.from({ length: 15 }, (_, index) => {
+        const station = index + 1
+        const cells = interpretedReadings.filter(
+          (reading) => reading.station === station,
+        )
 
-          return {
-            station: stationIndex + 1,
-            hits: stationReadings.filter(
-              (reading) => reading.state === "filled",
-            ).length,
-            uncertain: stationReadings.filter(
-              (reading) => reading.state === "uncertain",
-            ).length,
-            readings: stationReadings,
-          }
-        },
-      ),
+        return {
+          station,
+          hits: cells.filter((reading) => reading.state === "hit")
+            .length,
+          review: cells.filter(
+            (reading) => reading.state === "review",
+          ).length,
+          cells,
+        }
+      }),
     [interpretedReadings],
   )
 
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
-        title="Scorecard Auto-Scan Lab"
-        description="Automatic marker alignment — testing only"
+        title="Scorecard Grid Scan Lab"
+        description="X-mark recognition - testing only"
       />
 
       <PageContainer>
@@ -368,8 +373,8 @@ export function ScorecardScanLabPage() {
               <div>
                 <p className="font-bold">No official scores are saved</p>
                 <p className="mt-1">
-                  This version aligns the known V3 card template from the
-                  four finder centers before reading the fixed bubble grid.
+                  This test scanner counts a clear handwritten X as a hit
+                  and leaves blank cells as misses.
                 </p>
               </div>
             </div>
@@ -381,11 +386,11 @@ export function ScorecardScanLabPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-950">
-                      Scorecard Photo
+                      V4 Grid Scorecard Photo
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Keep all four finder markers visible and fill most of
-                      the camera frame with the scorecard.
+                      Photograph one complete half-page card with all four
+                      finder markers visible.
                     </p>
                   </div>
 
@@ -412,7 +417,7 @@ export function ScorecardScanLabPage() {
                     <div className="flex min-h-96 flex-col items-center justify-center text-center text-slate-500">
                       <Upload className="h-10 w-10" />
                       <p className="mt-3 font-semibold">
-                        No scorecard photo selected
+                        No grid scorecard photo selected
                       </p>
                     </div>
                   )}
@@ -425,7 +430,7 @@ export function ScorecardScanLabPage() {
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"
                   >
                     <ScanLine className="h-4 w-4" />
-                    Scan Scorecard
+                    Scan Grid Scorecard
                   </button>
 
                   <button
@@ -451,7 +456,7 @@ export function ScorecardScanLabPage() {
 
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">
-                  Corrected OMR Image
+                  Corrected Grid Image
                 </h2>
 
                 <div className="mt-5 overflow-auto rounded-2xl border border-slate-200 bg-slate-100 p-2">
@@ -466,10 +471,13 @@ export function ScorecardScanLabPage() {
                 <h2 className="text-lg font-bold text-slate-950">
                   Station Review
                 </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Tap a numbered cell to cycle Blank - Hit - Review.
+                </p>
 
                 {readings.length === 0 ? (
                   <div className="py-10 text-center text-sm text-slate-500">
-                    Scan a scorecard to see station results.
+                    Scan a V4 scorecard to see station results.
                   </div>
                 ) : (
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -484,33 +492,33 @@ export function ScorecardScanLabPage() {
                               Station {station.station}
                             </p>
                             <p className="mt-1 text-2xl font-black text-slate-950">
-                              {station.hits} / {TEMPLATE.birdsPerStation}
+                              {station.hits} / 6
                             </p>
                           </div>
 
-                          {station.uncertain > 0 ? (
+                          {station.review > 0 ? (
                             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">
-                              {station.uncertain} review
+                              {station.review} review
                             </span>
                           ) : null}
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {station.readings.map((reading) => (
+                          {station.cells.map((reading) => (
                             <button
-                              key={`${reading.stationIndex}-${reading.birdIndex}`}
+                              key={`${reading.station}-${reading.bird}`}
                               type="button"
                               onClick={() => cycleReading(reading)}
-                              title={`OMR ${reading.rawScore.toFixed(3)}`}
+                              title={`X score ${reading.score.toFixed(3)}`}
                               className={
-                                reading.state === "filled"
-                                  ? "h-9 w-9 rounded-full border-2 border-emerald-600 bg-emerald-100 text-xs font-bold text-emerald-800"
-                                  : reading.state === "uncertain"
-                                    ? "h-9 w-9 rounded-full border-2 border-amber-500 bg-amber-100 text-xs font-bold text-amber-800"
-                                    : "h-9 w-9 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-600"
+                                reading.state === "hit"
+                                  ? "h-9 w-9 rounded-md border-2 border-emerald-600 bg-emerald-100 text-xs font-bold text-emerald-800"
+                                  : reading.state === "review"
+                                    ? "h-9 w-9 rounded-md border-2 border-amber-500 bg-amber-100 text-xs font-bold text-amber-800"
+                                    : "h-9 w-9 rounded-md border-2 border-slate-300 bg-white text-xs font-bold text-slate-600"
                               }
                             >
-                              {reading.birdIndex + 1}
+                              {reading.bird}
                             </button>
                           ))}
                         </div>
@@ -528,10 +536,9 @@ export function ScorecardScanLabPage() {
                 </h2>
 
                 <p className="mt-5 text-5xl font-black text-slate-950">
-                  {summary.filled}
+                  {summary.hits}
                   <span className="text-2xl text-slate-400">
-                    {" "}
-                    / {summary.total || 90}
+                    {" "}/ {summary.total || 90}
                   </span>
                 </p>
 
@@ -545,24 +552,13 @@ export function ScorecardScanLabPage() {
                     value={`${markers.length} / 4`}
                   />
                   <SummaryRow
-                    label="Bubbles analyzed"
+                    label="Cells analyzed"
                     value={summary.total}
                   />
+                  <SummaryRow label="X hits" value={summary.hits} />
                   <SummaryRow
-                    label="Filled bubbles"
-                    value={summary.filled}
-                  />
-                  <SummaryRow
-                    label="Uncertain bubbles"
-                    value={summary.uncertain}
-                  />
-                  <SummaryRow
-                    label="Adaptive threshold"
-                    value={threshold.toFixed(3)}
-                  />
-                  <SummaryRow
-                    label="Uncertainty band"
-                    value={band.toFixed(3)}
+                    label="Needs review"
+                    value={summary.review}
                   />
                 </div>
               </section>
