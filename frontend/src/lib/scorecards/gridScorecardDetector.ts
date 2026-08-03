@@ -498,17 +498,10 @@ function measureXWindow(
   cellHeight: number,
 ) {
   /*
-   * Search a broad area around the expected cell center rather than requiring
-   * the photographed grid lines to align exactly. This makes recognition
-   * tolerant of small print, crop, and perspective differences.
+   * Search only near the expected cell center. The previous wide 5x5 search
+   * could wander into neighboring grid lines and text, causing false hits.
    */
-  const searchWidth = cellWidth * 0.82
-  const searchHeight = cellHeight * 0.82
-  const left = centerX - searchWidth / 2
-  const top = centerY - searchHeight / 2
-
-  const sampleStepsX = 5
-  const sampleStepsY = 5
+  const offsets = [-0.12, 0, 0.12]
   let best = {
     forwardDiagonal: 0,
     backwardDiagonal: 0,
@@ -517,29 +510,21 @@ function measureXWindow(
     state: "blank" as GridCellState,
   }
 
-  for (let stepY = 0; stepY < sampleStepsY; stepY += 1) {
-    for (let stepX = 0; stepX < sampleStepsX; stepX += 1) {
-      const candidateCenterX =
-        left +
-        (searchWidth * (stepX + 0.5)) / sampleStepsX
-      const candidateCenterY =
-        top +
-        (searchHeight * (stepY + 0.5)) / sampleStepsY
+  for (const offsetY of offsets) {
+    for (const offsetX of offsets) {
+      const candidateCenterX = centerX + offsetX * cellWidth
+      const candidateCenterY = centerY + offsetY * cellHeight
 
-      const windowWidth = cellWidth * 0.64
-      const windowHeight = cellHeight * 0.64
-      const windowLeft = candidateCenterX - windowWidth / 2
-      const windowTop = candidateCenterY - windowHeight / 2
-      const marginX = windowWidth * 0.12
-      const marginY = windowHeight * 0.12
-      const innerLeft = windowLeft + marginX
-      const innerRight = windowLeft + windowWidth - marginX
-      const innerTop = windowTop + marginY
-      const innerBottom = windowTop + windowHeight - marginY
-      const innerWidth = innerRight - innerLeft
-      const innerHeight = innerBottom - innerTop
-      const diagonalBand =
-        Math.max(2, Math.min(innerWidth, innerHeight) * 0.16)
+      /*
+       * Analyze only the central portion of the cell so printed borders are
+       * excluded even when the photographed grid is slightly misaligned.
+       */
+      const innerWidth = cellWidth * 0.58
+      const innerHeight = cellHeight * 0.58
+      const innerLeft = candidateCenterX - innerWidth / 2
+      const innerTop = candidateCenterY - innerHeight / 2
+      const innerRight = innerLeft + innerWidth
+      const innerBottom = innerTop + innerHeight
 
       let localLight = 0
       let localCount = 0
@@ -562,19 +547,25 @@ function measureXWindow(
       const localAverage = localCount
         ? localLight / localCount
         : 255
-      const darknessThreshold = Math.min(
-        212,
-        localAverage - 24,
-      )
 
-      let forwardDark = 0
-      let forwardCount = 0
-      let backwardDark = 0
-      let backwardCount = 0
-      let inkPixels = 0
+      /*
+       * Require a pixel to be meaningfully darker than the local paper.
+       * Colored pen is still accepted through saturation, but the saturation
+       * threshold is deliberately stricter than before.
+       */
+      const darknessThreshold = Math.min(195, localAverage - 34)
+
       let totalPixels = 0
+      let inkPixels = 0
+      let centerPixels = 0
       let centerInk = 0
-      let centerCount = 0
+
+      let forwardCounts = [0, 0, 0, 0]
+      let forwardInk = [0, 0, 0, 0]
+      let backwardCounts = [0, 0, 0, 0]
+      let backwardInk = [0, 0, 0, 0]
+
+      const diagonalBand = 0.11
 
       for (
         let py = Math.floor(innerTop);
@@ -597,35 +588,43 @@ function measureXWindow(
             value.green,
             value.blue,
           )
+
           const marked =
-            lum < darknessThreshold || sat > 0.30
+            lum < darknessThreshold ||
+            (sat > 0.42 && lum < localAverage - 10)
 
           const nx = (px - innerLeft) / innerWidth
           const ny = (py - innerTop) / innerHeight
-          const forwardDistance = Math.abs(ny - nx)
-          const backwardDistance = Math.abs(
-            ny - (1 - nx),
-          )
-          const normalizedBand =
-            diagonalBand / Math.min(innerWidth, innerHeight)
 
-          if (forwardDistance <= normalizedBand) {
-            forwardCount += 1
-            if (marked) forwardDark += 1
+          const quadrant =
+            ny < 0.5
+              ? nx < 0.5
+                ? 0
+                : 1
+              : nx < 0.5
+                ? 2
+                : 3
+
+          const forwardDistance = Math.abs(ny - nx)
+          const backwardDistance = Math.abs(ny - (1 - nx))
+
+          if (forwardDistance <= diagonalBand) {
+            forwardCounts[quadrant] += 1
+            if (marked) forwardInk[quadrant] += 1
           }
 
-          if (backwardDistance <= normalizedBand) {
-            backwardCount += 1
-            if (marked) backwardDark += 1
+          if (backwardDistance <= diagonalBand) {
+            backwardCounts[quadrant] += 1
+            if (marked) backwardInk[quadrant] += 1
           }
 
           if (
-            nx >= 0.28 &&
-            nx <= 0.72 &&
-            ny >= 0.28 &&
-            ny <= 0.72
+            nx >= 0.34 &&
+            nx <= 0.66 &&
+            ny >= 0.34 &&
+            ny <= 0.66
           ) {
-            centerCount += 1
+            centerPixels += 1
             if (marked) centerInk += 1
           }
 
@@ -634,45 +633,58 @@ function measureXWindow(
         }
       }
 
-      const forwardDiagonal = forwardCount
-        ? forwardDark / forwardCount
-        : 0
-      const backwardDiagonal = backwardCount
-        ? backwardDark / backwardCount
-        : 0
+      const forwardRatios = forwardCounts.map(
+        (count, index) =>
+          count > 0 ? forwardInk[index] / count : 0,
+      )
+      const backwardRatios = backwardCounts.map(
+        (count, index) =>
+          count > 0 ? backwardInk[index] / count : 0,
+      )
+
+      /*
+       * A real X should contain both halves of both diagonals. Using the
+       * weakest required quadrants prevents a single grid line, shadow, or
+       * slash from becoming a hit.
+       *
+       * Forward diagonal uses top-left and bottom-right.
+       * Backward diagonal uses top-right and bottom-left.
+       */
+      const forwardDiagonal = Math.min(
+        forwardRatios[0],
+        forwardRatios[3],
+      )
+      const backwardDiagonal = Math.min(
+        backwardRatios[1],
+        backwardRatios[2],
+      )
+
       const inkCoverage = totalPixels
         ? inkPixels / totalPixels
         : 0
-      const centerCoverage = centerCount
-        ? centerInk / centerCount
+      const centerCoverage = centerPixels
+        ? centerInk / centerPixels
         : 0
 
       const diagonalMinimum = Math.min(
         forwardDiagonal,
         backwardDiagonal,
       )
+      const diagonalMaximum = Math.max(
+        forwardDiagonal,
+        backwardDiagonal,
+      )
       const diagonalBalance =
-        Math.max(forwardDiagonal, backwardDiagonal) > 0
-          ? diagonalMinimum /
-            Math.max(forwardDiagonal, backwardDiagonal)
+        diagonalMaximum > 0
+          ? diagonalMinimum / diagonalMaximum
           : 0
 
       const score = clamp(
-        diagonalMinimum * 0.58 +
-          diagonalBalance * 0.18 +
-          clamp((inkCoverage - 0.015) / 0.16) * 0.14 +
-          clamp((centerCoverage - 0.02) / 0.30) * 0.10,
+        diagonalMinimum * 0.56 +
+          diagonalBalance * 0.16 +
+          clamp((centerCoverage - 0.035) / 0.30) * 0.18 +
+          clamp((inkCoverage - 0.018) / 0.13) * 0.10,
       )
-
-      const state: GridCellState =
-        forwardDiagonal >= 0.16 &&
-        backwardDiagonal >= 0.16 &&
-        diagonalBalance >= 0.48 &&
-        inkCoverage >= 0.025
-          ? "hit"
-          : score >= 0.20 || inkCoverage >= 0.055
-            ? "review"
-            : "blank"
 
       if (score > best.score) {
         best = {
@@ -680,7 +692,7 @@ function measureXWindow(
           backwardDiagonal,
           inkCoverage,
           score,
-          state,
+          state: "blank",
         }
       }
     }
@@ -693,26 +705,34 @@ export function analyzeGridScorecard(
   image: ImageData,
   template: GridTemplate,
 ): GridCellReading[] {
-  const results: GridCellReading[] = []
+  const measured: GridCellReading[] = []
 
   for (const block of template.blocks) {
     const blockX = block.x * image.width
     const blockY = block.y * image.height
     const blockWidth = block.width * image.width
     const blockHeight = block.height * image.height
-    const stationColumnWidth = block.stationColumnWidth * image.width
-    const totalColumnWidth = block.totalColumnWidth * image.width
+    const stationColumnWidth =
+      block.stationColumnWidth * image.width
+    const totalColumnWidth =
+      block.totalColumnWidth * image.width
     const headerHeight = block.headerHeight * image.height
     const birdWidth =
       (blockWidth - stationColumnWidth - totalColumnWidth) / 6
     const rowHeight =
       (blockHeight - headerHeight) / block.stations.length
 
-    for (let rowIndex = 0; rowIndex < block.stations.length; rowIndex += 1) {
+    for (
+      let rowIndex = 0;
+      rowIndex < block.stations.length;
+      rowIndex += 1
+    ) {
       for (let birdIndex = 0; birdIndex < 6; birdIndex += 1) {
         const cellX =
           blockX + stationColumnWidth + birdIndex * birdWidth
-        const cellY = blockY + headerHeight + rowIndex * rowHeight
+        const cellY =
+          blockY + headerHeight + rowIndex * rowHeight
+
         const reading = measureXWindow(
           image,
           cellX + birdWidth / 2,
@@ -721,7 +741,7 @@ export function analyzeGridScorecard(
           rowHeight,
         )
 
-        results.push({
+        measured.push({
           station: block.stations[rowIndex],
           bird: birdIndex + 1,
           x: cellX / image.width,
@@ -734,8 +754,81 @@ export function analyzeGridScorecard(
     }
   }
 
-  return results.sort(
-    (left, right) =>
-      left.station - right.station || left.bird - right.bird,
+  /*
+   * Learn the blank-cell baseline from the card itself. Most scorecards have
+   * more blank cells than marked cells, so the lower 70% gives a robust
+   * estimate of printing, shadows, and camera noise.
+   */
+  const scores = measured
+    .map((reading) => reading.score)
+    .sort((left, right) => left - right)
+
+  const baselineScores = scores.slice(
+    0,
+    Math.max(1, Math.floor(scores.length * 0.70)),
   )
+
+  const baselineMedian =
+    baselineScores[Math.floor(baselineScores.length / 2)] ?? 0
+
+  const deviations = baselineScores
+    .map((value) => Math.abs(value - baselineMedian))
+    .sort((left, right) => left - right)
+
+  const medianDeviation =
+    deviations[Math.floor(deviations.length / 2)] ?? 0
+
+  /*
+   * The adaptive threshold handles different lighting and printer darkness,
+   * while the absolute floor prevents a noisy card from classifying weak
+   * marks as hits.
+   */
+  const hitThreshold = Math.max(
+    0.38,
+    baselineMedian + Math.max(0.16, medianDeviation * 7),
+  )
+  const reviewThreshold = Math.max(
+    0.24,
+    baselineMedian + Math.max(0.09, medianDeviation * 4),
+  )
+
+  return measured
+    .map((reading) => {
+      const hasTwoStrongDiagonals =
+        reading.forwardDiagonal >= 0.22 &&
+        reading.backwardDiagonal >= 0.22
+
+      const balanced =
+        Math.min(
+          reading.forwardDiagonal,
+          reading.backwardDiagonal,
+        ) /
+          Math.max(
+            reading.forwardDiagonal,
+            reading.backwardDiagonal,
+            0.001,
+          ) >=
+        0.58
+
+      const state: GridCellState =
+        reading.score >= hitThreshold &&
+        hasTwoStrongDiagonals &&
+        balanced &&
+        reading.inkCoverage >= 0.035
+          ? "hit"
+          : reading.score >= reviewThreshold ||
+              reading.inkCoverage >= 0.075
+            ? "review"
+            : "blank"
+
+      return {
+        ...reading,
+        state,
+      }
+    })
+    .sort(
+      (left, right) =>
+        left.station - right.station ||
+        left.bird - right.bird,
+    )
 }
