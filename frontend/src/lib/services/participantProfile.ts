@@ -19,11 +19,13 @@ export type ParticipantProfile = {
     notes: string | null
     active: boolean
   }
+
   classRecord: {
     id: string
     code: string
     display_name: string
   } | null
+
   teamHistory: Array<{
     id: string
     team_id: string
@@ -32,6 +34,7 @@ export type ParticipantProfile = {
     start_date: string | null
     end_date: string | null
   }>
+
   registrations: Array<{
     id: string
     event_id: string
@@ -41,25 +44,33 @@ export type ParticipantProfile = {
     payment_status: string
     status: string
   }>
+
   shootResults: Array<{
     registration_id: string
     event_id: string
     event_name: string
     event_date: string | null
+    season: string
     shoot_id: string
     shoot_name: string
     discipline: string
     number_of_rounds: number
+    targets_per_round: number
     round_scores: number[]
     historical_total_score: number | null
     total_score: number
+    total_possible: number
+    score_percentage: number
   }>
+
   statistics: {
     eventCount: number
     shootCount: number
     roundsShot: number
     targetsHit: number
+    targetsPossible: number
     averageRound: number
+    overallPercentage: number
     highestRound: number
     highestShootTotal: number
     disciplineAverages: Array<{
@@ -67,12 +78,25 @@ export type ParticipantProfile = {
       averageRound: number
       roundsShot: number
       targetsHit: number
+      targetsPossible: number
+      percentage: number
+      personalBest: number
+      personalBestPossible: number
+      personalBestPercentage: number
     }>
   }
 }
 
 function throwIfError(error: { message?: string } | null) {
-  if (error) throw new Error(error.message || "A database error occurred.")
+  if (error) {
+    throw new Error(error.message || "A database error occurred.")
+  }
+}
+
+function seasonLabel(value: string | null) {
+  if (!value) return "Unknown"
+  const year = Number(value.slice(0, 4))
+  return Number.isFinite(year) ? String(year) : "Unknown"
 }
 
 export async function loadParticipantProfile(
@@ -109,7 +133,9 @@ export async function loadParticipantProfile(
   throwIfError(assignmentsResult.error)
   throwIfError(registrationsResult.error)
 
-  if (!athleteResult.data) throw new Error("Participant not found.")
+  if (!athleteResult.data) {
+    throw new Error("Participant not found.")
+  }
 
   const athlete = athleteResult.data
   const assignments = assignmentsResult.data ?? []
@@ -174,6 +200,7 @@ export async function loadParticipantProfile(
   const registrations = registrationRows
     .map((registration) => {
       const event = eventById.get(registration.event_id)
+
       return {
         id: registration.id,
         event_id: registration.event_id,
@@ -267,19 +294,31 @@ export async function loadParticipantProfile(
       const roundScores = memberScores.map((row) => row.score)
       const scoreTotal = roundScores.reduce((sum, score) => sum + score, 0)
       const historicalTotal = enrollment.historical_total_score ?? null
+      const targetsPerRound = shoot?.targets_per_round ?? 25
+      const roundsForTotal =
+        roundScores.length > 0
+          ? roundScores.length
+          : shoot?.number_of_rounds ?? 0
+      const totalPossible = roundsForTotal * targetsPerRound
+      const totalScore = historicalTotal ?? scoreTotal
 
       return {
         registration_id: enrollment.registration_id,
         event_id: registration?.event_id ?? shoot?.event_id ?? "",
         event_name: registration?.event_name ?? "Unknown event",
         event_date: registration?.event_date ?? null,
+        season: seasonLabel(registration?.event_date ?? null),
         shoot_id: enrollment.shoot_id,
         shoot_name: shoot?.name ?? "Unknown shoot",
         discipline: shoot?.discipline ?? "unknown",
         number_of_rounds: shoot?.number_of_rounds ?? 0,
+        targets_per_round: targetsPerRound,
         round_scores: roundScores,
         historical_total_score: historicalTotal,
-        total_score: historicalTotal ?? scoreTotal,
+        total_score: totalScore,
+        total_possible: totalPossible,
+        score_percentage:
+          totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0,
       }
     })
     .sort((left, right) =>
@@ -288,18 +327,32 @@ export async function loadParticipantProfile(
 
   const allRoundScores = shootResults.flatMap((result) => result.round_scores)
   const targetsHit = allRoundScores.reduce((sum, score) => sum + score, 0)
+  const targetsPossible = shootResults.reduce(
+    (sum, result) =>
+      sum + result.round_scores.length * result.targets_per_round,
+    0,
+  )
 
   const disciplineMap = new Map<
     string,
-    { roundsShot: number; targetsHit: number }
+    {
+      roundsShot: number
+      targetsHit: number
+      targetsPossible: number
+      personalBest: number
+      personalBestPossible: number
+      personalBestPercentage: number
+    }
   >()
 
   for (const result of shootResults) {
-    if (!result.round_scores.length) continue
-
     const current = disciplineMap.get(result.discipline) ?? {
       roundsShot: 0,
       targetsHit: 0,
+      targetsPossible: 0,
+      personalBest: 0,
+      personalBestPossible: 0,
+      personalBestPercentage: 0,
     }
 
     current.roundsShot += result.round_scores.length
@@ -307,6 +360,15 @@ export async function loadParticipantProfile(
       (sum, score) => sum + score,
       0,
     )
+    current.targetsPossible +=
+      result.round_scores.length * result.targets_per_round
+
+    if (result.score_percentage > current.personalBestPercentage) {
+      current.personalBest = result.total_score
+      current.personalBestPossible = result.total_possible
+      current.personalBestPercentage = result.score_percentage
+    }
+
     disciplineMap.set(result.discipline, current)
   }
 
@@ -316,7 +378,8 @@ export async function loadParticipantProfile(
     teamHistory: assignments.map((assignment) => ({
       id: assignment.id,
       team_id: assignment.team_id,
-      team_name: teamById.get(assignment.team_id)?.name ?? "Unknown team",
+      team_name:
+        teamById.get(assignment.team_id)?.name ?? "Unknown team",
       is_primary: assignment.is_primary,
       start_date: assignment.start_date,
       end_date: assignment.end_date,
@@ -328,25 +391,38 @@ export async function loadParticipantProfile(
       shootCount: shootResults.length,
       roundsShot: allRoundScores.length,
       targetsHit,
-      averageRound: allRoundScores.length
-        ? targetsHit / allRoundScores.length
-        : 0,
-      highestRound: allRoundScores.length
-        ? Math.max(...allRoundScores)
-        : 0,
-      highestShootTotal: shootResults.length
-        ? Math.max(...shootResults.map((result) => result.total_score))
-        : 0,
+      targetsPossible,
+      averageRound:
+        allRoundScores.length > 0
+          ? targetsHit / allRoundScores.length
+          : 0,
+      overallPercentage:
+        targetsPossible > 0 ? (targetsHit / targetsPossible) * 100 : 0,
+      highestRound:
+        allRoundScores.length > 0 ? Math.max(...allRoundScores) : 0,
+      highestShootTotal:
+        shootResults.length > 0
+          ? Math.max(...shootResults.map((result) => result.total_score))
+          : 0,
       disciplineAverages: Array.from(disciplineMap.entries())
         .map(([discipline, values]) => ({
           discipline,
-          averageRound: values.roundsShot
-            ? values.targetsHit / values.roundsShot
-            : 0,
+          averageRound:
+            values.roundsShot > 0
+              ? values.targetsHit / values.roundsShot
+              : 0,
           roundsShot: values.roundsShot,
           targetsHit: values.targetsHit,
+          targetsPossible: values.targetsPossible,
+          percentage:
+            values.targetsPossible > 0
+              ? (values.targetsHit / values.targetsPossible) * 100
+              : 0,
+          personalBest: values.personalBest,
+          personalBestPossible: values.personalBestPossible,
+          personalBestPercentage: values.personalBestPercentage,
         }))
-        .sort((left, right) => right.averageRound - left.averageRound),
+        .sort((left, right) => right.percentage - left.percentage),
     },
   }
 }
