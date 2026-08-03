@@ -149,6 +149,12 @@ const EventMaintenancePage = lazy(() =>
   })),
 )
 
+const ScorecardScanLabPage = lazy(() =>
+  import("@/features/scorecards/ScorecardScanLabPage").then((module) => ({
+    default: module.ScorecardScanLabPage,
+  })),
+)
+
 function RouteLoadingFallback() {
   return (
     <div
@@ -406,6 +412,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <EventMaintenancePage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="scorecard-scan-lab"
+                  element={
+                    <LazyRoute>
+                      <ScorecardScanLabPage />
                     </LazyRoute>
                   }
                 />
