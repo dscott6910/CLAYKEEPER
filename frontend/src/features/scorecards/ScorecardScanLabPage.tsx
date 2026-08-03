@@ -140,7 +140,7 @@ export function ScorecardScanLabPage() {
     })
   }
 
-  function drawCorrected(nextReadings = readings) {
+  function drawCorrected() {
     const canvas = correctedCanvasRef.current
     const corrected = correctedImageRef.current
     if (!canvas || !corrected) return
@@ -151,30 +151,6 @@ export function ScorecardScanLabPage() {
     canvas.width = corrected.width
     canvas.height = corrected.height
     context.putImageData(corrected, 0, 0)
-
-    for (const reading of nextReadings) {
-      const key = `${reading.station}-${reading.bird}`
-      const state = overrides[key] ?? reading.state
-      const x = reading.x * canvas.width
-      const y = reading.y * canvas.height
-      const width = reading.width * canvas.width
-      const height = reading.height * canvas.height
-
-      if (state === "hit") {
-        context.strokeStyle = "#059669"
-        context.fillStyle = "rgba(16, 185, 129, 0.20)"
-      } else if (state === "review") {
-        context.strokeStyle = "#d97706"
-        context.fillStyle = "rgba(245, 158, 11, 0.22)"
-      } else {
-        context.strokeStyle = "#64748b"
-        context.fillStyle = "rgba(255, 255, 255, 0.03)"
-      }
-
-      context.lineWidth = 3
-      context.fillRect(x + 2, y + 2, width - 4, height - 4)
-      context.strokeRect(x + 2, y + 2, width - 4, height - 4)
-    }
   }
 
   function scanScorecard() {
@@ -302,7 +278,7 @@ export function ScorecardScanLabPage() {
   }, [markers])
 
   useEffect(() => {
-    if (readings.length > 0) drawCorrected()
+    if (correctedImageRef.current) drawCorrected()
   }, [readings, overrides])
 
   const interpretedReadings = useMemo(
@@ -456,7 +432,7 @@ export function ScorecardScanLabPage() {
 
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950">
-                  Corrected Grid Image
+                  Straightened Scorecard
                 </h2>
 
                 <div className="mt-5 overflow-auto rounded-2xl border border-slate-200 bg-slate-100 p-2">

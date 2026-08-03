@@ -490,109 +490,203 @@ export function warpUsingMarkerTemplate(
   return output
 }
 
-function measureX(
+function measureXWindow(
   image: ImageData,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
+  centerX: number,
+  centerY: number,
+  cellWidth: number,
+  cellHeight: number,
 ) {
-  const marginX = width * 0.18
-  const marginY = height * 0.18
-  const left = x + marginX
-  const right = x + width - marginX
-  const top = y + marginY
-  const bottom = y + height - marginY
-  const innerWidth = right - left
-  const innerHeight = bottom - top
-  const band = Math.max(2, Math.min(innerWidth, innerHeight) * 0.13)
+  /*
+   * Search a broad area around the expected cell center rather than requiring
+   * the photographed grid lines to align exactly. This makes recognition
+   * tolerant of small print, crop, and perspective differences.
+   */
+  const searchWidth = cellWidth * 0.82
+  const searchHeight = cellHeight * 0.82
+  const left = centerX - searchWidth / 2
+  const top = centerY - searchHeight / 2
 
-  let forwardDark = 0
-  let forwardCount = 0
-  let backwardDark = 0
-  let backwardCount = 0
-  let inkPixels = 0
-  let totalPixels = 0
+  const sampleStepsX = 5
+  const sampleStepsY = 5
+  let best = {
+    forwardDiagonal: 0,
+    backwardDiagonal: 0,
+    inkCoverage: 0,
+    score: 0,
+    state: "blank" as GridCellState,
+  }
 
-  let localLight = 0
-  let localCount = 0
+  for (let stepY = 0; stepY < sampleStepsY; stepY += 1) {
+    for (let stepX = 0; stepX < sampleStepsX; stepX += 1) {
+      const candidateCenterX =
+        left +
+        (searchWidth * (stepX + 0.5)) / sampleStepsX
+      const candidateCenterY =
+        top +
+        (searchHeight * (stepY + 0.5)) / sampleStepsY
 
-  for (let py = Math.floor(top); py <= Math.ceil(bottom); py += 1) {
-    for (let px = Math.floor(left); px <= Math.ceil(right); px += 1) {
-      const value = pixel(image, px, py)
-      const lum = luminance(value.red, value.green, value.blue)
-      localLight += lum
-      localCount += 1
+      const windowWidth = cellWidth * 0.64
+      const windowHeight = cellHeight * 0.64
+      const windowLeft = candidateCenterX - windowWidth / 2
+      const windowTop = candidateCenterY - windowHeight / 2
+      const marginX = windowWidth * 0.12
+      const marginY = windowHeight * 0.12
+      const innerLeft = windowLeft + marginX
+      const innerRight = windowLeft + windowWidth - marginX
+      const innerTop = windowTop + marginY
+      const innerBottom = windowTop + windowHeight - marginY
+      const innerWidth = innerRight - innerLeft
+      const innerHeight = innerBottom - innerTop
+      const diagonalBand =
+        Math.max(2, Math.min(innerWidth, innerHeight) * 0.16)
+
+      let localLight = 0
+      let localCount = 0
+
+      for (
+        let py = Math.floor(innerTop);
+        py <= Math.ceil(innerBottom);
+        py += 1
+      ) {
+        for (
+          let px = Math.floor(innerLeft);
+          px <= Math.ceil(innerRight);
+          px += 1
+        ) {
+          localLight += pixelLuminance(image, px, py)
+          localCount += 1
+        }
+      }
+
+      const localAverage = localCount
+        ? localLight / localCount
+        : 255
+      const darknessThreshold = Math.min(
+        212,
+        localAverage - 24,
+      )
+
+      let forwardDark = 0
+      let forwardCount = 0
+      let backwardDark = 0
+      let backwardCount = 0
+      let inkPixels = 0
+      let totalPixels = 0
+      let centerInk = 0
+      let centerCount = 0
+
+      for (
+        let py = Math.floor(innerTop);
+        py <= Math.ceil(innerBottom);
+        py += 1
+      ) {
+        for (
+          let px = Math.floor(innerLeft);
+          px <= Math.ceil(innerRight);
+          px += 1
+        ) {
+          const value = pixel(image, px, py)
+          const lum = luminance(
+            value.red,
+            value.green,
+            value.blue,
+          )
+          const sat = saturation(
+            value.red,
+            value.green,
+            value.blue,
+          )
+          const marked =
+            lum < darknessThreshold || sat > 0.30
+
+          const nx = (px - innerLeft) / innerWidth
+          const ny = (py - innerTop) / innerHeight
+          const forwardDistance = Math.abs(ny - nx)
+          const backwardDistance = Math.abs(
+            ny - (1 - nx),
+          )
+          const normalizedBand =
+            diagonalBand / Math.min(innerWidth, innerHeight)
+
+          if (forwardDistance <= normalizedBand) {
+            forwardCount += 1
+            if (marked) forwardDark += 1
+          }
+
+          if (backwardDistance <= normalizedBand) {
+            backwardCount += 1
+            if (marked) backwardDark += 1
+          }
+
+          if (
+            nx >= 0.28 &&
+            nx <= 0.72 &&
+            ny >= 0.28 &&
+            ny <= 0.72
+          ) {
+            centerCount += 1
+            if (marked) centerInk += 1
+          }
+
+          totalPixels += 1
+          if (marked) inkPixels += 1
+        }
+      }
+
+      const forwardDiagonal = forwardCount
+        ? forwardDark / forwardCount
+        : 0
+      const backwardDiagonal = backwardCount
+        ? backwardDark / backwardCount
+        : 0
+      const inkCoverage = totalPixels
+        ? inkPixels / totalPixels
+        : 0
+      const centerCoverage = centerCount
+        ? centerInk / centerCount
+        : 0
+
+      const diagonalMinimum = Math.min(
+        forwardDiagonal,
+        backwardDiagonal,
+      )
+      const diagonalBalance =
+        Math.max(forwardDiagonal, backwardDiagonal) > 0
+          ? diagonalMinimum /
+            Math.max(forwardDiagonal, backwardDiagonal)
+          : 0
+
+      const score = clamp(
+        diagonalMinimum * 0.58 +
+          diagonalBalance * 0.18 +
+          clamp((inkCoverage - 0.015) / 0.16) * 0.14 +
+          clamp((centerCoverage - 0.02) / 0.30) * 0.10,
+      )
+
+      const state: GridCellState =
+        forwardDiagonal >= 0.16 &&
+        backwardDiagonal >= 0.16 &&
+        diagonalBalance >= 0.48 &&
+        inkCoverage >= 0.025
+          ? "hit"
+          : score >= 0.20 || inkCoverage >= 0.055
+            ? "review"
+            : "blank"
+
+      if (score > best.score) {
+        best = {
+          forwardDiagonal,
+          backwardDiagonal,
+          inkCoverage,
+          score,
+          state,
+        }
+      }
     }
   }
 
-  const localAverage = localCount ? localLight / localCount : 255
-  const darknessThreshold = Math.min(205, localAverage - 28)
-
-  for (let py = Math.floor(top); py <= Math.ceil(bottom); py += 1) {
-    for (let px = Math.floor(left); px <= Math.ceil(right); px += 1) {
-      const value = pixel(image, px, py)
-      const lum = luminance(value.red, value.green, value.blue)
-      const sat = saturation(value.red, value.green, value.blue)
-      const marked = lum < darknessThreshold || sat > 0.34
-
-      const nx = (px - left) / innerWidth
-      const ny = (py - top) / innerHeight
-      const forwardDistance = Math.abs(ny - nx)
-      const backwardDistance = Math.abs(ny - (1 - nx))
-      const normalizedBand = band / Math.min(innerWidth, innerHeight)
-
-      if (forwardDistance <= normalizedBand) {
-        forwardCount += 1
-        if (marked) forwardDark += 1
-      }
-
-      if (backwardDistance <= normalizedBand) {
-        backwardCount += 1
-        if (marked) backwardDark += 1
-      }
-
-      totalPixels += 1
-      if (marked) inkPixels += 1
-    }
-  }
-
-  const forwardDiagonal = forwardCount
-    ? forwardDark / forwardCount
-    : 0
-  const backwardDiagonal = backwardCount
-    ? backwardDark / backwardCount
-    : 0
-  const inkCoverage = totalPixels ? inkPixels / totalPixels : 0
-
-  const diagonalBalance = Math.min(
-    forwardDiagonal,
-    backwardDiagonal,
-  )
-  const score = clamp(
-    diagonalBalance * 0.74 +
-      Math.min(forwardDiagonal, backwardDiagonal) * 0.16 +
-      clamp((inkCoverage - 0.015) / 0.20) * 0.10,
-  )
-
-  const state: GridCellState =
-    forwardDiagonal >= 0.18 &&
-    backwardDiagonal >= 0.18 &&
-    inkCoverage >= 0.035
-      ? "hit"
-      : forwardDiagonal <= 0.08 &&
-          backwardDiagonal <= 0.08 &&
-          inkCoverage <= 0.025
-        ? "blank"
-        : "review"
-
-  return {
-    forwardDiagonal,
-    backwardDiagonal,
-    inkCoverage,
-    score,
-    state,
-  }
+  return best
 }
 
 export function analyzeGridScorecard(
@@ -619,10 +713,10 @@ export function analyzeGridScorecard(
         const cellX =
           blockX + stationColumnWidth + birdIndex * birdWidth
         const cellY = blockY + headerHeight + rowIndex * rowHeight
-        const reading = measureX(
+        const reading = measureXWindow(
           image,
-          cellX,
-          cellY,
+          cellX + birdWidth / 2,
+          cellY + rowHeight / 2,
           birdWidth,
           rowHeight,
         )
