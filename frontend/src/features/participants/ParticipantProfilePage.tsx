@@ -8,6 +8,8 @@ import {
   Phone,
   School,
   Target,
+  TrendingDown,
+  TrendingUp,
   Trophy,
   UserRound,
 } from "lucide-react"
@@ -18,6 +20,8 @@ import {
   loadParticipantProfile,
   type ParticipantProfile,
 } from "@/lib/services/participantProfile"
+
+type ShootResult = ParticipantProfile["shootResults"][number]
 
 function displayName(athlete: ParticipantProfile["athlete"]) {
   return `${athlete.preferred_name?.trim() || athlete.first_name} ${athlete.last_name}`.trim()
@@ -45,9 +49,73 @@ function disciplineLabel(value: string) {
   return statusLabel(value)
 }
 
+function scoreTone(percentage: number) {
+  if (percentage >= 90) return "text-emerald-700"
+  if (percentage >= 80) return "text-teal-700"
+  if (percentage >= 70) return "text-amber-700"
+  return "text-rose-700"
+}
+
+function scoreBarTone(percentage: number) {
+  if (percentage >= 90) return "bg-emerald-500"
+  if (percentage >= 80) return "bg-teal-500"
+  if (percentage >= 70) return "bg-amber-500"
+  return "bg-rose-500"
+}
+
+function calculateTrend(results: ShootResult[]) {
+  const scored = results
+    .filter((result) => result.total_possible > 0)
+    .slice(0, 6)
+
+  if (scored.length < 2) {
+    return { direction: "steady" as const, change: 0 }
+  }
+
+  const split = Math.ceil(scored.length / 2)
+  const newest = scored.slice(0, split)
+  const older = scored.slice(split)
+
+  const newestAverage =
+    newest.reduce((sum, result) => sum + result.score_percentage, 0) /
+    newest.length
+  const olderAverage =
+    older.reduce((sum, result) => sum + result.score_percentage, 0) /
+    older.length
+
+  const change = newestAverage - olderAverage
+
+  if (change > 0.5) return { direction: "up" as const, change }
+  if (change < -0.5) return { direction: "down" as const, change }
+
+  return { direction: "steady" as const, change }
+}
+
+function calculateInsights(results: ShootResult[]) {
+  const scores = results.flatMap((result) => result.round_scores)
+  const targetsHit = scores.reduce((sum, score) => sum + score, 0)
+  const targetsPossible = results.reduce(
+    (sum, result) =>
+      sum + result.round_scores.length * result.targets_per_round,
+    0,
+  )
+
+  return {
+    shootCount: results.length,
+    roundsShot: scores.length,
+    targetsHit,
+    targetsPossible,
+    averageRound: scores.length ? targetsHit / scores.length : 0,
+    percentage:
+      targetsPossible > 0 ? (targetsHit / targetsPossible) * 100 : 0,
+    highestRound: scores.length ? Math.max(...scores) : 0,
+  }
+}
+
 export function ParticipantProfilePage() {
   const { athleteId = "" } = useParams()
   const [data, setData] = useState<ParticipantProfile | null>(null)
+  const [selectedSeason, setSelectedSeason] = useState("all")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -94,6 +162,98 @@ export function ParticipantProfilePage() {
     [data],
   )
 
+  const seasons = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (data?.shootResults ?? [])
+            .map((result) => result.season)
+            .filter((season) => season !== "Unknown"),
+        ),
+      ).sort((left, right) => right.localeCompare(left)),
+    [data],
+  )
+
+  const filteredResults = useMemo(
+    () =>
+      (data?.shootResults ?? []).filter(
+        (result) =>
+          selectedSeason === "all" || result.season === selectedSeason,
+      ),
+    [data, selectedSeason],
+  )
+
+  const selectedInsights = useMemo(
+    () => calculateInsights(filteredResults),
+    [filteredResults],
+  )
+
+  const trend = useMemo(
+    () => calculateTrend(filteredResults),
+    [filteredResults],
+  )
+
+  const selectedDisciplineAverages = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        roundsShot: number
+        targetsHit: number
+        targetsPossible: number
+        bestScore: number
+        bestPossible: number
+        bestPercentage: number
+      }
+    >()
+
+    for (const result of filteredResults) {
+      const current = map.get(result.discipline) ?? {
+        roundsShot: 0,
+        targetsHit: 0,
+        targetsPossible: 0,
+        bestScore: 0,
+        bestPossible: 0,
+        bestPercentage: 0,
+      }
+
+      current.roundsShot += result.round_scores.length
+      current.targetsHit += result.round_scores.reduce(
+        (sum, score) => sum + score,
+        0,
+      )
+      current.targetsPossible +=
+        result.round_scores.length * result.targets_per_round
+
+      if (result.score_percentage > current.bestPercentage) {
+        current.bestScore = result.total_score
+        current.bestPossible = result.total_possible
+        current.bestPercentage = result.score_percentage
+      }
+
+      map.set(result.discipline, current)
+    }
+
+    return Array.from(map.entries())
+      .map(([discipline, values]) => ({
+        discipline,
+        roundsShot: values.roundsShot,
+        targetsHit: values.targetsHit,
+        targetsPossible: values.targetsPossible,
+        averageRound:
+          values.roundsShot > 0
+            ? values.targetsHit / values.roundsShot
+            : 0,
+        percentage:
+          values.targetsPossible > 0
+            ? (values.targetsHit / values.targetsPossible) * 100
+            : 0,
+        bestScore: values.bestScore,
+        bestPossible: values.bestPossible,
+        bestPercentage: values.bestPercentage,
+      }))
+      .sort((left, right) => right.percentage - left.percentage)
+  }, [filteredResults])
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -133,19 +293,45 @@ export function ParticipantProfilePage() {
   const checkedInCount = data.registrations.filter(
     (registration) => registration.checked_in,
   ).length
-
-  const recentResults = data.shootResults.slice(0, 6)
+  const recentResults = filteredResults.slice(0, 8)
+  const personalBest =
+    [...filteredResults]
+      .filter((result) => result.total_possible > 0)
+      .sort(
+        (left, right) =>
+          right.score_percentage - left.score_percentage,
+      )[0] ?? null
+  const scopeLabel =
+    selectedSeason === "all" ? "All-Time" : `${selectedSeason} Season`
 
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
         title="Athlete Dashboard"
-        description="Career statistics, recent scores, registrations, and team history"
+        description="Career statistics, season insights, recent scores, and history"
       />
 
       <PageContainer>
         <div className="space-y-6">
-          <BackLink />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <BackLink />
+
+            <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+              Season
+              <select
+                value={selectedSeason}
+                onChange={(event) => setSelectedSeason(event.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm"
+              >
+                <option value="all">All seasons</option>
+                {seasons.map((season) => (
+                  <option key={season} value={season}>
+                    {season}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-6 text-white shadow-sm">
             <div className="grid gap-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
@@ -173,6 +359,28 @@ export function ParticipantProfilePage() {
                   <span aria-hidden="true">•</span>
                   <span>{athlete.active ? "Active" : "Archived"}</span>
                 </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold">
+                    {scopeLabel}: {selectedInsights.percentage.toFixed(1)}%
+                  </span>
+
+                  {trend.direction === "up" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-3 py-1.5 text-sm font-semibold text-emerald-300">
+                      <TrendingUp className="h-4 w-4" />
+                      Up {Math.abs(trend.change).toFixed(1)} pts
+                    </span>
+                  ) : trend.direction === "down" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-400/15 px-3 py-1.5 text-sm font-semibold text-rose-300">
+                      <TrendingDown className="h-4 w-4" />
+                      Down {Math.abs(trend.change).toFixed(1)} pts
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold text-slate-200">
+                      Trend steady
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="grid gap-2 text-sm lg:text-right">
@@ -192,63 +400,96 @@ export function ParticipantProfilePage() {
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               icon={CalendarDays}
-              label="Registered Events"
-              value={statistics.eventCount}
+              label={`${scopeLabel} Shoots`}
+              value={selectedInsights.shootCount}
             />
             <MetricCard
               icon={Target}
-              label="Rounds Recorded"
-              value={statistics.roundsShot}
+              label={`${scopeLabel} Rounds`}
+              value={selectedInsights.roundsShot}
             />
             <MetricCard
               icon={BadgeCheck}
-              label="Average Round"
-              value={statistics.averageRound.toFixed(2)}
+              label={`${scopeLabel} Percentage`}
+              value={`${selectedInsights.percentage.toFixed(1)}%`}
             />
             <MetricCard
               icon={Trophy}
-              label="Highest Round"
-              value={statistics.highestRound}
+              label={`${scopeLabel} High Round`}
+              value={selectedInsights.highestRound}
             />
           </section>
 
+          {personalBest ? (
+            <section className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100">
+                    <Trophy className="h-6 w-6 text-amber-700" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-700">
+                      {scopeLabel} Personal Best
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-slate-950">
+                      {personalBest.event_name}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {disciplineLabel(personalBest.discipline)} ·{" "}
+                      {dateLabel(personalBest.event_date)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-left sm:text-right">
+                  <p className="text-3xl font-black text-slate-950">
+                    {personalBest.total_score} / {personalBest.total_possible}
+                  </p>
+                  <p className="text-sm font-bold text-amber-700">
+                    {personalBest.score_percentage.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
             <div className="space-y-5">
-              <InfoCard title="Career Statistics">
+              <InfoCard title={`${scopeLabel} Statistics`}>
                 <InfoRow
                   label="Shoots Recorded"
-                  value={String(statistics.shootCount)}
+                  value={String(selectedInsights.shootCount)}
                 />
                 <InfoRow
                   label="Rounds Recorded"
-                  value={String(statistics.roundsShot)}
+                  value={String(selectedInsights.roundsShot)}
                 />
                 <InfoRow
                   label="Targets Hit"
-                  value={String(statistics.targetsHit)}
+                  value={`${selectedInsights.targetsHit} / ${selectedInsights.targetsPossible}`}
+                />
+                <InfoRow
+                  label="Score Percentage"
+                  value={`${selectedInsights.percentage.toFixed(2)}%`}
                 />
                 <InfoRow
                   label="Average Round"
-                  value={statistics.averageRound.toFixed(2)}
+                  value={selectedInsights.averageRound.toFixed(2)}
                 />
                 <InfoRow
                   label="Highest Round"
-                  value={String(statistics.highestRound)}
-                />
-                <InfoRow
-                  label="Highest Shoot Total"
-                  value={String(statistics.highestShootTotal)}
+                  value={String(selectedInsights.highestRound)}
                 />
               </InfoCard>
 
-              <InfoCard title="Discipline Averages">
-                {statistics.disciplineAverages.length === 0 ? (
+              <InfoCard title={`${scopeLabel} Discipline Insights`}>
+                {selectedDisciplineAverages.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    No round-by-round scores are available yet.
+                    No round-by-round scores are available for this season.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {statistics.disciplineAverages.map((item) => (
+                    {selectedDisciplineAverages.map((item) => (
                       <div
                         key={item.discipline}
                         className="rounded-xl border border-slate-200 bg-slate-50 p-4"
@@ -259,18 +500,56 @@ export function ParticipantProfilePage() {
                               {disciplineLabel(item.discipline)}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
-                              {item.roundsShot} rounds · {item.targetsHit} targets hit
+                              {item.roundsShot} rounds · {item.targetsHit} /{" "}
+                              {item.targetsPossible} targets
+                            </p>
+                            <p className="mt-2 text-xs font-semibold text-emerald-700">
+                              Personal best: {item.bestScore} /{" "}
+                              {item.bestPossible} (
+                              {item.bestPercentage.toFixed(1)}%)
                             </p>
                           </div>
 
-                          <p className="text-2xl font-black text-slate-950">
-                            {item.averageRound.toFixed(2)}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-2xl font-black text-slate-950">
+                              {item.percentage.toFixed(1)}%
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Avg round {item.averageRound.toFixed(2)}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </InfoCard>
+
+              <InfoCard title="All-Time Career Snapshot">
+                <InfoRow
+                  label="Registered Events"
+                  value={String(statistics.eventCount)}
+                />
+                <InfoRow
+                  label="Shoots Recorded"
+                  value={String(statistics.shootCount)}
+                />
+                <InfoRow
+                  label="Rounds Recorded"
+                  value={String(statistics.roundsShot)}
+                />
+                <InfoRow
+                  label="Targets Hit"
+                  value={`${statistics.targetsHit} / ${statistics.targetsPossible}`}
+                />
+                <InfoRow
+                  label="Career Percentage"
+                  value={`${statistics.overallPercentage.toFixed(2)}%`}
+                />
+                <InfoRow
+                  label="Career Average Round"
+                  value={statistics.averageRound.toFixed(2)}
+                />
               </InfoCard>
 
               <InfoCard title="Participant Information">
@@ -367,16 +646,72 @@ export function ParticipantProfilePage() {
               <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-5">
                   <h2 className="text-lg font-bold text-slate-950">
-                    Recent Scores
+                    Performance Trend
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Most recent shoot totals and recorded rounds.
+                    Shoot percentages for the selected season.
                   </p>
                 </div>
 
                 {recentResults.length === 0 ? (
                   <div className="p-10 text-center text-slate-500">
-                    No score history is available.
+                    No performance history is available.
+                  </div>
+                ) : (
+                  <div className="space-y-4 p-5">
+                    {[...recentResults].reverse().map((result) => (
+                      <div
+                        key={`trend-${result.registration_id}-${result.shoot_id}`}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900">
+                              {result.event_name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {dateLabel(result.event_date)}
+                            </p>
+                          </div>
+                          <p
+                            className={`font-bold ${scoreTone(
+                              result.score_percentage,
+                            )}`}
+                          >
+                            {result.score_percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full ${scoreBarTone(
+                              result.score_percentage,
+                            )}`}
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.max(0, result.score_percentage),
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 p-5">
+                  <h2 className="text-lg font-bold text-slate-950">
+                    {scopeLabel} Scores
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Shoot totals, target counts, percentages, and recorded rounds.
+                  </p>
+                </div>
+
+                {recentResults.length === 0 ? (
+                  <div className="p-10 text-center text-slate-500">
+                    No score history is available for this season.
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
@@ -391,7 +726,8 @@ export function ParticipantProfilePage() {
                               {result.event_name}
                             </p>
                             <p className="mt-1 text-sm text-slate-600">
-                              {result.shoot_name} · {disciplineLabel(result.discipline)}
+                              {result.shoot_name} ·{" "}
+                              {disciplineLabel(result.discipline)}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
                               {dateLabel(result.event_date)}
@@ -400,10 +736,14 @@ export function ParticipantProfilePage() {
 
                           <div className="text-left sm:text-right">
                             <p className="text-3xl font-black text-slate-950">
-                              {result.total_score}
+                              {result.total_score} / {result.total_possible}
                             </p>
-                            <p className="text-xs text-slate-500">
-                              Total score
+                            <p
+                              className={`text-sm font-bold ${scoreTone(
+                                result.score_percentage,
+                              )}`}
+                            >
+                              {result.score_percentage.toFixed(1)}%
                             </p>
                           </div>
                         </div>
