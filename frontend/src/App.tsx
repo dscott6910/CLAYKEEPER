@@ -13,6 +13,13 @@ const DashboardPage = lazy(() =>
   })),
 )
 
+
+const CourseBuilderPage = lazy(() =>
+  import("@/features/events/CourseBuilderPage").then((module) => ({
+    default: module.CourseBuilderPage,
+  })),
+)
+
 const EventWorkspace = lazy(() =>
   import("@/features/events/EventWorkspace").then((module) => ({
     default: module.EventWorkspace,
@@ -277,6 +284,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <EventWorkspace />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/course"
+                  element={
+                    <LazyRoute>
+                      <CourseBuilderPage />
                     </LazyRoute>
                   }
                 />
