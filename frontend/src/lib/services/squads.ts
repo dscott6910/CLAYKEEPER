@@ -63,6 +63,7 @@ export type EnrollmentRecord = {
   registration_id: string
   shoot_id: string
   status: string
+  payment_status: string | null
 }
 
 export type RegistrationSnapshot = {
@@ -118,8 +119,8 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
   const [squadsResult, membersResult, enrollmentsResult, registrationsResult, athletesResult, teamsResult, classesResult] = await Promise.all([
     supabase.from("squads").select("id, organization_id, shoot_id, squad_number, name, house_number, course_name, station_name, flight_name, start_time, capacity, sort_order, assignment_method, status, is_locked, notes").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
     supabase.from("squad_members").select("id, organization_id, shoot_id, squad_id, registration_shoot_id, position, position_label, assignment_method, status, is_squad_leader, checked_in").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
-    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).not("status", "in", "(withdrawn,cancelled)"),
-    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status").eq("organization_id", organizationId).eq("event_id", eventId),
+    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).eq("status", "registered"),
+    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status, payment_status").eq("organization_id", organizationId).eq("event_id", eventId).eq("status", "registered").eq("payment_status", "paid"),
     supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId).eq("active", true).order("name"),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId).eq("active", true).order("display_order"),
@@ -127,11 +128,22 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
 
   for (const result of [squadsResult, membersResult, enrollmentsResult, registrationsResult, athletesResult, teamsResult, classesResult]) throwIfError(result.error)
 
+  const paidRegistrations =
+    (registrationsResult.data ?? []) as RegistrationSnapshot[]
+  const paidRegistrationIds = new Set(
+    paidRegistrations.map((registration) => registration.id),
+  )
+  const eligibleEnrollments = (
+    (enrollmentsResult.data ?? []) as EnrollmentRecord[]
+  ).filter((enrollment) =>
+    paidRegistrationIds.has(enrollment.registration_id),
+  )
+
   return {
     squads: (squadsResult.data ?? []) as SquadRecord[],
     members: (membersResult.data ?? []) as SquadMemberRecord[],
-    enrollments: (enrollmentsResult.data ?? []) as EnrollmentRecord[],
-    registrations: (registrationsResult.data ?? []) as RegistrationSnapshot[],
+    enrollments: eligibleEnrollments,
+    registrations: paidRegistrations,
     athletes: (athletesResult.data ?? []) as AthleteSnapshot[],
     teams: (teamsResult.data ?? []) as NamedRecord[],
     classes: (classesResult.data ?? []) as ClassSnapshot[],
@@ -175,4 +187,55 @@ export async function moveMember(memberId: string, squadId: string, position: nu
 export async function removeMember(memberId: string) {
   const { error } = await supabase.from("squad_members").delete().eq("id", memberId)
   throwIfError(error)
+}
+
+export async function swapMemberPositions(params: {
+  firstMemberId: string
+  secondMemberId: string
+  squadId: string
+  firstPosition: number
+  secondPosition: number
+  firstLabel: string
+  secondLabel: string
+}) {
+  const temporaryPosition = 9999
+
+  const firstTemporary = await supabase
+    .from("squad_members")
+    .update({ position: temporaryPosition, position_label: "Moving" })
+    .eq("id", params.firstMemberId)
+
+  throwIfError(firstTemporary.error)
+
+  const secondUpdate = await supabase
+    .from("squad_members")
+    .update({
+      position: params.firstPosition,
+      position_label: params.firstLabel,
+      assignment_method: "manual",
+    })
+    .eq("id", params.secondMemberId)
+
+  if (secondUpdate.error) {
+    await supabase
+      .from("squad_members")
+      .update({
+        position: params.firstPosition,
+        position_label: params.firstLabel,
+      })
+      .eq("id", params.firstMemberId)
+    throwIfError(secondUpdate.error)
+  }
+
+  const firstFinal = await supabase
+    .from("squad_members")
+    .update({
+      squad_id: params.squadId,
+      position: params.secondPosition,
+      position_label: params.secondLabel,
+      assignment_method: "manual",
+    })
+    .eq("id", params.firstMemberId)
+
+  throwIfError(firstFinal.error)
 }

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react"
 import {
+  AlertTriangle,
   BadgeCheck,
   CheckCircle2,
   ClipboardList,
@@ -110,22 +111,20 @@ type RegistrationShootRecord = {
 }
 
 type RegistrationFormState = {
-  athleteId: string
   teamId: string
+  selectedAthleteIds: string[]
+  manualAthleteId: string
   classId: string
   shootIds: string[]
-  paymentStatus: string
-  amountPaid: string
   notes: string
 }
 
 const initialFormState: RegistrationFormState = {
-  athleteId: "",
   teamId: "",
+  selectedAthleteIds: [],
+  manualAthleteId: "",
   classId: "",
   shootIds: [],
-  paymentStatus: "unpaid",
-  amountPaid: "0",
   notes: "",
 }
 
@@ -304,6 +303,67 @@ export function RegistrationPage() {
 
     return groupedRows
   }, [registrationShoots])
+
+  const registrationByAthleteId = useMemo(() => {
+    return new Map(
+      registrations.map((registration) => [
+        registration.athlete_id,
+        registration,
+      ]),
+    )
+  }, [registrations])
+
+  const athleteIdsForSelectedTeam = useMemo(() => {
+    if (!form.teamId) {
+      return new Set<string>()
+    }
+
+    return new Set(
+      athleteTeams
+        .filter((row) => row.team_id === form.teamId)
+        .map((row) => row.athlete_id),
+    )
+  }, [athleteTeams, form.teamId])
+
+  const selectedTeamAthletes = useMemo(() => {
+    return athletes.filter(
+      (athlete) =>
+        athlete.active !== false &&
+        athleteIdsForSelectedTeam.has(athlete.id),
+    )
+  }, [athleteIdsForSelectedTeam, athletes])
+
+  const eligibleTeamAthletes = useMemo(() => {
+    return selectedTeamAthletes.filter((athlete) => {
+      const registration = registrationByAthleteId.get(athlete.id)
+
+      return (
+        registration?.status === "registered" &&
+        ["paid", "waived", "not_required"].includes(
+          registration.payment_status ?? "",
+        )
+      )
+    })
+  }, [registrationByAthleteId, selectedTeamAthletes])
+
+  const hiddenUnpaidCount = useMemo(() => {
+    return selectedTeamAthletes.filter((athlete) => {
+      const registration = registrationByAthleteId.get(athlete.id)
+
+      return (
+        registration &&
+        !["paid", "not_required", "waived"].includes(
+          registration.payment_status ?? "",
+        )
+      )
+    }).length
+  }, [registrationByAthleteId, selectedTeamAthletes])
+
+  const manualAthleteOptions = useMemo(() => {
+    return selectedTeamAthletes.filter(
+      (athlete) => !registrationByAthleteId.has(athlete.id),
+    )
+  }, [registrationByAthleteId, selectedTeamAthletes])
 
   const selectedShootTotal = useMemo(() => {
     return form.shootIds.reduce((total, shootId) => {
@@ -645,17 +705,35 @@ export function RegistrationPage() {
     }))
   }
 
-  function selectAthlete(athleteId: string) {
-    const athlete = athletes.find((row) => row.id === athleteId)
-    const primaryTeam = athleteTeams.find(
-      (row) => row.athlete_id === athleteId && row.is_primary && !row.end_date,
-    )
-
+  function selectTeam(teamId: string) {
     setForm((currentForm) => ({
       ...currentForm,
-      athleteId,
-      teamId: primaryTeam?.team_id ?? "",
-      classId: athlete?.class_id ?? "",
+      teamId,
+      selectedAthleteIds: [],
+      manualAthleteId: "",
+      classId: "",
+    }))
+  }
+
+  function toggleAthlete(athleteId: string) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      selectedAthleteIds: currentForm.selectedAthleteIds.includes(
+        athleteId,
+      )
+        ? currentForm.selectedAthleteIds.filter(
+            (id) => id !== athleteId,
+          )
+        : [...currentForm.selectedAthleteIds, athleteId],
+    }))
+  }
+
+  function selectAllEligibleAthletes() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      selectedAthleteIds: eligibleTeamAthletes.map(
+        (athlete) => athlete.id,
+      ),
     }))
   }
 
@@ -693,12 +771,22 @@ export function RegistrationPage() {
     }
 
     if (!selectedEventId) {
-      setErrorMessage("Select an event before registering an athlete.")
+      setErrorMessage("Select an event before registering athletes.")
       return
     }
 
-    if (!form.athleteId) {
-      setErrorMessage("Select an athlete.")
+    if (!form.teamId) {
+      setErrorMessage("Select a team first.")
+      return
+    }
+
+    const athleteIds = [
+      ...form.selectedAthleteIds,
+      ...(form.manualAthleteId ? [form.manualAthleteId] : []),
+    ].filter((value, index, values) => values.indexOf(value) === index)
+
+    if (athleteIds.length === 0) {
+      setErrorMessage("Select at least one athlete.")
       return
     }
 
@@ -707,31 +795,9 @@ export function RegistrationPage() {
       return
     }
 
-    const duplicateRegistration = registrations.some(
-      (registration) => {
-        return registration.athlete_id === form.athleteId
-      },
-    )
-
-    if (duplicateRegistration) {
-      setErrorMessage(
-        "This athlete is already registered for the selected event.",
-      )
-      return
-    }
-
-    const amountPaid = Number(form.amountPaid || 0)
-
-    if (!Number.isFinite(amountPaid) || amountPaid < 0) {
-      setErrorMessage("Amount paid must be zero or greater.")
-      return
-    }
-
     setSaving(true)
     setErrorMessage("")
     setSuccessMessage("")
-
-    let createdRegistrationId: string | null = null
 
     try {
       const {
@@ -749,106 +815,130 @@ export function RegistrationPage() {
         )
       }
 
-      const registrationInsert = {
-        organization_id: organizationId,
-        event_id: selectedEventId,
-        athlete_id: form.athleteId,
-        team_id: form.teamId || null,
-        class_id: form.classId || null,
-        status: "registered",
-        registration_source: "manual",
-        payment_status: form.paymentStatus,
-        amount_paid: amountPaid,
-        paid_at:
-          form.paymentStatus === "paid"
-            ? new Date().toISOString()
-            : null,
-        notes: form.notes.trim() || null,
-        created_by: user.id,
-      }
+      let updatedCount = 0
+      let pendingCount = 0
 
-      const registrationResponse = await supabase
-        .from("registrations")
-        .insert(registrationInsert)
-        .select("*")
-        .single()
+      for (const athleteId of athleteIds) {
+        const athlete = athleteById.get(athleteId)
+        const existingRegistration =
+          registrationByAthleteId.get(athleteId)
+        let registrationId = existingRegistration?.id ?? null
+        let registrationStatus = existingRegistration?.status ?? null
 
-      if (registrationResponse.error) {
-        throw new Error(
-          `Registration could not be created: ${getErrorMessage(
-            registrationResponse.error,
-          )}`,
-        )
-      }
-
-      const createdRegistration =
-        registrationResponse.data as RegistrationRecord
-
-      createdRegistrationId = createdRegistration.id
-
-      const registrationShootRows = form.shootIds.map(
-        (shootId) => {
-          const shoot = shootById.get(shootId)
-
-          if (!shoot) {
+        if (existingRegistration) {
+          if (
+            !["paid", "waived", "not_required"].includes(
+              existingRegistration.payment_status ?? "",
+            ) ||
+            existingRegistration.status !== "registered"
+          ) {
             throw new Error(
-              "One of the selected shoots could not be found.",
+              `${athlete ? athleteDisplayName(athlete) : "An athlete"} is not registered and paid for this event.`,
+            )
+          }
+        } else {
+          const registrationResponse = await supabase
+            .from("registrations")
+            .insert({
+              organization_id: organizationId,
+              event_id: selectedEventId,
+              athlete_id: athleteId,
+              team_id: form.teamId,
+              class_id: athlete?.class_id ?? form.classId ?? null,
+              status: "pending_registration",
+              registration_source: "manual",
+              payment_status: "unpaid",
+              amount_paid: 0,
+              notes: [
+                "Manually added by coach; athlete must complete registration and payment before official participation.",
+                form.notes.trim(),
+              ]
+                .filter(Boolean)
+                .join(" "),
+              created_by: user.id,
+            })
+            .select("id,status")
+            .single()
+
+          if (registrationResponse.error) {
+            throw new Error(
+              `Pending registration could not be created: ${getErrorMessage(
+                registrationResponse.error,
+              )}`,
             )
           }
 
-          return {
-            organization_id: organizationId,
-            event_id: selectedEventId,
-            registration_id: createdRegistration.id,
-            shoot_id: shoot.id,
-            status: "registered",
-            entry_fee: Number(shoot.entry_fee ?? 0),
-            organization_fee: Number(
-              shoot.organization_fee ?? 0,
-            ),
-            fee_adjustment: 0,
-            squad_assignment_status: "unassigned",
-          }
-        },
-      )
+          registrationId = registrationResponse.data.id as string
+          registrationStatus = "pending_registration"
+          pendingCount += 1
+        }
 
-      const shootInsertResponse = await supabase
-        .from("registration_shoots")
-        .insert(registrationShootRows)
+        if (!registrationId) {
+          throw new Error("The registration could not be resolved.")
+        }
 
-      if (shootInsertResponse.error) {
-        throw new Error(
-          `Shoot registrations could not be created: ${getErrorMessage(
-            shootInsertResponse.error,
-          )}`,
+        const existingShootIds = new Set(
+          registrationShoots
+            .filter((row) => row.registration_id === registrationId)
+            .map((row) => row.shoot_id),
         )
+
+        const rowsToInsert = form.shootIds
+          .filter((shootId) => !existingShootIds.has(shootId))
+          .map((shootId) => {
+            const shoot = shootById.get(shootId)
+
+            if (!shoot) {
+              throw new Error(
+                "One of the selected shoots could not be found.",
+              )
+            }
+
+            return {
+              organization_id: organizationId,
+              event_id: selectedEventId,
+              registration_id: registrationId,
+              shoot_id: shoot.id,
+              status:
+                registrationStatus === "registered"
+                  ? "registered"
+                  : "pending_registration",
+              entry_fee: Number(shoot.entry_fee ?? 0),
+              organization_fee: Number(
+                shoot.organization_fee ?? 0,
+              ),
+              fee_adjustment: 0,
+              squad_assignment_status: "unassigned",
+            }
+          })
+
+        if (rowsToInsert.length > 0) {
+          const shootInsertResponse = await supabase
+            .from("registration_shoots")
+            .insert(rowsToInsert)
+
+          if (shootInsertResponse.error) {
+            throw new Error(
+              `Shoot registrations could not be created: ${getErrorMessage(
+                shootInsertResponse.error,
+              )}`,
+            )
+          }
+        }
+
+        updatedCount += 1
       }
 
       setSuccessMessage(
-        createdRegistration.registration_number
-          ? `Registration ${createdRegistration.registration_number} was created successfully.`
-          : "The athlete was registered successfully.",
+        pendingCount > 0
+          ? `${updatedCount} athlete${updatedCount === 1 ? "" : "s"} processed. ${pendingCount} manual athlete${pendingCount === 1 ? "" : "s"} remain pending registration and payment.`
+          : `${updatedCount} paid athlete${updatedCount === 1 ? "" : "s"} added to the selected shoots.`,
       )
 
       setForm(initialFormState)
       setShowRegistrationForm(false)
-
       await loadSelectedEventData()
     } catch (error) {
-      if (createdRegistrationId) {
-        const cleanupResponse = await supabase
-          .from("registrations")
-          .delete()
-          .eq("id", createdRegistrationId)
-
-        if (cleanupResponse.error) {
-          console.error(
-            "Unable to remove incomplete registration:",
-            cleanupResponse.error,
-          )
-        }
-      }
-
       setErrorMessage(getErrorMessage(error))
     } finally {
       setSaving(false)
@@ -1074,115 +1164,142 @@ export function RegistrationPage() {
           <section className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="mb-5">
               <h2 className="text-lg font-semibold">
-                Add Athlete Registration
+                Team Registration
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                Register one athlete in one or more shoots for the
-                selected event.
+                Select a team first, then choose paid athletes from that
+                team. Manual additions remain pending until registration and
+                payment are completed.
               </p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
-                <FormField label="Athlete" required>
+                <FormField label="Team" required>
                   <select
-                    value={form.athleteId}
-                    onChange={(event) => {
-                      selectAthlete(event.target.value)
-                    }}
+                    value={form.teamId}
+                    onChange={(event) => selectTeam(event.target.value)}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   >
-                    <option value="">Select an athlete</option>
-
-                    {athletes.map((athlete) => (
-                      <option key={athlete.id} value={athlete.id}>
-                        {athleteDisplayName(athlete)}
-                        {athlete.cyssa_number
-                          ? ` — CYSSA ${athlete.cyssa_number}`
-                          : ""}
+                    <option value="">Select a team first</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
                       </option>
                     ))}
                   </select>
                 </FormField>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Team">
-                    <select
-                      value={form.teamId}
-                      onChange={(event) => {
-                        updateForm("teamId", event.target.value)
-                      }}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    >
-                      <option value="">No team</option>
+                {form.teamId ? (
+                  <div className="rounded-lg border bg-muted/20">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          Registered and Paid Athletes
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          Only paid registrations for this event are selectable.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={selectAllEligibleAthletes}
+                        disabled={eligibleTeamAthletes.length === 0}
+                      >
+                        Select All
+                      </Button>
+                    </div>
 
-                      {teams.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
-
-                  <FormField label="Class">
-                    <select
-                      value={form.classId}
-                      onChange={(event) => {
-                        updateForm("classId", event.target.value)
-                      }}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    >
-                      <option value="">No class</option>
-
-                      {classes.map((competitionClass) => (
-                        <option
-                          key={competitionClass.id}
-                          value={competitionClass.id}
-                        >
-                          {competitionClass.code} —{" "}
-                          {competitionClass.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="Payment Status">
-                    <select
-                      value={form.paymentStatus}
-                      onChange={(event) => {
-                        updateForm(
-                          "paymentStatus",
-                          event.target.value,
+                    <div className="max-h-64 space-y-2 overflow-y-auto p-3">
+                      {eligibleTeamAthletes.map((athlete) => {
+                        const selected = form.selectedAthleteIds.includes(
+                          athlete.id,
                         )
-                      }}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    >
-                      <option value="unpaid">Unpaid</option>
-                      <option value="partial">Partial</option>
-                      <option value="paid">Paid</option>
-                      <option value="waived">Waived</option>
-                      <option value="not_required">
-                        Not Required
-                      </option>
-                    </select>
-                  </FormField>
 
-                  <FormField label="Amount Paid">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.amountPaid}
-                      onChange={(event) => {
-                        updateForm("amountPaid", event.target.value)
-                      }}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    />
-                  </FormField>
-                </div>
+                        return (
+                          <label
+                            key={athlete.id}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 ${
+                              selected
+                                ? "border-emerald-500 bg-emerald-50"
+                                : "bg-background"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleAthlete(athlete.id)}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium">
+                                {athleteDisplayName(athlete)}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                {athlete.cyssa_number
+                                  ? `CYSSA ${athlete.cyssa_number}`
+                                  : "No CYSSA number"}
+                              </span>
+                            </span>
+                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              Paid
+                            </span>
+                          </label>
+                        )
+                      })}
+
+                      {eligibleTeamAthletes.length === 0 ? (
+                        <p className="p-5 text-center text-sm text-muted-foreground">
+                          No registered and paid athletes from this team are
+                          available for the selected event.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {hiddenUnpaidCount > 0 ? (
+                      <div className="border-t bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        {hiddenUnpaidCount} unpaid or incomplete athlete
+                        {hiddenUnpaidCount === 1 ? " is" : "s are"} hidden.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {form.teamId ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-amber-950">
+                          Add Athlete Manually
+                        </h3>
+                        <p className="mt-1 text-xs text-amber-800">
+                          Manual athletes remain pending and will not appear in
+                          official squadding until they register and pay.
+                        </p>
+                        <select
+                          value={form.manualAthleteId}
+                          onChange={(event) =>
+                            updateForm(
+                              "manualAthleteId",
+                              event.target.value,
+                            )
+                          }
+                          className="mt-3 h-10 w-full rounded-md border border-amber-300 bg-white px-3 text-sm"
+                        >
+                          <option value="">Choose an unregistered athlete</option>
+                          {manualAthleteOptions.map((athlete) => (
+                            <option key={athlete.id} value={athlete.id}>
+                              {athleteDisplayName(athlete)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <FormField label="Notes">
                   <textarea
@@ -1190,7 +1307,7 @@ export function RegistrationPage() {
                     onChange={(event) => {
                       updateForm("notes", event.target.value)
                     }}
-                    rows={4}
+                    rows={3}
                     placeholder="Optional registration notes"
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                   />
@@ -1289,7 +1406,7 @@ export function RegistrationPage() {
                   <Plus className="h-4 w-4" />
                 )}
 
-                Create Registration
+                Process Selected Athletes
               </Button>
             </div>
           </section>
