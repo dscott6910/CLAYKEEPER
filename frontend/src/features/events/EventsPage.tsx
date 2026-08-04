@@ -15,10 +15,33 @@ type EventStatus =
   | "cancelled"
   | "archived"
 
+type EventDiscipline =
+  | "Trap"
+  | "Skeet"
+  | "Sporting Clays"
+  | "Bunker"
+
+type EventType =
+  | "Series 1"
+  | "Series 2"
+  | "Series 3"
+  | "Series 4"
+  | "Series 5"
+  | "Series 6"
+  | "State All"
+  | "State Junior"
+  | "State Senior"
+  | "US Open"
+
 type ClayEvent = {
   id: string
   organization_id: string
   name: string
+  event_year: number | null
+  discipline: EventDiscipline | null
+  event_type: EventType | null
+  location_name: string | null
+  host_sponsor: string | null
   description: string | null
   series_name: string | null
   sponsor_name: string | null
@@ -35,6 +58,11 @@ type ClayEvent = {
 
 type EventForm = {
   name: string
+  event_year: string
+  discipline: EventDiscipline
+  event_type: EventType
+  location_name: string
+  host_sponsor: string
   description: string
   series_name: string
   sponsor_name: string
@@ -46,6 +74,33 @@ type EventForm = {
   notes: string
   active: boolean
 }
+
+const EVENT_DISCIPLINES: EventDiscipline[] = [
+  "Trap",
+  "Skeet",
+  "Sporting Clays",
+  "Bunker",
+]
+
+const EVENT_TYPES: EventType[] = [
+  "Series 1",
+  "Series 2",
+  "Series 3",
+  "Series 4",
+  "Series 5",
+  "Series 6",
+  "State All",
+  "State Junior",
+  "State Senior",
+  "US Open",
+]
+
+const CURRENT_YEAR = new Date().getFullYear()
+
+const EVENT_YEARS = Array.from(
+  { length: CURRENT_YEAR + 6 - 2023 },
+  (_, index) => String(2023 + index),
+)
 
 const EVENT_STATUSES: Array<{
   value: EventStatus
@@ -63,6 +118,11 @@ const EVENT_STATUSES: Array<{
 
 const EMPTY_FORM: EventForm = {
   name: "",
+  event_year: String(CURRENT_YEAR),
+  discipline: "Trap",
+  event_type: "Series 1",
+  location_name: "",
+  host_sponsor: "",
   description: "",
   series_name: "",
   sponsor_name: "",
@@ -73,6 +133,19 @@ const EMPTY_FORM: EventForm = {
   status: "draft",
   notes: "",
   active: true,
+}
+
+function buildEventName(form: EventForm): string {
+  return [
+    form.event_year.trim(),
+    form.discipline,
+    form.event_type,
+    form.location_name.trim(),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function getErrorMessage(error: unknown): string {
@@ -207,6 +280,11 @@ export function EventsPage() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [form, setForm] = useState<EventForm>(EMPTY_FORM)
 
+  const generatedEventName = useMemo(
+    () => buildEventName(form),
+    [form],
+  )
+
   const loadEvents = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -278,6 +356,10 @@ export function EventsPage() {
 
       return [
         event.name,
+        event.location_name,
+        event.host_sponsor,
+        event.discipline,
+        event.event_type,
         event.series_name,
         event.sponsor_name,
         event.description,
@@ -323,6 +405,15 @@ export function EventsPage() {
     setEditingEventId(event.id)
     setForm({
       name: event.name,
+      event_year:
+        event.event_year?.toString() ??
+        event.start_date?.slice(0, 4) ??
+        String(CURRENT_YEAR),
+      discipline: event.discipline ?? "Trap",
+      event_type: event.event_type ?? "Series 1",
+      location_name: event.location_name ?? "",
+      host_sponsor:
+        event.host_sponsor ?? event.sponsor_name ?? "",
       description: event.description ?? "",
       series_name: event.series_name ?? "",
       sponsor_name: event.sponsor_name ?? "",
@@ -370,10 +461,20 @@ export function EventsPage() {
       return
     }
 
-    const trimmedName = form.name.trim()
+    const trimmedName = generatedEventName
 
-    if (!trimmedName) {
-      setError("Event name is required.")
+    if (!form.event_year) {
+      setError("Year is required.")
+      return
+    }
+
+    if (!form.location_name.trim()) {
+      setError("Location is required.")
+      return
+    }
+
+    if (!form.start_date) {
+      setError("Date is required.")
       return
     }
 
@@ -404,9 +505,16 @@ export function EventsPage() {
     const payload = {
       organization_id: organizationId,
       name: trimmedName,
+      event_year: Number(form.event_year),
+      discipline: form.discipline,
+      event_type: form.event_type,
+      location_name: normalizeOptionalText(form.location_name),
+      host_sponsor: normalizeOptionalText(form.host_sponsor),
       description: normalizeOptionalText(form.description),
-      series_name: normalizeOptionalText(form.series_name),
-      sponsor_name: normalizeOptionalText(form.sponsor_name),
+      series_name: form.event_type.startsWith("Series")
+        ? form.event_type
+        : null,
+      sponsor_name: normalizeOptionalText(form.host_sponsor),
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       registration_opens_at: localInputToIso(
@@ -641,12 +749,23 @@ export function EventsPage() {
                           {(shootCounts[event.id] ?? 0) === 1 ? "" : "s"}
                         </span>
 
-                        {event.series_name && (
-                          <span>Series: {event.series_name}</span>
+                        {event.discipline && (
+                          <span>{event.discipline}</span>
                         )}
 
-                        {event.sponsor_name && (
-                          <span>Sponsored by {event.sponsor_name}</span>
+                        {event.event_type && (
+                          <span>{event.event_type}</span>
+                        )}
+
+                        {event.location_name && (
+                          <span>{event.location_name}</span>
+                        )}
+
+                        {(event.host_sponsor ?? event.sponsor_name) && (
+                          <span>
+                            Host/Sponsor:{" "}
+                            {event.host_sponsor ?? event.sponsor_name}
+                          </span>
                         )}
                       </div>
 
@@ -723,77 +842,148 @@ export function EventsPage() {
 
             <form onSubmit={saveEvent}>
               <div className="grid gap-5 p-6 md:grid-cols-2">
-                <label className="md:col-span-2">
+                <div className="md:col-span-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      Step 1
+                    </p>
+                    <h3 className="mt-1 text-lg font-bold text-slate-950">
+                      Event Information
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      The event name is generated from the four fields below.
+                    </p>
+                  </div>
+                </div>
+
+                <label>
                   <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                    Event Name *
+                    Year *
+                  </span>
+                  <select
+                    required
+                    value={form.event_year}
+                    onChange={(event) =>
+                      updateForm("event_year", event.target.value)
+                    }
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
+                  >
+                    {EVENT_YEARS.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    Discipline *
+                  </span>
+                  <select
+                    required
+                    value={form.discipline}
+                    onChange={(event) =>
+                      updateForm(
+                        "discipline",
+                        event.target.value as EventDiscipline,
+                      )
+                    }
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
+                  >
+                    {EVENT_DISCIPLINES.map((discipline) => (
+                      <option key={discipline} value={discipline}>
+                        {discipline}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    Type *
+                  </span>
+                  <select
+                    required
+                    value={form.event_type}
+                    onChange={(event) =>
+                      updateForm(
+                        "event_type",
+                        event.target.value as EventType,
+                      )
+                    }
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
+                  >
+                    {EVENT_TYPES.map((eventType) => (
+                      <option key={eventType} value={eventType}>
+                        {eventType}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    Location *
                   </span>
                   <input
                     required
-                    value={form.name}
+                    value={form.location_name}
                     onChange={(event) =>
-                      updateForm("name", event.target.value)
+                      updateForm("location_name", event.target.value)
                     }
-                    placeholder="Example: US Open 2027"
+                    placeholder="Example: Stockton"
                     className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
                   />
                 </label>
 
-                <label>
-                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                    Series Name
+                <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <span className="block text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Event Name
                   </span>
-                  <input
-                    value={form.series_name}
-                    onChange={(event) =>
-                      updateForm("series_name", event.target.value)
-                    }
-                    placeholder="Example: Trap Series"
-                    className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
-                  />
-                </label>
+                  <p className="mt-2 text-xl font-bold text-slate-950">
+                    {generatedEventName || "Complete the event fields above"}
+                  </p>
+                </div>
 
                 <label>
                   <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                    Sponsor
+                    Date *
                   </span>
                   <input
-                    value={form.sponsor_name}
-                    onChange={(event) =>
-                      updateForm("sponsor_name", event.target.value)
-                    }
-                    placeholder="Sponsor name"
-                    className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
-                  />
-                </label>
-
-                <label>
-                  <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                    Start Date
-                  </span>
-                  <input
+                    required
                     type="date"
                     value={form.start_date}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       updateForm("start_date", event.target.value)
-                    }
+                      updateForm("end_date", event.target.value)
+                    }}
                     className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
                   />
                 </label>
 
                 <label>
                   <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                    End Date
+                    Host-Sponsor
                   </span>
                   <input
-                    type="date"
-                    min={form.start_date || undefined}
-                    value={form.end_date}
+                    value={form.host_sponsor}
                     onChange={(event) =>
-                      updateForm("end_date", event.target.value)
+                      updateForm("host_sponsor", event.target.value)
                     }
+                    placeholder="Host or sponsor name"
                     className="min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200"
                   />
                 </label>
+
+                <div className="md:col-span-2 mt-1 border-t border-slate-200 pt-5">
+                  <h3 className="text-base font-bold text-slate-950">
+                    Additional Settings
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Registration, status, and internal administration.
+                  </p>
+                </div>
 
                 <label>
                   <span className="mb-1.5 block text-sm font-semibold text-slate-700">
