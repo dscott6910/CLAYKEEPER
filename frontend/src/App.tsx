@@ -156,6 +156,13 @@ const EventMaintenancePage = lazy(() =>
   })),
 )
 
+
+const ScorecardCenterPage = lazy(() =>
+  import("@/features/scorecards/ScorecardCenterPage").then((module) => ({
+    default: module.ScorecardCenterPage,
+  })),
+)
+
 const ScorecardScanLabPage = lazy(() =>
   import("@/features/scorecards/ScorecardScanLabPage").then((module) => ({
     default: module.ScorecardScanLabPage,
@@ -293,6 +300,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <CourseBuilderPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/scoring"
+                  element={
+                    <LazyRoute>
+                      <ScorecardCenterPage />
                     </LazyRoute>
                   }
                 />
