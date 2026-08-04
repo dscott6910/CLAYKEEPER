@@ -3,9 +3,11 @@ import { jsPDF } from "jspdf"
 import QRCode from "qrcode"
 import {
   ArrowLeft,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   FileDown,
   Loader2,
-  Printer,
   RefreshCw,
 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
@@ -19,6 +21,9 @@ import {
   type ScorecardRegistration,
 } from "@/lib/services/scorecardCenter"
 
+type PrintMode = "event" | "team" | "squad" | "athlete"
+type WizardStep = 1 | 2 | 3 | 4 | 5
+
 type PrintableCard = {
   registration: ScorecardRegistration
   athleteName: string
@@ -28,10 +33,16 @@ type PrintableCard = {
   shootName: string
 }
 
+const STEPS: Array<{ step: WizardStep; label: string }> = [
+  { step: 1, label: "Course" },
+  { step: 2, label: "Shoot" },
+  { step: 3, label: "Print Mode" },
+  { step: 4, label: "Preview" },
+  { step: 5, label: "Generate" },
+]
+
 function athleteName(
-  athlete:
-    | ScorecardCenterData["athletes"][number]
-    | undefined,
+  athlete: ScorecardCenterData["athletes"][number] | undefined,
 ) {
   if (!athlete) return "Unknown Athlete"
   const first =
@@ -53,7 +64,10 @@ function formatDate(value: string | null) {
 export function ScorecardCenterPage() {
   const { eventId } = useParams()
   const [data, setData] = useState<ScorecardCenterData | null>(null)
+  const [step, setStep] = useState<WizardStep>(1)
   const [selectedCourseId, setSelectedCourseId] = useState("")
+  const [selectedShootId, setSelectedShootId] = useState("")
+  const [printMode, setPrintMode] = useState<PrintMode>("event")
   const [teamFilter, setTeamFilter] = useState("")
   const [squadFilter, setSquadFilter] = useState("")
   const [athleteFilter, setAthleteFilter] = useState("")
@@ -72,6 +86,11 @@ export function ScorecardCenterPage() {
         current && next.courses.some((course) => course.id === current)
           ? current
           : next.courses[0]?.id ?? "",
+      )
+      setSelectedShootId((current) =>
+        current && next.shoots.some((shoot) => shoot.id === current)
+          ? current
+          : next.shoots[0]?.id ?? "",
       )
     } catch (caught) {
       setError(
@@ -95,43 +114,36 @@ export function ScorecardCenterPage() {
     [data?.courses, selectedCourseId],
   )
 
-  const cards = useMemo<PrintableCard[]>(() => {
-    if (!data) return []
+  const selectedShoot = useMemo(
+    () =>
+      data?.shoots.find((shoot) => shoot.id === selectedShootId) ?? null,
+    [data?.shoots, selectedShootId],
+  )
+
+  const allCards = useMemo<PrintableCard[]>(() => {
+    if (!data || !selectedShootId) return []
 
     const athleteMap = new Map(data.athletes.map((row) => [row.id, row]))
     const teamMap = new Map(data.teams.map((row) => [row.id, row]))
-    const shootMap = new Map(data.shoots.map((row) => [row.id, row]))
-    const enrollmentByRegistration = new Map<string, typeof data.enrollments>()
-
-    for (const enrollment of data.enrollments) {
-      const rows = enrollmentByRegistration.get(enrollment.registration_id) ?? []
-      rows.push(enrollment)
-      enrollmentByRegistration.set(enrollment.registration_id, rows)
-    }
-
+    const registrationMap = new Map(
+      data.registrations.map((row) => [row.id, row]),
+    )
+    const squadMap = new Map(data.squads.map((row) => [row.id, row]))
     const memberByEnrollment = new Map(
       data.members.map((row) => [row.registration_shoot_id, row]),
     )
-    const squadMap = new Map(data.squads.map((row) => [row.id, row]))
 
-    return data.registrations
-      .map((registration) => {
-        const enrollments =
-          enrollmentByRegistration.get(registration.id) ?? []
-        const enrollment = enrollments[0]
-        const member = enrollment
-          ? memberByEnrollment.get(enrollment.id)
-          : undefined
+    return data.enrollments
+      .filter((enrollment) => enrollment.shoot_id === selectedShootId)
+      .map((enrollment) => {
+        const registration = registrationMap.get(enrollment.registration_id)
+        if (!registration) return null
+        const member = memberByEnrollment.get(enrollment.id)
         const squad = member ? squadMap.get(member.squad_id) : undefined
-        const shoot = enrollment
-          ? shootMap.get(enrollment.shoot_id)
-          : undefined
 
         return {
           registration,
-          athleteName: athleteName(
-            athleteMap.get(registration.athlete_id),
-          ),
+          athleteName: athleteName(athleteMap.get(registration.athlete_id)),
           teamName: registration.team_id
             ? teamMap.get(registration.team_id)?.name ?? "Unassigned"
             : "Unassigned",
@@ -139,24 +151,10 @@ export function ScorecardCenterPage() {
           postLabel:
             member?.position_label ??
             (member ? `Post ${member.position}` : ""),
-          shootName: shoot?.name ?? "",
+          shootName: selectedShoot?.name ?? "",
         }
       })
-      .filter((card) => {
-        if (teamFilter && card.registration.team_id !== teamFilter) {
-          return false
-        }
-        if (squadFilter && card.squadNumber !== squadFilter) {
-          return false
-        }
-        if (
-          athleteFilter &&
-          card.registration.athlete_id !== athleteFilter
-        ) {
-          return false
-        }
-        return true
-      })
+      .filter((card): card is PrintableCard => Boolean(card))
       .sort(
         (left, right) =>
           left.teamName.localeCompare(right.teamName) ||
@@ -165,27 +163,79 @@ export function ScorecardCenterPage() {
           }) ||
           left.athleteName.localeCompare(right.athleteName),
       )
-  }, [athleteFilter, data, squadFilter, teamFilter])
+  }, [data, selectedShoot?.name, selectedShootId])
+
+  const availableTeams = useMemo(() => {
+    if (!data) return []
+    const ids = new Set(allCards.map((card) => card.registration.team_id))
+    return data.teams.filter((team) => ids.has(team.id))
+  }, [allCards, data])
 
   const availableSquads = useMemo(
     () =>
       Array.from(
-        new Set(
-          (data?.squads ?? [])
-            .map((squad) => squad.squad_number)
-            .filter(Boolean),
-        ),
+        new Set(allCards.map((card) => card.squadNumber).filter(Boolean)),
       ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-    [data?.squads],
+    [allCards],
   )
 
+  const cards = useMemo(() => {
+    switch (printMode) {
+      case "team":
+        return allCards.filter(
+          (card) => card.registration.team_id === teamFilter,
+        )
+      case "squad":
+        return allCards.filter((card) => card.squadNumber === squadFilter)
+      case "athlete":
+        return allCards.filter(
+          (card) => card.registration.athlete_id === athleteFilter,
+        )
+      default:
+        return allCards
+    }
+  }, [allCards, athleteFilter, printMode, squadFilter, teamFilter])
+
+  function choosePrintMode(mode: PrintMode) {
+    setPrintMode(mode)
+    setTeamFilter("")
+    setSquadFilter("")
+    setAthleteFilter("")
+  }
+
+  function canContinue(currentStep: WizardStep) {
+    if (currentStep === 1) return Boolean(selectedCourseId)
+    if (currentStep === 2) return Boolean(selectedShootId)
+    if (currentStep === 3) {
+      if (printMode === "team") return Boolean(teamFilter)
+      if (printMode === "squad") return Boolean(squadFilter)
+      if (printMode === "athlete") return Boolean(athleteFilter)
+      return true
+    }
+    return cards.length > 0
+  }
+
+  function nextStep() {
+    if (!canContinue(step)) {
+      setError("Complete this step before continuing.")
+      return
+    }
+    setError("")
+    setStep((current) => Math.min(5, current + 1) as WizardStep)
+  }
+
+  function previousStep() {
+    setError("")
+    setStep((current) => Math.max(1, current - 1) as WizardStep)
+  }
+
   async function createPdf() {
-    if (!data || !selectedCourse) {
-      setError("Select a course before generating scorecards.")
+    if (!data || !selectedCourse || !selectedShoot) {
+      setError("Select a course and shoot before generating scorecards.")
       return
     }
     if (cards.length === 0) {
-      setError("No eligible athletes match the selected filters.")
+      setError("No eligible athletes match the selected print mode.")
       return
     }
 
@@ -207,22 +257,28 @@ export function ScorecardCenterPage() {
         const slot = index % 2
         if (index > 0 && slot === 0) pdf.addPage("letter", "landscape")
 
-        const card = cards[index]
-        const x = slot === 0 ? 0 : 5.5
-        const y = 0
         await drawScorecard(
           pdf,
-          x,
-          y,
+          slot === 0 ? 0 : 5.5,
+          0,
           data,
           selectedCourse,
           stations,
-          card,
+          cards[index],
         )
       }
 
+      const scope =
+        printMode === "event"
+          ? "all"
+          : printMode === "team"
+            ? `team-${teamFilter}`
+            : printMode === "squad"
+              ? `squad-${squadFilter}`
+              : `athlete-${athleteFilter}`
+
       pdf.save(
-        `${data.event.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-scorecards.pdf`,
+        `${data.event.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${scope}-scorecards.pdf`,
       )
     } catch (caught) {
       setError(
@@ -270,14 +326,14 @@ export function ScorecardCenterPage() {
           <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-semibold text-emerald-700">
-                Scorecard Center
+                Scorecard Print Wizard
               </p>
               <h1 className="mt-1 text-3xl font-bold text-slate-950">
                 {data.event.name}
               </h1>
               <p className="mt-2 text-sm text-slate-600">
-                Generate two 5½ × 8½ scorecards on each landscape
-                letter-size page.
+                Select the course, shoot, and print group before creating
+                the final two-up landscape PDF.
               </p>
             </div>
             <Button
@@ -291,6 +347,8 @@ export function ScorecardCenterPage() {
           </div>
         </header>
 
+        <WizardProgress currentStep={step} />
+
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -298,148 +356,305 @@ export function ScorecardCenterPage() {
         ) : null}
 
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <label className="text-sm font-semibold">
-              Course
-              <select
-                value={selectedCourseId}
-                onChange={(event) =>
-                  setSelectedCourseId(event.target.value)
-                }
-                className="mt-1.5 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
-              >
-                <option value="">Select a course</option>
-                {data.courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {step === 1 ? (
+            <StepCourse
+              courses={data.courses}
+              selectedCourseId={selectedCourseId}
+              setSelectedCourseId={setSelectedCourseId}
+            />
+          ) : null}
 
-            <label className="text-sm font-semibold">
-              Team
-              <select
-                value={teamFilter}
-                onChange={(event) => {
-                  setTeamFilter(event.target.value)
-                  setAthleteFilter("")
-                }}
-                className="mt-1.5 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
-              >
-                <option value="">All teams</option>
-                {data.teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {step === 2 ? (
+            <StepShoot
+              shoots={data.shoots}
+              selectedShootId={selectedShootId}
+              setSelectedShootId={setSelectedShootId}
+            />
+          ) : null}
 
-            <label className="text-sm font-semibold">
-              Squad
-              <select
-                value={squadFilter}
-                onChange={(event) => setSquadFilter(event.target.value)}
-                className="mt-1.5 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
-              >
-                <option value="">All squads</option>
-                {availableSquads.map((squad) => (
-                  <option key={squad} value={squad}>
-                    Squad {squad}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {step === 3 ? (
+            <StepPrintMode
+              mode={printMode}
+              chooseMode={choosePrintMode}
+              teams={availableTeams}
+              teamFilter={teamFilter}
+              setTeamFilter={setTeamFilter}
+              squads={availableSquads}
+              squadFilter={squadFilter}
+              setSquadFilter={setSquadFilter}
+              cards={allCards}
+              athleteFilter={athleteFilter}
+              setAthleteFilter={setAthleteFilter}
+            />
+          ) : null}
 
-            <label className="text-sm font-semibold">
-              Athlete
-              <select
-                value={athleteFilter}
-                onChange={(event) =>
-                  setAthleteFilter(event.target.value)
-                }
-                className="mt-1.5 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
-              >
-                <option value="">All athletes</option>
-                {cards.map((card) => (
-                  <option
-                    key={card.registration.athlete_id}
-                    value={card.registration.athlete_id}
-                  >
-                    {card.athleteName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          {step === 4 ? (
+            <StepPreview
+              cards={cards}
+              course={selectedCourse}
+              shootName={selectedShoot?.name ?? ""}
+            />
+          ) : null}
 
-          <div className="mt-5 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-bold text-slate-950">
-                {cards.length} scorecard{cards.length === 1 ? "" : "s"}
-              </p>
-              <p className="text-sm text-slate-500">
-                Only registered and paid/waived athletes are included.
-              </p>
-            </div>
+          {step === 5 ? (
+            <StepGenerate
+              count={cards.length}
+              courseName={selectedCourse?.name ?? ""}
+              shootName={selectedShoot?.name ?? ""}
+              generating={generating}
+              createPdf={createPdf}
+            />
+          ) : null}
 
-            <div className="flex flex-wrap gap-2">
+          <div className="mt-6 flex items-center justify-between border-t pt-5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={previousStep}
+              disabled={step === 1 || generating}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
+
+            {step < 5 ? (
               <Button
-                onClick={() => void createPdf()}
-                disabled={generating || !selectedCourseId}
+                type="button"
+                onClick={nextStep}
+                disabled={!canContinue(step) || generating}
               >
-                {generating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4" />
-                )}
-                Generate PDF
+                Continue
+                <ChevronRight className="h-4 w-4" />
               </Button>
+            ) : (
               <Button
+                type="button"
                 variant="outline"
-                onClick={() => window.print()}
+                onClick={() => setStep(1)}
                 disabled={generating}
               >
-                <Printer className="h-4 w-4" />
-                Print Page
+                Start Over
               </Button>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border bg-white shadow-sm">
-          <div className="border-b p-5">
-            <h2 className="text-xl font-bold">Print Queue</h2>
-          </div>
-          <div className="divide-y">
-            {cards.slice(0, 100).map((card) => (
-              <div
-                key={card.registration.id}
-                className="grid gap-2 p-4 text-sm sm:grid-cols-5"
-              >
-                <span className="font-semibold">{card.athleteName}</span>
-                <span>{card.teamName}</span>
-                <span>
-                  {card.squadNumber
-                    ? `Squad ${card.squadNumber}`
-                    : "No squad"}
-                </span>
-                <span>{card.postLabel || "No post"}</span>
-                <span className="text-slate-500">
-                  {card.shootName || "No shoot"}
-                </span>
-              </div>
-            ))}
-            {cards.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-500">
-                No athletes match the selected filters.
-              </div>
-            ) : null}
+            )}
           </div>
         </section>
       </div>
     </PageContainer>
+  )
+}
+
+function WizardProgress({ currentStep }: { currentStep: WizardStep }) {
+  return (
+    <ol className="grid gap-2 sm:grid-cols-5">
+      {STEPS.map((item) => {
+        const complete = item.step < currentStep
+        const active = item.step === currentStep
+        return (
+          <li
+            key={item.step}
+            className={`rounded-xl border p-3 text-sm font-semibold ${
+              active
+                ? "border-slate-950 bg-slate-950 text-white"
+                : complete
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "bg-white text-slate-500"
+            }`}
+          >
+            <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs">
+              {complete ? <Check className="h-3.5 w-3.5" /> : item.step}
+            </span>
+            {item.label}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function StepCourse(props: {
+  courses: ScorecardCenterData["courses"]
+  selectedCourseId: string
+  setSelectedCourseId: (value: string) => void
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-bold">1. Select Course</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        The saved station and bird layout will be printed on every card.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {props.courses.map((course) => (
+          <button
+            key={course.id}
+            type="button"
+            onClick={() => props.setSelectedCourseId(course.id)}
+            className={`rounded-xl border p-4 text-left ${
+              props.selectedCourseId === course.id
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "hover:bg-slate-50"
+            }`}
+          >
+            <p className="font-bold">{course.name}</p>
+            <p className="mt-1 text-sm opacity-75">
+              {course.course_side} · {course.discipline.replaceAll("_", " ")}
+            </p>
+          </button>
+        ))}
+      </div>
+      {props.courses.length === 0 ? (
+        <p className="mt-5 rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">
+          Build and save a course before generating scorecards.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function StepShoot(props: {
+  shoots: ScorecardCenterData["shoots"]
+  selectedShootId: string
+  setSelectedShootId: (value: string) => void
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-bold">2. Select Shoot</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Only athletes entered in this shoot will be included.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {props.shoots.map((shoot) => (
+          <button
+            key={shoot.id}
+            type="button"
+            onClick={() => props.setSelectedShootId(shoot.id)}
+            className={`rounded-xl border p-4 text-left ${
+              props.selectedShootId === shoot.id
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "hover:bg-slate-50"
+            }`}
+          >
+            <p className="font-bold">{shoot.name}</p>
+            <p className="mt-1 text-sm opacity-75">
+              {shoot.discipline.replaceAll("_", " ")}
+            </p>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StepPrintMode(props: {
+  mode: PrintMode
+  chooseMode: (mode: PrintMode) => void
+  teams: ScorecardCenterData["teams"]
+  teamFilter: string
+  setTeamFilter: (value: string) => void
+  squads: string[]
+  squadFilter: string
+  setSquadFilter: (value: string) => void
+  cards: PrintableCard[]
+  athleteFilter: string
+  setAthleteFilter: (value: string) => void
+}) {
+  const options: Array<{ value: PrintMode; title: string; detail: string }> = [
+    { value: "event", title: "Entire Shoot", detail: "Print every eligible athlete" },
+    { value: "team", title: "One Team", detail: "Print one selected team" },
+    { value: "squad", title: "One Squad", detail: "Print one selected squad" },
+    { value: "athlete", title: "One Athlete", detail: "Print or reprint one card" },
+  ]
+  return (
+    <div>
+      <h2 className="text-xl font-bold">3. Choose Print Mode</h2>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => props.chooseMode(option.value)}
+            className={`rounded-xl border p-4 text-left ${
+              props.mode === option.value
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "hover:bg-slate-50"
+            }`}
+          >
+            <p className="font-bold">{option.title}</p>
+            <p className="mt-1 text-sm opacity-75">{option.detail}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5 max-w-xl">
+        {props.mode === "team" ? (
+          <select value={props.teamFilter} onChange={(e) => props.setTeamFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+            <option value="">Select a team</option>
+            {props.teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+          </select>
+        ) : null}
+        {props.mode === "squad" ? (
+          <select value={props.squadFilter} onChange={(e) => props.setSquadFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+            <option value="">Select a squad</option>
+            {props.squads.map((squad) => <option key={squad} value={squad}>Squad {squad}</option>)}
+          </select>
+        ) : null}
+        {props.mode === "athlete" ? (
+          <select value={props.athleteFilter} onChange={(e) => props.setAthleteFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+            <option value="">Select an athlete</option>
+            {props.cards.map((card) => <option key={card.registration.id} value={card.registration.athlete_id}>{card.athleteName} · {card.teamName}</option>)}
+          </select>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function StepPreview(props: {
+  cards: PrintableCard[]
+  course: ScorecardCourse | null
+  shootName: string
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-bold">4. Preview Print Queue</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        {props.cards.length} scorecard{props.cards.length === 1 ? "" : "s"} · {props.course?.name ?? "No course"} · {props.shootName}
+      </p>
+      <div className="mt-5 max-h-[520px] divide-y overflow-y-auto rounded-xl border">
+        {props.cards.slice(0, 200).map((card) => (
+          <div key={card.registration.id} className="grid gap-2 p-4 text-sm sm:grid-cols-5">
+            <span className="font-semibold">{card.athleteName}</span>
+            <span>{card.teamName}</span>
+            <span>{card.squadNumber ? `Squad ${card.squadNumber}` : "No squad"}</span>
+            <span>{card.postLabel || "No post"}</span>
+            <span className="text-slate-500">{card.shootName}</span>
+          </div>
+        ))}
+        {props.cards.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No scorecards are available for this selection.</p> : null}
+      </div>
+    </div>
+  )
+}
+
+function StepGenerate(props: {
+  count: number
+  courseName: string
+  shootName: string
+  generating: boolean
+  createPdf: () => Promise<void>
+}) {
+  return (
+    <div className="py-6 text-center">
+      <FileDown className="mx-auto h-12 w-12 text-emerald-600" />
+      <h2 className="mt-4 text-2xl font-bold">5. Generate Scorecards</h2>
+      <p className="mt-2 text-slate-500">
+        {props.count} cards · {Math.ceil(props.count / 2)} landscape pages<br />
+        {props.courseName} · {props.shootName}
+      </p>
+      <Button className="mt-6" onClick={() => void props.createPdf()} disabled={props.generating || props.count === 0}>
+        {props.generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+        Generate PDF
+      </Button>
+    </div>
   )
 }
 
