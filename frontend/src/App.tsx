@@ -118,6 +118,14 @@ const CoachPortalPage = lazy(() =>
   })),
 )
 
+const TournamentOperationsCenterPage = lazy(() =>
+  import("@/features/events/TournamentOperationsCenterPage").then(
+    (module) => ({
+      default: module.TournamentOperationsCenterPage,
+    }),
+  ),
+)
+
 const EventOperationsPage = lazy(() =>
   import("@/features/operations/EventOperationsPage").then((module) => ({
     default: module.EventOperationsPage,
@@ -299,6 +307,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <EventWorkspace />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/operations"
+                  element={
+                    <LazyRoute>
+                      <TournamentOperationsCenterPage />
                     </LazyRoute>
                   }
                 />
