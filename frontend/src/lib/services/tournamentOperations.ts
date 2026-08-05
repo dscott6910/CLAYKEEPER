@@ -25,6 +25,9 @@ export type OperationsSnapshot = {
   eligibleRegistrations: number
   unpaidRegistrations: number
   checkedIn: number
+  lateArrivals: number
+  noShows: number
+  refundsPending: number
   courses: number
   enabledStations: number
   enrollments: number
@@ -67,7 +70,7 @@ export async function loadTournamentOperations(
         .eq("active", true),
       supabase
         .from("registrations")
-        .select("id,status,payment_status,checked_in,amount_paid")
+        .select("id,status,payment_status,checked_in,attendance_status,refund_status,amount_paid")
         .eq("organization_id", event.organization_id)
         .eq("event_id", eventId),
       supabase
@@ -151,7 +154,19 @@ export async function loadTournamentOperations(
     eligibleRegistrations: eligibleRegistrations.length,
     unpaidRegistrations:
       activeRegistrations.length - eligibleRegistrations.length,
-    checkedIn: activeRegistrations.filter((row) => row.checked_in).length,
+    checkedIn: activeRegistrations.filter(
+      (row) => row.attendance_status === "checked_in" || row.checked_in,
+    ).length,
+    lateArrivals: activeRegistrations.filter(
+      (row) => row.attendance_status === "late_arrival",
+    ).length,
+    noShows: activeRegistrations.filter(
+      (row) => row.attendance_status === "no_show",
+    ).length,
+    refundsPending: activeRegistrations.filter(
+      (row) => row.refund_status === "pending_review" ||
+        row.refund_status === "full_refund_due",
+    ).length,
     courses: courses.length,
     enabledStations: stations.filter((row) => numeric(row.bird_count) > 0)
       .length,

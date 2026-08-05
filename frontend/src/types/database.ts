@@ -14,6 +14,22 @@ export type ShootDiscipline =
   | "sporting_clays"
   | "bunker"
 
+export type AttendanceStatus =
+  | "expected"
+  | "checked_in"
+  | "late_arrival"
+  | "no_show"
+  | "withdrawn"
+  | "disqualified"
+
+export type RefundStatus =
+  | "not_applicable"
+  | "pending_review"
+  | "no_refund"
+  | "partial_refund"
+  | "full_refund_due"
+  | "refunded"
+
 export type EventRecord = {
   id: string
   organization_id: string
@@ -64,6 +80,14 @@ export type RegistrationRecord = {
   status: string
   payment_status: string
   checked_in: boolean
+  checked_in_at?: string | null
+  attendance_status?: AttendanceStatus | null
+  attendance_notes?: string | null
+  refund_status?: RefundStatus | null
+  refund_amount?: number | null
+  refund_reason?: string | null
+  refund_notes?: string | null
+  refund_processed_at?: string | null
   amount_paid: number
 }
 

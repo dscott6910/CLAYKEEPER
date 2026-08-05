@@ -228,8 +228,8 @@ export function TournamentOperationsCenterPage() {
         description: "Track arriving athletes and last-minute no-shows.",
         detail: `${data.checkedIn} / ${data.eligibleRegistrations} checked in`,
         status: checkInStatus,
-        href: `/events/${eventId}/participants`,
-        action: "Review Participants",
+        href: `/events/${eventId}/check-in`,
+        action: "Open Check-In",
         icon: Check,
       },
       {
@@ -281,9 +281,9 @@ export function TournamentOperationsCenterPage() {
         key: "refunds",
         title: "No-Shows and Refunds",
         description: "Track paid no-shows and refund decisions.",
-        detail: "Attendance and refund workflow will be connected next.",
-        status: "not_started",
-        href: "/registration-payments",
+        detail: `${data.noShows} no-show${data.noShows === 1 ? "" : "s"} · ${data.refundsPending} refund${data.refundsPending === 1 ? "" : "s"} pending`,
+        status: data.refundsPending > 0 ? "needs_attention" : data.noShows > 0 ? "ready" : "not_started",
+        href: `/events/${eventId}/check-in`,
         action: "Open Payments",
         icon: BadgeDollarSign,
       },
@@ -409,7 +409,7 @@ export function TournamentOperationsCenterPage() {
           <Summary
             label="Collected"
             value={formatMoney(data.collected)}
-            detail={`${data.checkedIn} checked in`}
+            detail={`${data.checkedIn} checked in · ${data.noShows} no-shows`}
           />
         </section>
 

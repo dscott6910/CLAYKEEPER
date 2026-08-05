@@ -118,6 +118,12 @@ const CoachPortalPage = lazy(() =>
   })),
 )
 
+const CheckInCenterPage = lazy(() =>
+  import("@/features/events/CheckInCenterPage").then((module) => ({
+    default: module.CheckInCenterPage,
+  })),
+)
+
 const TournamentOperationsCenterPage = lazy(() =>
   import("@/features/events/TournamentOperationsCenterPage").then(
     (module) => ({
@@ -307,6 +313,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <EventWorkspace />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/check-in"
+                  element={
+                    <LazyRoute>
+                      <CheckInCenterPage />
                     </LazyRoute>
                   }
                 />
