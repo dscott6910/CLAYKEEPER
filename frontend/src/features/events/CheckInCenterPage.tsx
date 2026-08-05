@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useRef} from "react"
 import { ArrowLeft, Camera, CheckCircle2, CircleAlert, Image, Loader2, Printer, QrCode, RefreshCw, Search, Users, X } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 
@@ -58,6 +58,16 @@ export function CheckInCenterPage() {
   }, [eventId])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    if (!success) return
+
+    const timer = window.setTimeout(() => {
+      setSuccess("")
+    }, 4500)
+
+    return () => window.clearTimeout(timer)
+  }, [success])
 
   const rows = useMemo(() => {
     if (!data) return []
@@ -207,7 +217,40 @@ export function CheckInCenterPage() {
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-bold text-emerald-700">Tournament Day</p><h1 className="mt-1 text-3xl font-bold">Check-In Center</h1><p className="mt-2 text-sm text-slate-600">{data.event.name}</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => { setError(""); setSuccess(""); setScannerOpen(true) }}><QrCode className="h-4 w-4" />Scan QR</Button><Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />Print Report</Button><Button variant="outline" onClick={() => void load()}><RefreshCw className="h-4 w-4" />Refresh</Button></div></div>
     </header>
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
-    {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{success}</div> : null}
+    {success ? (
+      <div className="fixed inset-x-4 top-5 z-[100] mx-auto max-w-md">
+        <div
+          role="status"
+          aria-live="assertive"
+          className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5 shadow-2xl"
+        >
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-emerald-600 p-2 text-white">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-bold text-emerald-950">
+                Scan Successful
+              </h3>
+
+              <p className="mt-1 text-sm text-emerald-800">
+                {success}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSuccess("")}
+              className="rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+              aria-label="Close success message"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Expected" value={stats.expected} /><Stat label="Checked In" value={stats.checkedIn} /><Stat label="Late" value={stats.late} /><Stat label="No Shows" value={stats.noShows} /><Stat label="Refunds Pending" value={stats.refundsPending} /></section>
     <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <label className="relative"><span className="text-sm font-semibold">Search</span><Search className="absolute left-3 top-[38px] h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Athlete, team, squad, CYSSA…" className="mt-1 min-h-11 w-full rounded-lg border pl-9 pr-3 text-sm" /></label>
@@ -235,30 +278,67 @@ function QrScannerDialog(props: {
   const [scanSuccessMessage, setScanSuccessMessage] = useState("")
 const [starting, setStarting] = useState(true)
 
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null)
+
+  function stopCamera() {
+    try {
+      scannerControlsRef.current?.stop()
+    } catch (error) {
+      console.warn("ClayKeeper scanner stop warning:", error)
+    }
+
+    scannerControlsRef.current = null
+
+    const stream = videoElement?.srcObject
+
+    if (stream instanceof MediaStream) {
+      for (const track of stream.getTracks()) {
+        track.stop()
+      }
+    }
+
+    if (videoElement) {
+      videoElement.pause()
+      videoElement.srcObject = null
+      videoElement.removeAttribute("src")
+      videoElement.load()
+    }
+  }
+
   useEffect(() => {
     if (!videoElement) return
 
-    let stopped = false
-    let controls: { stop: () => void } | null = null
+    let cancelled = false
 
     async function startCamera() {
       try {
         setStarting(true)
         setCameraError("")
+
         const { BrowserQRCodeReader } = await import("@zxing/browser")
         const reader = new BrowserQRCodeReader()
-        controls = await reader.decodeFromVideoDevice(
+
+        const controls = await reader.decodeFromVideoDevice(
           undefined,
           videoElement ?? undefined,
           (result) => {
-            if (result && !stopped) {
-              stopped = true
-              controls?.stop()
-              void completeSuccessfulScan(result.getText())
-            }
+            if (!result || cancelled) return
+
+            cancelled = true
+            stopCamera()
+            props.detected(result.getText())
           },
         )
+
+        if (cancelled) {
+          controls.stop()
+          return
+        }
+
+        scannerControlsRef.current = controls
       } catch (caught) {
+        stopCamera()
+
         setCameraError(
           caught instanceof Error
             ? caught.message
@@ -272,28 +352,18 @@ const [starting, setStarting] = useState(true)
     void startCamera()
 
     return () => {
-      stopped = true
-      controls?.stop()
+      cancelled = true
+      stopCamera()
     }
-  }, [props.detected, videoElement])
-
-  async function completeSuccessfulScan(decodedText: string) {
-    await completeSuccessfulScan(decodedText)
-
-    setScanSuccessMessage(
-      "QR code imported successfully. The athlete has been checked in.",
-    )
-
-    window.setTimeout(() => {
-      setScanSuccessMessage("")
-    }, 3500)
-  }
+  }, [videoElement])
 
   async function scanImage(file: File | null) {
     if (!file) {
       setCameraError("No photo was selected.")
       return
     }
+
+    stopCamera()
 
     setStarting(true)
     setCameraError(`Opening ${file.name}…`)
@@ -417,7 +487,10 @@ const [starting, setStarting] = useState(true)
           </div>
           <button
             type="button"
-            onClick={props.close}
+            onClick={() => {
+              stopCamera()
+              props.close()
+            }}
             className="rounded-lg border p-2 text-slate-600"
             aria-label="Close scanner"
           >
