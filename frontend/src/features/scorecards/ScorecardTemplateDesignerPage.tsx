@@ -10,6 +10,7 @@ import {
 
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
+import { DISCIPLINE_FILTER_OPTIONS } from "@/lib/constants/disciplines"
 import {
   deleteScorecardTemplate,
   loadScorecardTemplates,
@@ -17,14 +18,6 @@ import {
   type ScorecardTemplate,
   type ScorecardTemplatePayload,
 } from "@/lib/services/scorecardTemplates"
-
-const DISCIPLINES = [
-  { value: "", label: "All disciplines" },
-  { value: "american_trap", label: "American Trap" },
-  { value: "skeet", label: "Skeet" },
-  { value: "sporting_clays", label: "Sporting Clays" },
-  { value: "bunker", label: "Bunker" },
-]
 
 const EMPTY_TEMPLATE: ScorecardTemplatePayload = {
   name: "CYSSA Standard Scorecard",
@@ -259,7 +252,7 @@ export function ScorecardTemplateDesignerPage() {
                     onChange={(e) => update("discipline", e.target.value || null)}
                     className="min-h-11 w-full rounded-lg border bg-white px-3"
                   >
-                    {DISCIPLINES.map((item) => (
+                    {DISCIPLINE_FILTER_OPTIONS.map((item) => (
                       <option key={item.value || "all"} value={item.value}>
                         {item.label}
                       </option>

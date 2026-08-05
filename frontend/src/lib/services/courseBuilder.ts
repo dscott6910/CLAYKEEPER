@@ -1,3 +1,4 @@
+import { normalizeDiscipline } from "@/lib/constants/disciplines"
 import { supabase } from "@/lib/supabase"
 
 export type CourseSide = "East" | "West" | "Custom"
@@ -48,7 +49,10 @@ export async function loadCourseBuilderData(eventId: string): Promise<CourseBuil
     .eq("id", eventId)
     .single()
   throwIfError(eventResult.error)
-  const event = eventResult.data as CourseBuilderData["event"]
+  const event = {
+    ...(eventResult.data as CourseBuilderData["event"]),
+    discipline: normalizeDiscipline(eventResult.data?.discipline),
+  }
 
   const courseResult = await supabase
     .from("event_courses")
@@ -86,7 +90,7 @@ export async function saveEventCourse(input: {
     organization_id: input.organizationId,
     event_id: input.eventId,
     name: input.name.trim(),
-    discipline: input.discipline,
+    discipline: normalizeDiscipline(input.discipline),
     course_side: input.courseSide,
     template_name: input.templateName ?? null,
     active: true,

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom"
 
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
+import { DISCIPLINE_OPTIONS, getDisciplineLabel } from "@/lib/constants/disciplines"
 import {
   deleteEventCourse,
   loadCourseBuilderData,
@@ -16,12 +17,6 @@ import {
 type StationForm = { stationNumber: number; birdCount: number; notes: string; targetType: string }
 type CourseForm = { id: string | null; name: string; discipline: string; courseSide: CourseSide; templateName: string; stations: StationForm[] }
 
-const DISCIPLINES = [
-  { value: "american_trap", label: "American Trap" },
-  { value: "skeet", label: "Skeet" },
-  { value: "sporting_clays", label: "Sporting Clays" },
-  { value: "bunker", label: "Bunker" },
-]
 const COURSE_SIDES: CourseSide[] = ["East", "West", "Custom"]
 const blankStations = () => Array.from({ length: 15 }, (_, index) => ({ stationNumber: index + 1, birdCount: 10, notes: "", targetType: "" }))
 const blankForm = (discipline = "sporting_clays"): CourseForm => ({ id: null, name: "East Course", discipline, courseSide: "East", templateName: "", stations: blankStations() })
@@ -114,11 +109,11 @@ export function CourseBuilderPage() {
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
     {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{success}</div> : null}
     <section className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="rounded-2xl border bg-white shadow-sm"><div className="border-b p-4"><h2 className="font-bold text-slate-950">Event Courses</h2><p className="mt-1 text-sm text-slate-500">East, West, or custom layouts.</p></div><div className="space-y-2 p-3">{courses.map((course) => <button key={course.id} type="button" onClick={() => chooseCourse(course.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedCourseId === course.id ? "border-slate-950 bg-slate-950 text-white" : "hover:bg-slate-50"}`}><div className="font-semibold">{course.name}</div><div className={`mt-1 text-xs ${selectedCourseId === course.id ? "text-slate-300" : "text-slate-500"}`}>{course.course_side} · {DISCIPLINES.find((item) => item.value === course.discipline)?.label ?? course.discipline}</div></button>)}{courses.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">No courses have been created.</div> : null}</div></aside>
+      <aside className="rounded-2xl border bg-white shadow-sm"><div className="border-b p-4"><h2 className="font-bold text-slate-950">Event Courses</h2><p className="mt-1 text-sm text-slate-500">East, West, or custom layouts.</p></div><div className="space-y-2 p-3">{courses.map((course) => <button key={course.id} type="button" onClick={() => chooseCourse(course.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedCourseId === course.id ? "border-slate-950 bg-slate-950 text-white" : "hover:bg-slate-50"}`}><div className="font-semibold">{course.name}</div><div className={`mt-1 text-xs ${selectedCourseId === course.id ? "text-slate-300" : "text-slate-500"}`}>{course.course_side} · {getDisciplineLabel(course.discipline)}</div></button>)}{courses.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">No courses have been created.</div> : null}</div></aside>
       <main className="space-y-5">
         <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label><span className="text-sm font-semibold">Course name</span><input value={form.name} onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))} className="mt-1 min-h-11 w-full rounded-lg border px-3 text-sm"/></label>
-          <label><span className="text-sm font-semibold">Discipline</span><select value={form.discipline} onChange={(e) => setForm((c) => ({ ...c, discipline: e.target.value }))} className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3 text-sm">{DISCIPLINES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label><span className="text-sm font-semibold">Discipline</span><select value={form.discipline} onChange={(e) => setForm((c) => ({ ...c, discipline: e.target.value }))} className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3 text-sm">{DISCIPLINE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label><span className="text-sm font-semibold">Course side</span><select value={form.courseSide} onChange={(e) => setForm((c) => ({ ...c, courseSide: e.target.value as CourseSide }))} className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3 text-sm">{COURSE_SIDES.map((side) => <option key={side} value={side}>{side}</option>)}</select></label>
           <label><span className="text-sm font-semibold">Template name</span><input value={form.templateName} onChange={(e) => setForm((c) => ({ ...c, templateName: e.target.value }))} placeholder="Optional" className="mt-1 min-h-11 w-full rounded-lg border px-3 text-sm"/></label>
         </div><div className="mt-5 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between"><label><span className="text-sm font-semibold">Apply bird count to all stations</span><select value={applyBirdCount} onChange={(e) => setApplyBirdCount(Number(e.target.value))} className="mt-1 min-h-10 rounded-lg border bg-white px-3 text-sm">{Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}</option>)}</select></label><Button variant="outline" onClick={applyToAllStations}>Apply to All 15 Stations</Button></div></section>
