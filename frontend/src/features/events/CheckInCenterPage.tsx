@@ -231,7 +231,9 @@ function QrScannerDialog(props: {
   const videoRef = useState<HTMLVideoElement | null>(null)
   const [videoElement, setVideoElement] = videoRef
   const [cameraError, setCameraError] = useState("")
-  const [starting, setStarting] = useState(true)
+  
+  const [scanSuccessMessage, setScanSuccessMessage] = useState("")
+const [starting, setStarting] = useState(true)
 
   useEffect(() => {
     if (!videoElement) return
@@ -252,7 +254,7 @@ function QrScannerDialog(props: {
             if (result && !stopped) {
               stopped = true
               controls?.stop()
-              props.detected(result.getText())
+              void completeSuccessfulScan(result.getText())
             }
           },
         )
@@ -274,6 +276,18 @@ function QrScannerDialog(props: {
       controls?.stop()
     }
   }, [props.detected, videoElement])
+
+  async function completeSuccessfulScan(decodedText: string) {
+    await completeSuccessfulScan(decodedText)
+
+    setScanSuccessMessage(
+      "QR code imported successfully. The athlete has been checked in.",
+    )
+
+    window.setTimeout(() => {
+      setScanSuccessMessage("")
+    }, 3500)
+  }
 
   async function scanImage(file: File | null) {
     if (!file) {
@@ -356,7 +370,43 @@ function QrScannerDialog(props: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 p-4">
+    <>
+      {scanSuccessMessage ? (
+        <div className="fixed inset-x-4 top-5 z-[70] mx-auto max-w-md">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5 shadow-2xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-emerald-600 p-2 text-white">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-bold text-emerald-950">
+                  Import Successful
+                </h3>
+
+                <p className="mt-1 text-sm text-emerald-800">
+                  {scanSuccessMessage}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setScanSuccessMessage("")}
+                className="rounded-lg p-1 text-emerald-800 hover:bg-emerald-100"
+                aria-label="Close success message"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 p-4">
       <div className="mx-auto my-6 max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b p-5">
           <div>
@@ -418,6 +468,7 @@ function QrScannerDialog(props: {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
