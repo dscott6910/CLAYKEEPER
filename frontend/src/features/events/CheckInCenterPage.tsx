@@ -276,37 +276,82 @@ function QrScannerDialog(props: {
   }, [props.detected, videoElement])
 
   async function scanImage(file: File | null) {
-    if (!file) return
+    if (!file) {
+      setCameraError("No photo was selected.")
+      return
+    }
 
-    const url = URL.createObjectURL(file)
+    setStarting(true)
+    setCameraError(`Opening ${file.name}…`)
 
     try {
-      setStarting(true)
-      setCameraError("")
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
 
-      const image = new window.Image()
-      image.decoding = "async"
-      image.src = url
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result)
+          } else {
+            reject(new Error("The selected photo could not be read."))
+          }
+        }
 
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve()
-        image.onerror = () => reject(new Error("The selected photo could not be opened."))
+        reader.onerror = () => {
+          reject(
+            reader.error ??
+              new Error("The selected photo could not be read."),
+          )
+        }
+
+        reader.readAsDataURL(file)
       })
 
-      const { BrowserQRCodeReader } = await import("@zxing/browser")
-      const reader = new BrowserQRCodeReader()
-      const result = await reader.decodeFromImageElement(image)
+      setCameraError("Looking for a QR code in the selected photo…")
 
-      props.detected(result.getText())
+      const { BrowserQRCodeReader } = await import("@zxing/browser")
+      const qrReader = new BrowserQRCodeReader()
+
+      const result = await qrReader.decodeFromImageUrl(dataUrl)
+      const decodedText = result.getText().trim()
+
+      if (!decodedText) {
+        throw new Error("The QR code did not contain any data.")
+      }
+
+      setCameraError("QR code found. Checking in athlete…")
+      await props.detected(decodedText)
     } catch (caught) {
-      setCameraError(
-        caught instanceof Error
+      console.error("ClayKeeper photo QR scan error:", caught)
+
+      const message =
+        caught instanceof Error && caught.message
           ? caught.message
-          : "No QR code was found in that image.",
+          : "No readable QR code was found."
+
+      setCameraError(
+        `${message} Try cropping the picture so the QR code fills most of the image.`,
       )
     } finally {
       setStarting(false)
-      URL.revokeObjectURL(url)
+    }
+  }
+
+  async function handlePhotoSelection(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const input = event.currentTarget
+    const file = input.files?.item(0) ?? null
+
+    console.log("ClayKeeper selected QR photo:", {
+      name: file?.name,
+      type: file?.type,
+      size: file?.size,
+    })
+
+    try {
+      await scanImage(file)
+    } finally {
+      input.value = ""
     }
   }
 
@@ -361,9 +406,7 @@ function QrScannerDialog(props: {
               accept="image/*"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0] ?? null
-                event.target.value = ""
-                void scanImage(file)
+                void handlePhotoSelection(event)
               }}
             />
           </label>
