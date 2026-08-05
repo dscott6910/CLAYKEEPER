@@ -277,12 +277,26 @@ function QrScannerDialog(props: {
 
   async function scanImage(file: File | null) {
     if (!file) return
+
     const url = URL.createObjectURL(file)
+
     try {
+      setStarting(true)
       setCameraError("")
+
+      const image = new window.Image()
+      image.decoding = "async"
+      image.src = url
+
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve()
+        image.onerror = () => reject(new Error("The selected photo could not be opened."))
+      })
+
       const { BrowserQRCodeReader } = await import("@zxing/browser")
       const reader = new BrowserQRCodeReader()
-      const result = await reader.decodeFromImageUrl(url)
+      const result = await reader.decodeFromImageElement(image)
+
       props.detected(result.getText())
     } catch (caught) {
       setCameraError(
@@ -291,6 +305,7 @@ function QrScannerDialog(props: {
           : "No QR code was found in that image.",
       )
     } finally {
+      setStarting(false)
       URL.revokeObjectURL(url)
     }
   }
@@ -344,11 +359,12 @@ function QrScannerDialog(props: {
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
-              onChange={(event) =>
-                void scanImage(event.target.files?.[0] ?? null)
-              }
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null
+                event.target.value = ""
+                void scanImage(file)
+              }}
             />
           </label>
 
