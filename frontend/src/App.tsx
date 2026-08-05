@@ -169,6 +169,14 @@ const ScorecardScanLabPage = lazy(() =>
   })),
 )
 
+const ScorecardTemplateDesignerPage = lazy(() =>
+  import(
+    "@/features/scorecards/ScorecardTemplateDesignerPage"
+  ).then((module) => ({
+    default: module.ScorecardTemplateDesignerPage,
+  })),
+)
+
 function RouteLoadingFallback() {
   return (
     <div
@@ -358,6 +366,15 @@ function App() {
                   }
                 />
 
+                  <Route
+                    path="scorecard-templates"
+                    element={
+                       <LazyRoute>
+                         <ScorecardTemplateDesignerPage />
+                       </LazyRoute>
+                   }
+                />
+                
                 <Route
                   path="reports"
                   element={
