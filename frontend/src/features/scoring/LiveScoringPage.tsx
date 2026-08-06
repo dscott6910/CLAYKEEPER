@@ -1,243 +1,185 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
-import { AlertCircle, CheckCircle2, ClipboardList, Plus, RefreshCw, Save, Target, Trash2, Trophy, UserPlus, Users } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { ArrowLeft, CheckCircle2, CircleAlert, Loader2, Lock, RefreshCw, Save } from "lucide-react"
+import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
-import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
-  createShootOffRound,
-  deleteShootOffRound,
-  loadScoringBaseData,
-  loadShootScoringData,
-  saveRoundScore,
-  saveShootOffScore,
-  type ScoreEntry,
-  type ScoringAthlete,
-  type ScoringClass,
-  type ScoringEnrollment,
-  type ScoringEvent,
-  type ScoringMember,
-  type ScoringNamedRecord,
-  type ScoringRegistration,
-  type ScoringShoot,
-  type ScoringSquad,
-  type ShootOffRound,
-  type ShootOffScore,
-} from "@/lib/services/scoring"
+  loadDigitalScoring,
+  saveDigitalScorecard,
+  type DigitalScoringData,
+} from "@/lib/services/digitalScoring"
 
-type ShootData = {
-  squads: ScoringSquad[]
-  members: ScoringMember[]
-  enrollments: ScoringEnrollment[]
-  registrations: ScoringRegistration[]
-  athletes: ScoringAthlete[]
-  teams: ScoringNamedRecord[]
-  classes: ScoringClass[]
-  scores: ScoreEntry[]
-  shootOffRounds: ShootOffRound[]
-  shootOffScores: ShootOffScore[]
+function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
+  if (!athlete) return "Unknown Athlete"
+  const first = athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
+  return `${first} ${athlete.last_name?.trim() || ""}`.trim()
 }
-
-const emptyData: ShootData = { squads: [], members: [], enrollments: [], registrations: [], athletes: [], teams: [], classes: [], scores: [], shootOffRounds: [], shootOffScores: [] }
 
 export function LiveScoringPage() {
-  const [searchParams] = useSearchParams()
-  const requestedEventId = searchParams.get("eventId") || ""
-  const requestedShootId = searchParams.get("shootId") || ""
-  const requestedSquadId = searchParams.get("squadId") || ""
-  const requestedMemberId = searchParams.get("memberId") || ""
-  const requestedFocus = searchParams.get("focus") || ""
-  const [organizationId, setOrganizationId] = useState("")
-  const [events, setEvents] = useState<ScoringEvent[]>([])
-  const [shoots, setShoots] = useState<ScoringShoot[]>([])
-  const [eventId, setEventId] = useState("")
+  const { eventId } = useParams()
+  const [data, setData] = useState<DigitalScoringData | null>(null)
   const [shootId, setShootId] = useState("")
   const [squadId, setSquadId] = useState("")
-  const [data, setData] = useState<ShootData>(emptyData)
+  const [memberId, setMemberId] = useState("")
+  const [courseId, setCourseId] = useState("")
+  const [scores, setScores] = useState<Record<string, string>>({})
+  const [malfunctions, setMalfunctions] = useState(0)
+  const [verified1, setVerified1] = useState("")
+  const [verified2, setVerified2] = useState("")
+  const [enteredBy, setEnteredBy] = useState("")
+  const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(true)
-  const [savingKey, setSavingKey] = useState("")
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-  const deepLinkFocused = useRef(false)
 
-  const eventShoots = useMemo(() => shoots.filter((shoot) => shoot.event_id === eventId), [shoots, eventId])
-  const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
-  const selectedSquad = data.squads.find((squad) => squad.id === squadId)
-  const squadMembers = useMemo(() => data.members.filter((member) => member.squad_id === squadId).sort((a, b) => a.position - b.position), [data.members, squadId])
-
-  const enrollmentById = useMemo(() => new Map(data.enrollments.map((row) => [row.id, row])), [data.enrollments])
-  const registrationById = useMemo(() => new Map(data.registrations.map((row) => [row.id, row])), [data.registrations])
-  const athleteById = useMemo(() => new Map(data.athletes.map((row) => [row.id, row])), [data.athletes])
-  const teamById = useMemo(() => new Map(data.teams.map((row) => [row.id, row])), [data.teams])
-  const classById = useMemo(() => new Map(data.classes.map((row) => [row.id, row])), [data.classes])
-  const scoreMap = useMemo(() => new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row.score])), [data.scores])
-  const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
-
-  async function loadBase() {
-    setLoading(true); setError("")
+  const load = useCallback(async () => {
+    if (!eventId) return
+    setLoading(true)
+    setError("")
     try {
-      const base = await loadScoringBaseData()
-      setOrganizationId(base.organizationId); setEvents(base.events); setShoots(base.shoots)
-      const nextEvent = requestedEventId || eventId || base.events[0]?.id || ""
-      setEventId(nextEvent)
-      const nextShoot = requestedShootId || shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
-      setShootId(nextShoot)
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load live scoring.") }
-    finally { setLoading(false) }
-  }
-
-  async function loadShoot() {
-    if (!organizationId || !eventId || !shootId) { setData(emptyData); return }
-    setLoading(true); setError("")
-    try {
-      const next = await loadShootScoringData(organizationId, eventId, shootId)
+      const next = await loadDigitalScoring(eventId)
       setData(next)
-      setSquadId((current) => {
-        if (requestedSquadId && next.squads.some((s) => s.id === requestedSquadId)) return requestedSquadId
-        return next.squads.some((s) => s.id === current) ? current : next.squads[0]?.id || ""
-      })
-      setDrafts({})
-      deepLinkFocused.current = false
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load scores. Apply the live-scoring migration in Supabase if this is the first run.") }
-    finally { setLoading(false) }
-  }
+      setShootId((current) => current || next.shoots[0]?.id || "")
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Scoring could not be loaded.")
+    } finally {
+      setLoading(false)
+    }
+  }, [eventId])
 
-  useEffect(() => { void loadBase() }, [])
-  useEffect(() => { void loadShoot() }, [organizationId, eventId, shootId])
+  useEffect(() => { void load() }, [load])
 
+  const squads = useMemo(() => data?.squads.filter((row) => row.shoot_id === shootId) ?? [], [data, shootId])
+  useEffect(() => { setSquadId((current) => squads.some((row) => row.id === current) ? current : squads[0]?.id || "") }, [squads])
+
+  const members = useMemo(() => data?.members.filter((row) => row.squad_id === squadId) ?? [], [data, squadId])
+  useEffect(() => { setMemberId((current) => members.some((row) => row.id === current) ? current : members[0]?.id || "") }, [members])
+
+  const selectedSquad = data?.squads.find((row) => row.id === squadId)
+  const suggestedCourse = data?.courses.find((row) => row.name === selectedSquad?.course_name) ?? data?.courses[0]
+  useEffect(() => { setCourseId(suggestedCourse?.id || "") }, [suggestedCourse?.id])
+
+  const stations = useMemo(() => data?.stations.filter((row) => row.course_id === courseId && row.bird_count > 0).sort((a, b) => a.display_order - b.display_order) ?? [], [data, courseId])
+  const scorecard = data?.scorecards.find((row) => row.squad_member_id === memberId)
+  const locked = scorecard?.status === "finalized"
 
   useEffect(() => {
-    if (deepLinkFocused.current || !requestedMemberId || loading || squadId !== requestedSquadId) return
-    const member = data.members.find((row) => row.id === requestedMemberId)
-    if (!member) return
+    if (!data || !memberId) return
+    const existing = scorecard
+    const stationMap = new Map(data.stationScores.filter((row) => row.scorecard_id === existing?.id).map((row) => [row.station_id, String(row.hits)]))
+    setScores(Object.fromEntries(stations.map((station) => [station.id, stationMap.get(station.id) ?? ""])))
+    setMalfunctions(existing?.malfunction_count ?? 0)
+    setVerified1(existing?.verified_by_1 ?? "")
+    setVerified2(existing?.verified_by_2 ?? "")
+    setEnteredBy(existing?.entered_by_name ?? "")
+    setNotes(existing?.notes ?? "")
+  }, [data, memberId, scorecard?.id, stations])
 
-    const focusKey = requestedFocus === "shootOff" && data.shootOffRounds.length > 0
-      ? `so:${requestedMemberId}:${data.shootOffRounds[0].id}`
-      : Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, index) => `${requestedMemberId}:${index + 1}`)
-          .find((key) => !scoreMap.has(key)) || `${requestedMemberId}:1`
+  const participant = useMemo(() => {
+    if (!data || !memberId) return null
+    const member = data.members.find((row) => row.id === memberId)
+    const enrollment = data.enrollments.find((row) => row.id === member?.registration_shoot_id)
+    const registration = data.registrations.find((row) => row.id === enrollment?.registration_id)
+    const athlete = data.athletes.find((row) => row.id === registration?.athlete_id)
+    const team = data.teams.find((row) => row.id === registration?.team_id)
+    const cls = data.classes.find((row) => row.id === registration?.class_id)
+    return { member, athlete, team, cls, registration }
+  }, [data, memberId])
 
-    window.setTimeout(() => {
-      const input = inputRefs.current[focusKey]
-      input?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
-      input?.focus()
-      input?.select()
-      deepLinkFocused.current = true
-    }, 150)
-  }, [data.members, data.shootOffRounds, loading, requestedFocus, requestedMemberId, requestedSquadId, scoreMap, selectedShoot?.number_of_rounds, squadId])
-
-  function participantFor(member: ScoringMember) {
-    const enrollment = enrollmentById.get(member.registration_shoot_id)
-    const registration = enrollment ? registrationById.get(enrollment.registration_id) : undefined
-    const athlete = registration ? athleteById.get(registration.athlete_id) : undefined
-    return { registration, athlete, team: registration?.team_id ? teamById.get(registration.team_id) : undefined, cls: registration?.class_id ? classById.get(registration.class_id) : undefined }
-  }
-
-  function displayName(athlete?: ScoringAthlete) {
-    if (!athlete) return "Unknown participant"
-    return [athlete.preferred_name || athlete.first_name, athlete.last_name].filter(Boolean).join(" ") || "Unknown participant"
-  }
-
-  function scoreValue(memberId: string, round: number) {
-    const key = `${memberId}:${round}`
-    return drafts[key] ?? (scoreMap.get(key)?.toString() ?? "")
-  }
-
-  async function commitRound(memberId: string, round: number, moveNext = false) {
-    if (!selectedShoot) return
-    const key = `${memberId}:${round}`
-    const raw = scoreValue(memberId, round).trim()
+  const stationRows = stations.map((station) => {
+    const raw = scores[station.id] ?? ""
     const parsed = raw === "" ? null : Number(raw)
-    if (parsed !== null && (!Number.isInteger(parsed) || parsed < 0 || parsed > selectedShoot.targets_per_round)) {
-      toast.error(`Enter a whole number from 0 to ${selectedShoot.targets_per_round}.`); inputRefs.current[key]?.focus(); return
-    }
-    setSavingKey(key)
+    return { station, raw, parsed }
+  })
+  const enteredCount = stationRows.filter((row) => row.parsed !== null).length
+  const totalScore = stationRows.reduce((sum, row) => sum + (row.parsed ?? 0), 0)
+  const totalTargets = stations.reduce((sum, row) => sum + row.bird_count, 0)
+  const invalid = stationRows.filter((row) => row.parsed !== null && (!Number.isInteger(row.parsed) || row.parsed < 0 || row.parsed > row.station.bird_count))
+
+  async function save(status: "draft" | "finalized") {
+    if (!data || !eventId || !shootId || !memberId || !courseId) return
+    if (locked) { toast.error("This scorecard is finalized and locked."); return }
+    if (invalid.length) { toast.error("Correct the highlighted station scores before saving."); return }
+    if (status === "finalized" && enteredCount !== stations.length) { toast.error("Enter a score for every active station before finalizing."); return }
+    if (status === "finalized" && !enteredBy.trim()) { toast.error("Entered by is required before finalizing."); return }
+
+    setSaving(true)
     try {
-      await saveRoundScore({ organizationId, eventId, shootId, squadMemberId: memberId, roundNumber: round, score: parsed })
-      setData((current) => ({ ...current, scores: parsed === null ? current.scores.filter((row) => !(row.squad_member_id === memberId && row.round_number === round)) : [...current.scores.filter((row) => !(row.squad_member_id === memberId && row.round_number === round)), { id: key, squad_member_id: memberId, round_number: round, score: parsed, status: "entered" }] }))
-      setDrafts((current) => { const next = { ...current }; delete next[key]; return next })
-      if (moveNext && round < selectedShoot.number_of_rounds) setTimeout(() => inputRefs.current[`${memberId}:${round + 1}`]?.focus(), 0)
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Score could not be saved.") }
-    finally { setSavingKey("") }
+      await saveDigitalScorecard({
+        organizationId: data.event.organization_id,
+        eventId,
+        shootId,
+        squadMemberId: memberId,
+        courseId,
+        scorecardId: scorecard?.id,
+        malfunctionCount: malfunctions,
+        verifiedBy1: verified1,
+        verifiedBy2: verified2,
+        enteredByName: enteredBy,
+        notes,
+        status,
+        stationScores: stationRows.filter((row) => row.parsed !== null).map((row) => ({ stationId: row.station.id, hits: row.parsed as number, targets: row.station.bird_count })),
+      })
+      toast.success(status === "finalized" ? "Scorecard finalized and locked." : "Draft scorecard saved.")
+      await load()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "Scorecard could not be saved.")
+    } finally { setSaving(false) }
   }
 
-  async function addShootOff() {
-    if (!selectedShoot) return
-    if (squadMembers.length < 2) {
-      toast.info("Shoot-offs require at least two participants in the selected squad.")
-      return
-    }
-    const roundNumber = Math.max(0, ...data.shootOffRounds.map((round) => round.round_number)) + 1
-    try { await createShootOffRound({ organizationId, eventId, shootId, roundNumber }); await loadShoot(); toast.success(`Shoot-off ${roundNumber} added.`) }
-    catch (err) { toast.error(err instanceof Error ? err.message : "Shoot-off could not be added.") }
-  }
+  if (loading) return <PageContainer><div className="flex min-h-[420px] items-center justify-center gap-3 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Loading digital scoring…</div></PageContainer>
+  if (!data) return <PageContainer><div className="rounded-xl border p-6">Scoring data is unavailable.</div></PageContainer>
 
-  async function removeShootOff(round: ShootOffRound) {
-    if (!window.confirm(`Delete ${round.label || `SO${round.round_number}`} and all scores in it?`)) return
-    try { await deleteShootOffRound(round.id); await loadShoot(); toast.success("Shoot-off round deleted.") }
-    catch (err) { toast.error(err instanceof Error ? err.message : "Shoot-off could not be deleted.") }
-  }
+  return <PageContainer><div className="space-y-6">
+    <header className="rounded-2xl border bg-white p-6 shadow-sm">
+      <Link to={`/events/${eventId}/operations`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft className="h-4 w-4" />Operations Center</Link>
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-bold text-emerald-700">Tournament Scoring</p><h1 className="mt-1 text-3xl font-bold">Digital Score Entry</h1><p className="mt-2 text-sm text-slate-600">{data.event.name}</p></div><Button variant="outline" onClick={() => void load()}><RefreshCw className="h-4 w-4" />Refresh</Button></div>
+    </header>
 
-  async function commitShootOff(memberId: string, round: ShootOffRound, value: string) {
-    const key = `so:${memberId}:${round.id}`
-    const parsed = value.trim() === "" ? null : Number(value)
-    if (parsed !== null && (!Number.isInteger(parsed) || parsed < 0 || parsed > 100)) { toast.error("Enter a whole number from 0 to 100."); return }
-    setSavingKey(key)
-    try { await saveShootOffScore({ organizationId, eventId, shootId, roundId: round.id, squadMemberId: memberId, score: parsed }); await loadShoot() }
-    catch (err) { toast.error(err instanceof Error ? err.message : "Shoot-off score could not be saved.") }
-    finally { setSavingKey("") }
-  }
+    {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
 
-  const completedScores = data.scores.filter((score) => score.score !== null).length
-  const expectedScores = squadMembers.length * (selectedShoot?.number_of_rounds ?? 0)
+    <section className="grid gap-3 rounded-2xl border bg-white p-5 shadow-sm md:grid-cols-4">
+      <Select label="Shoot" value={shootId} setValue={setShootId} options={data.shoots.map((row) => ({ value: row.id, label: row.name }))} />
+      <Select label="Squad" value={squadId} setValue={setSquadId} options={squads.map((row) => ({ value: row.id, label: `Squad ${row.squad_number}` }))} />
+      <Select label="Athlete / Post" value={memberId} setValue={setMemberId} options={members.map((member) => { const enrollment=data.enrollments.find((row)=>row.id===member.registration_shoot_id); const registration=data.registrations.find((row)=>row.id===enrollment?.registration_id); const athlete=data.athletes.find((row)=>row.id===registration?.athlete_id); return { value:member.id,label:`${member.position_label || `Post ${member.position}`} · ${nameOf(athlete)}` } })} />
+      <Select label="Course" value={courseId} setValue={setCourseId} options={data.courses.map((row) => ({ value: row.id, label: row.name }))} />
+    </section>
 
-  return (
-    <div className="min-h-screen">
-      <AppHeader title="Live Scoring" description="Enter and save participant scores by squad, round, and shoot-off" />
-      <PageContainer>
-        <div className="space-y-5">
-          <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-3">
-            <label className="space-y-1 text-sm font-medium">Event<select className="w-full rounded-lg border bg-white px-3 py-2" value={eventId} onChange={(e) => { const id = e.target.value; setEventId(id); setShootId(shoots.find((shoot) => shoot.event_id === id)?.id || "") }}>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label>
-            <label className="space-y-1 text-sm font-medium">Shoot<select className="w-full rounded-lg border bg-white px-3 py-2" value={shootId} onChange={(e) => setShootId(e.target.value)}>{eventShoots.map((shoot) => <option key={shoot.id} value={shoot.id}>{shoot.name}</option>)}</select></label>
-            <label className="space-y-1 text-sm font-medium">Squad<select className="w-full rounded-lg border bg-white px-3 py-2" value={squadId} onChange={(e) => setSquadId(e.target.value)}>{data.squads.map((squad) => <option key={squad.id} value={squad.id}>Squad {squad.squad_number}{squad.house_number ? ` · House ${squad.house_number}` : ""}{squad.course_name ? ` · ${squad.course_name}` : ""}</option>)}</select></label>
-          </section>
+    {!memberId || !courseId ? <div className="rounded-2xl border border-dashed bg-white p-10 text-center text-slate-500">Select a shoot, squad, athlete, and course to begin scoring.</div> : <>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Summary label="Athlete" value={nameOf(participant?.athlete)} detail={participant?.team?.name || "No team"} />
+        <Summary label="Squad / Post" value={`Squad ${selectedSquad?.squad_number ?? "—"}`} detail={participant?.member?.position_label || `Post ${participant?.member?.position ?? "—"}`} />
+        <Summary label="Score" value={`${totalScore} / ${totalTargets}`} detail={`${enteredCount} of ${stations.length} stations entered`} />
+        <Summary label="Status" value={locked ? "Finalized" : scorecard ? "Draft" : "Not Started"} detail={locked ? "Locked from editing" : "Editable"} />
+      </section>
 
-          {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Live scoring could not load.</strong><p>{error}</p></div></div> : null}
+      {locked ? <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><Lock className="h-5 w-5" />This scorecard was finalized and is locked.</div> : null}
+      {invalid.length ? <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><CircleAlert className="h-5 w-5" />One or more station scores exceed the configured number of birds.</div> : null}
 
-          <section className="grid gap-3 sm:grid-cols-3">
-            <Stat icon={Users} label="Participants" value={squadMembers.length} />
-            <Stat icon={CheckCircle2} label="Scores entered" value={`${completedScores} / ${expectedScores}`} />
-            <Stat icon={Trophy} label="Shoot-offs" value={data.shootOffRounds.length} />
-          </section>
+      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="p-4">Station</th><th className="p-4">Available Birds</th><th className="p-4">Hits</th><th className="p-4">Misses</th><th className="p-4">Running Total</th><th className="p-4">Notes</th></tr></thead><tbody className="divide-y">
+          {stationRows.map((row, index) => { const running=stationRows.slice(0,index+1).reduce((sum,item)=>sum+(item.parsed??0),0); const bad=row.parsed!==null && (row.parsed<0 || row.parsed>row.station.bird_count || !Number.isInteger(row.parsed)); return <tr key={row.station.id}><td className="p-4 font-bold">{row.station.station_number}</td><td className="p-4">{row.station.bird_count}</td><td className="p-4"><input disabled={locked} inputMode="numeric" value={row.raw} onChange={(event)=>setScores((current)=>({...current,[row.station.id]:event.target.value.replace(/[^0-9]/g,"")}))} className={`h-11 w-24 rounded-lg border px-3 text-center text-lg font-bold ${bad?"border-red-400 bg-red-50":""}`} /></td><td className="p-4">{row.parsed===null?"—":row.station.bird_count-row.parsed}</td><td className="p-4 text-lg font-bold">{running}</td><td className="p-4 text-slate-500">{row.station.notes || "—"}</td></tr> })}
+        </tbody></table></div>
+      </section>
 
-          <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4"><div><h2 className="text-lg font-semibold">{selectedSquad ? `Squad ${selectedSquad.squad_number}` : "Select a squad"}</h2><p className="text-sm text-slate-500">{selectedShoot ? `${selectedShoot.targets_per_round} targets per round · ${selectedShoot.number_of_rounds} rounds` : ""}</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => void loadShoot()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button><Button onClick={() => void addShootOff()} disabled={!shootId || squadMembers.length === 0}><Plus />Add shoot-off</Button></div></header>
+      <section className="grid gap-4 rounded-2xl border bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-4">
+        <label><span className="text-sm font-semibold">Malfunctions (0–3)</span><input disabled={locked} type="number" min={0} max={3} value={malfunctions} onChange={(e)=>setMalfunctions(Math.min(3,Math.max(0,Number(e.target.value))))} className="mt-1 min-h-11 w-full rounded-lg border px-3" /></label>
+        <Field label="Verified by #1" value={verified1} setValue={setVerified1} disabled={locked} />
+        <Field label="Verified by #2" value={verified2} setValue={setVerified2} disabled={locked} />
+        <Field label="Entered by" value={enteredBy} setValue={setEnteredBy} disabled={locked} />
+        <label className="md:col-span-2 xl:col-span-4"><span className="text-sm font-semibold">Notes</span><textarea disabled={locked} value={notes} onChange={(e)=>setNotes(e.target.value)} className="mt-1 min-h-24 w-full rounded-lg border p-3" /></label>
+      </section>
 
-            {loading ? <div className="p-12 text-center text-slate-500">Loading scoring data…</div> : squadMembers.length === 0 ? (
-              <div className="p-8 sm:p-12">
-                <div className="mx-auto max-w-2xl text-center">
-                  {data.enrollments.length === 0 ? <ClipboardList className="mx-auto mb-4 h-11 w-11 text-slate-300" /> : data.squads.length === 0 ? <Target className="mx-auto mb-4 h-11 w-11 text-slate-300" /> : <UserPlus className="mx-auto mb-4 h-11 w-11 text-slate-300" />}
-                  <h3 className="text-lg font-semibold text-slate-900">{data.enrollments.length === 0 ? "No participants are registered for this shoot" : data.squads.length === 0 ? "No squads have been created" : "No participants are assigned to this squad"}</h3>
-                  <p className="mt-2 text-sm text-slate-500">{data.enrollments.length === 0 ? "Register a participant for this event and select this shoot before entering scores." : data.squads.length === 0 ? "Create a squad and assign the registered participants before entering scores." : "Assign at least one registered participant to the selected squad, then return here and refresh."}</p>
-                  <div className="mt-5 flex flex-wrap justify-center gap-3">
-                    {data.enrollments.length === 0 ? <Link to="/registration"><Button><ClipboardList className="h-4 w-4" />Open Registration</Button></Link> : <Link to="/squads"><Button><Users className="h-4 w-4" />Open Squadding</Button></Link>}
-                    <Button variant="outline" onClick={() => void loadShoot()}><RefreshCw className="h-4 w-4" />Refresh</Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[980px] border-collapse text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="sticky left-0 z-10 min-w-60 border-r bg-slate-50 px-4 py-3">Participant</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Class</th><th className="px-3 py-3">Squad #</th><th className="px-3 py-3">Post</th>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => <th key={i} className="px-2 py-3 text-center">R{i + 1}</th>)}<th className="px-3 py-3 text-center">Total</th>{data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-1"><span>{round.label || `SO${round.round_number}`}</span><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete shoot-off round" onClick={() => void removeShootOff(round)}><Trash2 className="h-3.5 w-3.5" /></button></div></th>)}</tr></thead><tbody>{squadMembers.map((member) => { const participant = participantFor(member); const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0); return <tr key={member.id} className="border-t hover:bg-slate-50/60"><td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.athlete?.cyssa_number ? `CYSSA ${participant.athlete.cyssa_number}` : "No CYSSA number"}</div></td><td className="px-3 py-3">{participant.team?.name || "—"}</td><td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td><td className="px-3 py-3">{selectedSquad?.squad_number || "—"}</td><td className="px-3 py-3">{member.position_label || `Post ${member.position}`}</td>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => { const round = i + 1; const key = `${member.id}:${round}`; return <td key={round} className="px-2 py-2"><div className="relative"><input ref={(node) => { inputRefs.current[key] = node }} inputMode="numeric" className={`h-10 w-16 rounded-lg border px-2 text-center text-base font-semibold focus:border-slate-900 focus:ring-2 focus:ring-slate-200 ${requestedMemberId === member.id ? "ring-2 ring-emerald-400" : ""}`} value={scoreValue(member.id, round)} onChange={(e) => setDrafts((current) => ({ ...current, [key]: e.target.value.replace(/[^0-9]/g, "") }))} onBlur={() => void commitRound(member.id, round)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitRound(member.id, round, true) } }} maxLength={3} />{savingKey === key ? <Save className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-slate-500" /> : null}</div></td> })}<td className="px-3 py-3 text-center text-lg font-bold">{total}</td>{data.shootOffRounds.map((round) => { const current = shootOffScoreMap.get(`${member.id}:${round.id}`); return <td key={round.id} className="px-2 py-2"><input ref={(node) => { inputRefs.current[`so:${member.id}:${round.id}`] = node }} inputMode="numeric" defaultValue={current ?? ""} className={`h-10 w-16 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-base font-semibold ${requestedMemberId === member.id ? "ring-2 ring-emerald-400" : ""}`} onBlur={(e) => void commitShootOff(member.id, round, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} /></td> })}</tr> })}</tbody></table></div>
-            )}
-          </section>
-          <p className="text-xs text-slate-500">Scores save automatically when you press Enter or leave a field. Pressing Enter advances from R1 to R2, then through the remaining rounds.</p>
-        </div>
-      </PageContainer>
-    </div>
-  )
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={()=>void save("draft")} disabled={saving || locked}><Save className="h-4 w-4" />Save Draft</Button>
+        <Button onClick={()=>void save("finalized")} disabled={saving || locked || stations.length===0}>{saving?<Loader2 className="h-4 w-4 animate-spin"/>:<CheckCircle2 className="h-4 w-4"/>}Finalize Scorecard</Button>
+      </div>
+    </>}
+  </div></PageContainer>
 }
 
-function Stat({ icon: Icon, label, value }: { icon: typeof Trophy; label: string; value: string | number }) {
-  return <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm"><div className="rounded-lg bg-slate-100 p-2"><Icon className="h-5 w-5" /></div><div><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="text-xl font-bold">{value}</p></div></div>
-}
+function Select(props:{label:string;value:string;setValue:(value:string)=>void;options:Array<{value:string;label:string}>}){return <label><span className="text-sm font-semibold">{props.label}</span><select value={props.value} onChange={(e)=>props.setValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3"><option value="">Select…</option>{props.options.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+function Field(props:{label:string;value:string;setValue:(value:string)=>void;disabled:boolean}){return <label><span className="text-sm font-semibold">{props.label}</span><input disabled={props.disabled} value={props.value} onChange={(e)=>props.setValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border px-3" /></label>}
+function Summary(props:{label:string;value:string;detail:string}){return <div className="rounded-2xl border bg-white p-4 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{props.label}</p><p className="mt-1 text-xl font-black">{props.value}</p><p className="mt-1 text-xs text-slate-500">{props.detail}</p></div>}

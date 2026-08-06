@@ -116,3 +116,23 @@ export type EventWorkspaceData = {
   teams: TeamRecord[]
   classes: ClassRecord[]
 }
+
+export type DigitalScorecardStatus = "draft" | "finalized"
+
+export type DigitalScorecardRecord = {
+  id: string
+  organization_id: string
+  event_id: string
+  shoot_id: string
+  squad_member_id: string
+  course_id: string
+  status: DigitalScorecardStatus
+  malfunction_count: number
+  verified_by_1: string | null
+  verified_by_2: string | null
+  entered_by_name: string | null
+  notes: string | null
+  total_score: number
+  total_targets: number
+  finalized_at: string | null
+}

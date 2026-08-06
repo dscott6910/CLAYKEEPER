@@ -345,6 +345,15 @@ function App() {
                 />
 
                 <Route
+                  path="events/:eventId/live-scoring"
+                  element={
+                    <LazyRoute>
+                      <LiveScoringPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
                   path="events/:eventId/scoring"
                   element={
                     <LazyRoute>

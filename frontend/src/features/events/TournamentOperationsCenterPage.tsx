@@ -236,15 +236,15 @@ export function TournamentOperationsCenterPage() {
         key: "scoring",
         title: "Live Scoring",
         description: "Enable score entry and monitor progress.",
-        detail: `${data.scoringEnabledShoots} of ${data.shoots} shoots have live scoring enabled.`,
+        detail: `${data.scorecardsFinalized} finalized · ${data.scorecardsStarted} started`,
         status:
-          data.scoringEnabledShoots > 0
+          data.scorecardsFinalized > 0
             ? "ready"
-            : data.shoots > 0
+            : data.scorecardsStarted > 0
               ? "needs_attention"
               : "not_started",
-        href: "/scoring",
-        action: "Open Live Scoring",
+        href: `/events/${eventId}/live-scoring`,
+        action: "Open Digital Scoring",
         icon: Flag,
       },
       {

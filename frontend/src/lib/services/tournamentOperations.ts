@@ -35,6 +35,8 @@ export type OperationsSnapshot = {
   assignedMembers: number
   unassignedEnrollments: number
   collected: number
+  scorecardsStarted: number
+  scorecardsFinalized: number
 }
 
 function throwIfError(error: { message?: string } | null) {
@@ -60,7 +62,7 @@ export async function loadTournamentOperations(
   throwIfError(eventResult.error)
   const event = eventResult.data as OperationsEvent
 
-  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult] =
+  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult, scorecardsResult] =
     await Promise.all([
       supabase
         .from("shoots")
@@ -85,6 +87,11 @@ export async function loadTournamentOperations(
         .eq("organization_id", event.organization_id)
         .eq("event_id", eventId)
         .eq("status", "registered"),
+      supabase
+        .from("digital_scorecards")
+        .select("id,status")
+        .eq("organization_id", event.organization_id)
+        .eq("event_id", eventId),
     ])
 
   for (const result of [
@@ -92,6 +99,7 @@ export async function loadTournamentOperations(
     registrationsResult,
     coursesResult,
     enrollmentsResult,
+    scorecardsResult,
   ]) {
     throwIfError(result.error)
   }
@@ -176,6 +184,8 @@ export async function loadTournamentOperations(
     unassignedEnrollments: enrollments.filter(
       (row) => !assignedEnrollmentIds.has(row.id),
     ).length,
+    scorecardsStarted: (scorecardsResult.data ?? []).length,
+    scorecardsFinalized: (scorecardsResult.data ?? []).filter((row) => row.status === "finalized").length,
     collected: activeRegistrations.reduce(
       (total, row) => total + numeric(row.amount_paid),
       0,
