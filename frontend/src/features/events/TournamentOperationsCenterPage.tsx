@@ -12,6 +12,7 @@ import {
   Globe2,
   Import,
   Loader2,
+  MonitorUp,
   Printer,
   RefreshCw,
   Route,
@@ -407,10 +408,16 @@ export function TournamentOperationsCenterPage() {
               </p>
             </div>
 
-            <Button variant="outline" onClick={() => void load()}>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/events/${eventId}/director`} className="inline-flex min-h-10 items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                  <MonitorUp className="h-4 w-4" />
+                  Director Dashboard
+                </Link>
+              <Button variant="outline" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
               Refresh Status
             </Button>
+            </div>
           </div>
 
           <div className="mt-6">

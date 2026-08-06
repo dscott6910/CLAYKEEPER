@@ -130,6 +130,12 @@ const CheckInCenterPage = lazy(() =>
   })),
 )
 
+const DirectorDashboardPage = lazy(() =>
+  import("@/features/events/DirectorDashboardPage").then((module) => ({
+    default: module.DirectorDashboardPage,
+  })),
+)
+
 const TournamentOperationsCenterPage = lazy(() =>
   import("@/features/events/TournamentOperationsCenterPage").then(
     (module) => ({
@@ -328,6 +334,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <CheckInCenterPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/director"
+                  element={
+                    <LazyRoute>
+                      <DirectorDashboardPage />
                     </LazyRoute>
                   }
                 />
