@@ -41,6 +41,8 @@ export type OperationsSnapshot = {
   scoringCompletionPercent: number
   lastScoreAt: string | null
   awardsStatus: "provisional" | "approved" | "published" | null
+  publicPortalOpen: boolean
+  publicLiveScores: boolean
 }
 
 function throwIfError(error: { message?: string } | null) {
@@ -66,7 +68,7 @@ export async function loadTournamentOperations(
   throwIfError(eventResult.error)
   const event = eventResult.data as OperationsEvent
 
-  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult, scorecardsResult, awardsResult] =
+  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult, scorecardsResult, awardsResult, publicSettingsResult] =
     await Promise.all([
       supabase
         .from("shoots")
@@ -103,6 +105,12 @@ export async function loadTournamentOperations(
         .eq("event_id", eventId)
         .order("updated_at", { ascending: false })
         .limit(1),
+      supabase
+        .from("public_event_settings")
+        .select("is_public,show_live_scores")
+        .eq("organization_id", event.organization_id)
+        .eq("event_id", eventId)
+        .maybeSingle(),
     ])
 
   for (const result of [
@@ -112,6 +120,7 @@ export async function loadTournamentOperations(
     enrollmentsResult,
     scorecardsResult,
     awardsResult,
+    publicSettingsResult,
   ]) {
     throwIfError(result.error)
   }
@@ -208,6 +217,8 @@ export async function loadTournamentOperations(
       .sort()
       .at(-1) ?? null,
     awardsStatus: ((awardsResult.data ?? [])[0]?.status as OperationsSnapshot["awardsStatus"]) ?? null,
+    publicPortalOpen: Boolean(publicSettingsResult.data?.is_public),
+    publicLiveScores: Boolean(publicSettingsResult.data?.show_live_scores),
     collected: activeRegistrations.reduce(
       (total, row) => total + numeric(row.amount_paid),
       0,

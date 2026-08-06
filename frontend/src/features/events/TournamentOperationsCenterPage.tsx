@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   FileText,
   Flag,
+  Globe2,
   Import,
   Loader2,
   Printer,
@@ -262,6 +263,20 @@ export function TournamentOperationsCenterPage() {
         href: `/events/${eventId}/leaderboard`,
         action: "Open Leaderboard",
         icon: Trophy,
+      },
+      {
+        key: "public",
+        title: "Public Spectator Portal",
+        description: "Share live standings, squads, and published awards with families and spectators.",
+        detail: data.publicPortalOpen
+          ? data.publicLiveScores
+            ? "Public page is open with live scores."
+            : "Public page is open; live scores are hidden."
+          : "Public page is currently closed.",
+        status: data.publicPortalOpen ? "ready" : "not_started",
+        href: `/events/${eventId}/public`,
+        action: "Manage Public Page",
+        icon: Globe2,
       },
       {
         key: "scanning",
