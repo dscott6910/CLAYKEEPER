@@ -82,6 +82,12 @@ const LeaderboardPage = lazy(() =>
   })),
 )
 
+const LiveScoringEventSelectorPage = lazy(() =>
+  import("@/features/scoring/LiveScoringEventSelectorPage").then((module) => ({
+    default: module.LiveScoringEventSelectorPage,
+  })),
+)
+
 const LiveScoringPage = lazy(() =>
   import("@/features/scoring/LiveScoringPage").then((module) => ({
     default: module.LiveScoringPage,
@@ -402,7 +408,7 @@ function App() {
                   path="scoring"
                   element={
                     <LazyRoute>
-                      <LiveScoringPage />
+                      <LiveScoringEventSelectorPage />
                     </LazyRoute>
                   }
                 />
