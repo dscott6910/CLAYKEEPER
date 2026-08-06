@@ -37,6 +37,9 @@ export type OperationsSnapshot = {
   collected: number
   scorecardsStarted: number
   scorecardsFinalized: number
+  scorecardsMissing: number
+  scoringCompletionPercent: number
+  lastScoreAt: string | null
 }
 
 function throwIfError(error: { message?: string } | null) {
@@ -89,7 +92,7 @@ export async function loadTournamentOperations(
         .eq("status", "registered"),
       supabase
         .from("digital_scorecards")
-        .select("id,status")
+        .select("id,status,updated_at")
         .eq("organization_id", event.organization_id)
         .eq("event_id", eventId),
     ])
@@ -186,6 +189,15 @@ export async function loadTournamentOperations(
     ).length,
     scorecardsStarted: (scorecardsResult.data ?? []).length,
     scorecardsFinalized: (scorecardsResult.data ?? []).filter((row) => row.status === "finalized").length,
+    scorecardsMissing: Math.max(0, members.length - (scorecardsResult.data ?? []).length),
+    scoringCompletionPercent: members.length > 0
+      ? Math.round(((scorecardsResult.data ?? []).filter((row) => row.status === "finalized").length / members.length) * 100)
+      : 0,
+    lastScoreAt: (scorecardsResult.data ?? [])
+      .map((row) => row.updated_at as string | null)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null,
     collected: activeRegistrations.reduce(
       (total, row) => total + numeric(row.amount_paid),
       0,

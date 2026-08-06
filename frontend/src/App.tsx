@@ -360,6 +360,15 @@ function App() {
                 />
 
                 <Route
+                  path="events/:eventId/leaderboard"
+                  element={
+                    <LazyRoute>
+                      <LeaderboardPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
                   path="events/:eventId/scoring"
                   element={
                     <LazyRoute>

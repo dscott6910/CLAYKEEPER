@@ -16,6 +16,7 @@ import {
   Route,
   ScanLine,
   Target,
+  Trophy,
   Users,
   WalletCards,
   type LucideIcon,
@@ -236,7 +237,7 @@ export function TournamentOperationsCenterPage() {
         key: "scoring",
         title: "Live Scoring",
         description: "Enable score entry and monitor progress.",
-        detail: `${data.scorecardsFinalized} finalized · ${data.scorecardsStarted} started`,
+        detail: `${data.scorecardsFinalized} finalized · ${data.scorecardsStarted - data.scorecardsFinalized} drafts · ${data.scorecardsMissing} missing`,
         status:
           data.scorecardsFinalized > 0
             ? "ready"
@@ -246,6 +247,21 @@ export function TournamentOperationsCenterPage() {
         href: `/events/${eventId}/live-scoring`,
         action: "Open Digital Scoring",
         icon: Flag,
+      },
+      {
+        key: "leaderboard",
+        title: "Live Leaderboard",
+        description: "Monitor standings, squad progress, ties, and missing scorecards.",
+        detail: `${data.scoringCompletionPercent}% complete · ${data.scorecardsMissing} missing`,
+        status:
+          data.scorecardsFinalized > 0
+            ? data.scorecardsMissing > 0
+              ? "needs_attention"
+              : "ready"
+            : "not_started",
+        href: `/events/${eventId}/leaderboard`,
+        action: "Open Leaderboard",
+        icon: Trophy,
       },
       {
         key: "scanning",
