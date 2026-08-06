@@ -277,9 +277,23 @@ export function TournamentOperationsCenterPage() {
         key: "awards",
         title: "Awards",
         description: "Review individual, team, class, and HOA results.",
-        detail: "Awards become final after scoring is complete.",
-        status: "not_started",
-        href: "/awards",
+        detail:
+          data.awardsStatus === "published"
+            ? "Official awards have been published."
+            : data.awardsStatus === "approved"
+              ? "Awards are approved and ready to publish."
+              : data.awardsStatus === "provisional"
+                ? "Provisional awards have been saved."
+                : "Awards become available as finalized scores arrive.",
+        status:
+          data.awardsStatus === "published"
+            ? "complete"
+            : data.awardsStatus === "approved"
+              ? "ready"
+              : data.awardsStatus === "provisional" || data.scorecardsFinalized > 0
+                ? "needs_attention"
+                : "not_started",
+        href: `/events/${eventId}/awards`,
         action: "Open Awards",
         icon: Award,
       },

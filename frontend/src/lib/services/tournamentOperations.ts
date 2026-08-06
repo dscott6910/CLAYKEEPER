@@ -40,6 +40,7 @@ export type OperationsSnapshot = {
   scorecardsMissing: number
   scoringCompletionPercent: number
   lastScoreAt: string | null
+  awardsStatus: "provisional" | "approved" | "published" | null
 }
 
 function throwIfError(error: { message?: string } | null) {
@@ -65,7 +66,7 @@ export async function loadTournamentOperations(
   throwIfError(eventResult.error)
   const event = eventResult.data as OperationsEvent
 
-  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult, scorecardsResult] =
+  const [shootsResult, registrationsResult, coursesResult, enrollmentsResult, scorecardsResult, awardsResult] =
     await Promise.all([
       supabase
         .from("shoots")
@@ -95,6 +96,13 @@ export async function loadTournamentOperations(
         .select("id,status,updated_at")
         .eq("organization_id", event.organization_id)
         .eq("event_id", eventId),
+      supabase
+        .from("award_publications")
+        .select("status,updated_at")
+        .eq("organization_id", event.organization_id)
+        .eq("event_id", eventId)
+        .order("updated_at", { ascending: false })
+        .limit(1),
     ])
 
   for (const result of [
@@ -103,6 +111,7 @@ export async function loadTournamentOperations(
     coursesResult,
     enrollmentsResult,
     scorecardsResult,
+    awardsResult,
   ]) {
     throwIfError(result.error)
   }
@@ -198,6 +207,7 @@ export async function loadTournamentOperations(
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1) ?? null,
+    awardsStatus: ((awardsResult.data ?? [])[0]?.status as OperationsSnapshot["awardsStatus"]) ?? null,
     collected: activeRegistrations.reduce(
       (total, row) => total + numeric(row.amount_paid),
       0,

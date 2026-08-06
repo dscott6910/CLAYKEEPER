@@ -450,6 +450,15 @@ function App() {
                 />
 
                 <Route
+                  path="events/:eventId/awards"
+                  element={
+                    <LazyRoute>
+                      <AwardsPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
                   path="awards"
                   element={
                     <LazyRoute>

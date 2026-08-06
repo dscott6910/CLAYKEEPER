@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
 
-export type AwardPublicationStatus = "draft" | "published" | "locked"
+export type AwardPublicationStatus = "provisional" | "approved" | "published"
 
 export type AwardPublication = {
   id: string
@@ -10,6 +10,7 @@ export type AwardPublication = {
   status: AwardPublicationStatus
   settings: Record<string, unknown>
   published_at: string | null
+  approved_at: string | null
   locked_at: string | null
 }
 
@@ -29,7 +30,7 @@ function throwIfError(error: { message?: string } | null) {
 
 export async function loadAwardAdministration(shootId: string) {
   const [publicationResult, overridesResult] = await Promise.all([
-    supabase.from("award_publications").select("id, organization_id, event_id, shoot_id, status, settings, published_at, locked_at").eq("shoot_id", shootId).maybeSingle(),
+    supabase.from("award_publications").select("id, organization_id, event_id, shoot_id, status, settings, approved_at, published_at, locked_at").eq("shoot_id", shootId).maybeSingle(),
     supabase.from("award_overrides").select("id, registration_shoot_id, award_group, award_key, placement, title, note").eq("shoot_id", shootId).order("award_group").order("award_key").order("placement"),
   ])
   throwIfError(publicationResult.error)
@@ -54,10 +55,11 @@ export async function saveAwardPublication(input: {
     shoot_id: input.shootId,
     status: input.status,
     settings: input.settings,
-    published_at: input.status === "published" || input.status === "locked" ? now : null,
-    locked_at: input.status === "locked" ? now : null,
+    approved_at: input.status === "approved" || input.status === "published" ? now : null,
+    published_at: input.status === "published" ? now : null,
+    locked_at: null,
   }
-  const { data, error } = await supabase.from("award_publications").upsert(payload, { onConflict: "shoot_id" }).select("id, organization_id, event_id, shoot_id, status, settings, published_at, locked_at").single()
+  const { data, error } = await supabase.from("award_publications").upsert(payload, { onConflict: "shoot_id" }).select("id, organization_id, event_id, shoot_id, status, settings, approved_at, published_at, locked_at").single()
   throwIfError(error)
   return data as AwardPublication
 }

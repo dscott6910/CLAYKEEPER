@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Lock, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
+import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -11,8 +11,10 @@ import {
   calculateSeriesTeamPoints,
   calculateSquads,
   calculateStateTeams,
+  CYSSA_CLASSES,
   classAwardGroups,
   normalizeDiscipline,
+  rankIndividuals,
   type AwardParticipant,
   type DisciplineKey,
   type MeetType,
@@ -21,7 +23,7 @@ import {
 import { loadReportBaseData, loadShootReportData, type ReportAthlete, type ReportEvent, type ReportShoot } from "@/lib/services/reports"
 
 type ReportPayload = Awaited<ReturnType<typeof loadShootReportData>>
-type TabKey = "individual" | "squad" | "stateTeam" | "seriesTeam"
+type TabKey = "overall" | "individual" | "squad" | "stateTeam" | "seriesTeam"
 
 function participantName(athlete?: ReportAthlete) {
   if (!athlete) return "Unknown participant"
@@ -74,6 +76,7 @@ function disciplineLabel(value: DisciplineKey) {
 
 export function AwardsPage() {
   const navigate = useNavigate()
+  const { eventId: routeEventId } = useParams()
   const brand = useBrandSettings()
   const [organizationId, setOrganizationId] = useState("")
   const [events, setEvents] = useState<ReportEvent[]>([])
@@ -84,7 +87,9 @@ export function AwardsPage() {
   const [eventReports, setEventReports] = useState<SeriesShootTeam[]>([])
   const [publication, setPublication] = useState<AwardPublication | null>(null)
   const [meetType, setMeetType] = useState<MeetType>("series")
-  const [tab, setTab] = useState<TabKey>("individual")
+  const [overallPlaces, setOverallPlaces] = useState(2)
+  const [classPlaces, setClassPlaces] = useState(3)
+  const [tab, setTab] = useState<TabKey>("overall")
   const [tvMode, setTvMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -94,7 +99,7 @@ export function AwardsPage() {
   const selectedEvent = events.find((event) => event.id === eventId)
   const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
   const discipline = normalizeDiscipline(selectedShoot?.discipline)
-  const locked = publication?.status === "locked"
+  const locked = publication?.status === "published"
 
   useEffect(() => {
     void (async () => {
@@ -104,7 +109,10 @@ export function AwardsPage() {
         setOrganizationId(base.organizationId)
         setEvents(base.events)
         setShoots(base.shoots)
-        const firstEvent = base.events[0]?.id || ""
+        const firstEvent =
+          (routeEventId && base.events.some((event) => event.id === routeEventId)
+            ? routeEventId
+            : base.events[0]?.id) || ""
         setEventId(firstEvent)
         setShootId(base.shoots.find((shoot) => shoot.event_id === firstEvent)?.id || "")
       } catch (caught) {
@@ -113,7 +121,7 @@ export function AwardsPage() {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [routeEventId])
 
   async function refresh() {
     if (!organizationId || !eventId || !shootId) return
@@ -127,8 +135,14 @@ export function AwardsPage() {
       ])
       setReport(nextReport)
       setPublication(admin.publication)
-      const settings = admin.publication?.settings as { meetType?: MeetType } | undefined
+      const settings = admin.publication?.settings as {
+        meetType?: MeetType
+        overallPlaces?: number
+        classPlaces?: number
+      } | undefined
       if (settings?.meetType) setMeetType(settings.meetType)
+      if (settings?.overallPlaces) setOverallPlaces(settings.overallPlaces)
+      if (settings?.classPlaces) setClassPlaces(settings.classPlaces)
 
       const allReports = await Promise.all(eventShoots.map(async (shoot) => ({
         shootId: shoot.id,
@@ -146,7 +160,20 @@ export function AwardsPage() {
   useEffect(() => { void refresh() }, [organizationId, eventId, shootId])
 
   const rows = useMemo(() => report ? buildRows(report, selectedShoot) : [], [report, selectedShoot])
-  const individualGroups = useMemo(() => classAwardGroups(rows, meetType), [rows, meetType])
+  const overallRows = useMemo(
+    () => rankIndividuals(rows, overallPlaces),
+    [rows, overallPlaces],
+  )
+  const individualGroups = useMemo(
+    () => CYSSA_CLASSES.map((classCode) => ({
+      classCode,
+      rows: rankIndividuals(
+        rows.filter((row) => row.classCode.toUpperCase() === classCode),
+        classPlaces,
+      ),
+    })),
+    [rows, classPlaces],
+  )
   const squadResults = useMemo(() => calculateSquads(rows, discipline), [rows, discipline])
   const stateTeams = useMemo(() => calculateStateTeams(rows, discipline), [rows, discipline])
   const seriesTeams = useMemo(() => calculateSeriesTeamPoints(eventReports, discipline), [eventReports, discipline])
@@ -201,10 +228,10 @@ export function AwardsPage() {
       tab: "seriesTeam",
     }))
 
-    if (publication?.status !== "published" && publication?.status !== "locked") issues.push({
+    if (publication?.status !== "published") issues.push({
       id: "publication",
       title: "Awards have not been published",
-      detail: "After all score and tie issues are resolved, use Publish. Use Lock only after the awards have been verified and are ready to announce.",
+      detail: "After all score and tie issues are resolved, approve the awards. Publish only after the official results have been verified.",
       action: "Use Publish above",
     })
 
@@ -215,7 +242,7 @@ export function AwardsPage() {
     { label: "Participant results are available", ready: rows.length > 0 },
     { label: "All participant scoring is complete", ready: rows.length > 0 && incompleteCount === 0 },
     { label: "No unresolved award ties remain", ready: unresolvedTieCount === 0 },
-    { label: "Awards are published or locked", ready: publication?.status === "published" || publication?.status === "locked" },
+    { label: "Awards are published", ready: publication?.status === "published" },
   ]
   const readyToPublish = readinessChecks.slice(0, 4).every((check) => check.ready)
   const fullyReady = readinessChecks.every((check) => check.ready)
@@ -233,12 +260,28 @@ export function AwardsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  async function saveStatus(status: "draft" | "published" | "locked") {
+  async function saveStatus(status: "provisional" | "approved" | "published") {
     if (!organizationId || !eventId || !shootId) return
+    if (status !== "provisional" && (incompleteCount > 0 || unresolvedTieCount > 0)) {
+      setError("Complete all scores and resolve ties before approving or publishing awards.")
+      return
+    }
     try {
-      const saved = await saveAwardPublication({ organizationId, eventId, shootId, status, settings: { meetType, discipline } })
+      const saved = await saveAwardPublication({
+        organizationId,
+        eventId,
+        shootId,
+        status,
+        settings: { meetType, discipline, overallPlaces, classPlaces },
+      })
       setPublication(saved)
-      setMessage(status === "locked" ? "Awards locked." : status === "published" ? "Awards published." : "Draft saved.")
+      setMessage(
+        status === "published"
+          ? "Awards published."
+          : status === "approved"
+            ? "Awards approved."
+            : "Provisional awards saved.",
+      )
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save awards.")
     }
@@ -246,7 +289,10 @@ export function AwardsPage() {
 
   function exportCsv() {
     const lines: string[] = []
-    if (tab === "individual") {
+    if (tab === "overall") {
+      lines.push(["Place", "Participant", "Score", "Shoot Off", "Team", "Class", "Squad", "Tie Status"].map(csvValue).join(","))
+      overallRows.forEach((row) => lines.push([row.place, row.name, row.total, row.shootOffs.filter((score) => score >= 0).join("/"), row.team, row.classCode, row.squad, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
+    } else if (tab === "individual") {
       lines.push(["Category", "Place", "Participant", "Score", "Shoot Off", "Team", "Squad", "Tie Status"].map(csvValue).join(","))
       individualGroups.forEach((group) => group.rows.forEach((row) => lines.push([
         group.classCode, row.place, row.name, row.total, row.shootOffs.filter((score) => score >= 0).join("/"), row.team, row.squad, row.unresolvedTie ? "Unresolved" : "Resolved",
@@ -273,10 +319,10 @@ export function AwardsPage() {
       <PageContainer className={tvMode ? "max-w-none px-8 py-8" : ""}>
         <div className="space-y-6 awards-page">
           <section className={`awards-controls rounded-2xl border p-5 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
-            <div className="grid gap-4 xl:grid-cols-[1fr_1fr_220px_auto]">
-              <label className="text-sm font-medium">Event<select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={eventId} onChange={(event) => { const next = event.target.value; setEventId(next); setShootId(shoots.find((shoot) => shoot.event_id === next)?.id || "") }}>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label>
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr_180px_150px_150px_auto]">
+              <label className="text-sm font-medium">Event<select disabled={Boolean(routeEventId)} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={eventId} onChange={(event) => { const next = event.target.value; setEventId(next); setShootId(shoots.find((shoot) => shoot.event_id === next)?.id || "") }}>{events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}</select></label>
               <label className="text-sm font-medium">Shoot<select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={shootId} onChange={(event) => setShootId(event.target.value)}>{eventShoots.map((shoot) => <option key={shoot.id} value={shoot.id}>{shoot.name}</option>)}</select></label>
-              <label className="text-sm font-medium">Meet type<select disabled={locked} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={meetType} onChange={(event) => setMeetType(event.target.value as MeetType)}><option value="series">Series Shoot</option><option value="state">State Shoot</option></select></label>
+              <label className="text-sm font-medium">Meet type<select disabled={locked} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" value={meetType} onChange={(event) => setMeetType(event.target.value as MeetType)}><option value="series">Series Shoot</option><option value="state">State Shoot</option></select></label><label className="text-sm font-medium">Overall places<input disabled={locked} type="number" min={1} max={10} value={overallPlaces} onChange={(event) => setOverallPlaces(Math.min(10, Math.max(1, Number(event.target.value) || 1)))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" /></label><label className="text-sm font-medium">Class places<input disabled={locked} type="number" min={1} max={10} value={classPlaces} onChange={(event) => setClassPlaces(Math.min(10, Math.max(1, Number(event.target.value) || 1)))} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-slate-900" /></label>
               <div className="flex flex-wrap items-end gap-2"><Button variant="outline" onClick={() => void refresh()}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />CSV</Button><Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />Print</Button><Button onClick={() => setTvMode((value) => !value)}><Tv className="mr-2 h-4 w-4" />{tvMode ? "Exit TV" : "TV"}</Button></div>
             </div>
           </section>
@@ -285,7 +331,7 @@ export function AwardsPage() {
           {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">{message}</div>}
           {incompleteCount > 0 && <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><AlertTriangle className="mt-0.5 h-5 w-5" /><div><p className="font-semibold">{incompleteCount} participant{incompleteCount === 1 ? " has" : "s have"} incomplete scoring.</p><p className="text-sm">Incomplete participants are excluded from awards.</p></div></div>}
 
-          {!tvMode && <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Rule preset: {disciplineLabel(discipline)} · {meetType === "state" ? "State" : "Series"}</p><p className="text-sm text-slate-500">Series individual awards are top 3. State individual awards are top 5 for IA/IE/R and top 3 for JV/VR/YA. Shoot-off rounds break individual ties.</p></div><div className="flex gap-2"><Button variant="outline" disabled={locked} onClick={() => void saveStatus("draft")}><Save className="mr-2 h-4 w-4" />Save</Button><Button disabled={locked} onClick={() => void saveStatus("published")}><Trophy className="mr-2 h-4 w-4" />Publish</Button><Button variant="outline" disabled={locked} onClick={() => void saveStatus("locked")}><Lock className="mr-2 h-4 w-4" />Lock</Button></div></div><p className="mt-3 text-xs text-slate-500">Status: <strong className="capitalize">{publication?.status || "unsaved draft"}</strong></p></section>}
+          {!tvMode && <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold">Award workflow</p><p className="text-sm text-slate-500">Save provisional results, approve them after all ties are resolved, then publish the official award sheet.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={locked} onClick={() => void saveStatus("provisional")}><Save className="mr-2 h-4 w-4" />Save Provisional</Button><Button variant="outline" disabled={locked || incompleteCount > 0 || unresolvedTieCount > 0} onClick={() => void saveStatus("approved")}><FileCheck2 className="mr-2 h-4 w-4" />Approve</Button><Button disabled={locked || publication?.status !== "approved"} onClick={() => void saveStatus("published")}><Trophy className="mr-2 h-4 w-4" />Publish</Button></div></div><p className="mt-3 text-xs text-slate-500">Status: <strong className="capitalize">{publication?.status || "unsaved provisional"}</strong></p></section>}
 
           {!tvMode && <section className="awards-controls rounded-2xl border bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-5">
@@ -341,9 +387,10 @@ export function AwardsPage() {
             </div>
             <div className="mb-6"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
 
-            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['individual','Individual Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
+            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 
             {loading ? <div className="py-20 text-center text-slate-500">Calculating official awards…</div> : rows.length === 0 ? <div className="py-20 text-center"><Medal className="mx-auto h-12 w-12 text-slate-400" /><p className="mt-3 text-lg font-semibold">No results available</p></div> : <div className="space-y-5">
+              {(tvMode || tab === "overall") && <div className="grid gap-5"><IndividualCard classCode="Overall" rows={overallRows} /></div>}
               {(tvMode || tab === "individual") && <div className="grid gap-5 xl:grid-cols-2">{individualGroups.map((group) => <IndividualCard key={group.classCode} classCode={group.classCode} rows={group.rows} />)}</div>}
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team and category. The next shooter is displayed as the team tie-break score when available.`} />}
@@ -361,7 +408,7 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: number; la
 }
 
 function IndividualCard({ classCode, rows }: { classCode: string; rows: ReturnType<typeof classAwardGroups>[number]["rows"] }) {
-  return <div className="overflow-hidden rounded-2xl border"><div className="border-b bg-slate-50 px-5 py-4"><h2 className="font-bold">Class {classCode}</h2></div>{rows.length === 0 ? <p className="px-5 py-8 text-sm text-slate-500">No complete scores.</p> : <div className="divide-y">{rows.map((row) => <div key={row.enrollmentId} className="grid grid-cols-[54px_1fr_auto] items-center gap-4 px-5 py-4"><PlaceBadge place={row.place} /><div><p className="font-bold">{row.name}{row.unresolvedTie && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Tie unresolved</span>}</p><p className="text-xs text-slate-500">{row.team} · {row.squad}{row.shootOffs.some((score) => score >= 0) ? ` · Shoot-off ${row.shootOffs.filter((score) => score >= 0).join("/")}` : ""}</p></div><p className="text-2xl font-black">{row.total}</p></div>)}</div>}</div>
+  return <div className="overflow-hidden rounded-2xl border"><div className="border-b bg-slate-50 px-5 py-4"><h2 className="font-bold">{classCode === "Overall" ? "Overall Champion and Placements" : `Class ${classCode}`}</h2></div>{rows.length === 0 ? <p className="px-5 py-8 text-sm text-slate-500">No complete scores.</p> : <div className="divide-y">{rows.map((row) => <div key={row.enrollmentId} className="grid grid-cols-[54px_1fr_auto] items-center gap-4 px-5 py-4"><PlaceBadge place={row.place} /><div><p className="font-bold">{row.name}{row.unresolvedTie && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Tie unresolved</span>}</p><p className="text-xs text-slate-500">{row.team} · {row.squad}{row.shootOffs.some((score) => score >= 0) ? ` · Shoot-off ${row.shootOffs.filter((score) => score >= 0).join("/")}` : ""}</p></div><p className="text-2xl font-black">{row.total}</p></div>)}</div>}</div>
 }
 
 function PlaceBadge({ place }: { place: number }) {
