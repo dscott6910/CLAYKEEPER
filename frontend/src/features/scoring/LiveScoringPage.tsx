@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
@@ -33,6 +35,20 @@ function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
   const first =
     athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
   return `${first} ${athlete.last_name?.trim() || ""}`.trim()
+}
+
+type OfflineDraft = {
+  scores: Record<string, string>
+  malfunctions: number
+  verified1: string
+  verified2: string
+  enteredBy: string
+  notes: string
+  savedAt: string
+}
+
+function offlineDraftKey(eventId: string, memberId: string, courseId: string) {
+  return `claykeeper:scoring-draft:${eventId}:${memberId}:${courseId}`
 }
 
 function formatSavedTime(value: Date | null) {
@@ -62,6 +78,9 @@ export function LiveScoringPage() {
   const [error, setError] = useState("")
   const [dirty, setDirty] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [online, setOnline] = useState(() => navigator.onLine)
+  const [pendingSync, setPendingSync] = useState(false)
+  const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
 
   const load = useCallback(async () => {
@@ -92,6 +111,17 @@ export function LiveScoringPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const handleOnline = () => setOnline(true)
+    const handleOffline = () => setOnline(false)
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
 
   useEffect(() => {
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
@@ -174,8 +204,57 @@ export function LiveScoringPage() {
     setVerified2(scorecard?.verified_by_2 ?? "")
     setEnteredBy(scorecard?.entered_by_name ?? "")
     setNotes(scorecard?.notes ?? "")
+
+    const key = eventId && courseId
+      ? offlineDraftKey(eventId, memberId, courseId)
+      : ""
+    const stored = key ? window.localStorage.getItem(key) : null
+    if (stored && !locked) {
+      try {
+        const draft = JSON.parse(stored) as OfflineDraft
+        setScores((current) => ({ ...current, ...draft.scores }))
+        setMalfunctions(draft.malfunctions)
+        setVerified1(draft.verified1)
+        setVerified2(draft.verified2)
+        setEnteredBy(draft.enteredBy)
+        setNotes(draft.notes)
+        setLocalDraftSavedAt(new Date(draft.savedAt))
+        setPendingSync(true)
+        setDirty(true)
+        return
+      } catch {
+        window.localStorage.removeItem(key)
+      }
+    }
+
+    setPendingSync(false)
+    setLocalDraftSavedAt(null)
     setDirty(false)
-  }, [data, memberId, scorecard?.id, stations])
+  }, [courseId, data, eventId, locked, memberId, scorecard?.id, stations])
+
+  useEffect(() => {
+    if (!dirty || locked || !eventId || !memberId || !courseId) return
+
+    const draft: OfflineDraft = {
+      scores,
+      malfunctions,
+      verified1,
+      verified2,
+      enteredBy,
+      notes,
+      savedAt: new Date().toISOString(),
+    }
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(
+        offlineDraftKey(eventId, memberId, courseId),
+        JSON.stringify(draft),
+      )
+      setLocalDraftSavedAt(new Date(draft.savedAt))
+      setPendingSync(true)
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [courseId, dirty, enteredBy, eventId, locked, malfunctions, memberId, notes, scores, verified1, verified2])
 
   const participant = useMemo(() => {
     if (!data || !memberId) return null
@@ -279,7 +358,14 @@ export function LiveScoringPage() {
             })),
         })
 
+        if (eventId && memberId && courseId) {
+          window.localStorage.removeItem(
+            offlineDraftKey(eventId, memberId, courseId),
+          )
+        }
         setDirty(false)
+        setPendingSync(false)
+        setLocalDraftSavedAt(null)
         setLastSavedAt(new Date())
 
         if (!options.silent) {
@@ -293,6 +379,7 @@ export function LiveScoringPage() {
         await load()
         return true
       } catch (caught) {
+        setPendingSync(true)
         if (!options.silent) {
           toast.error(
             caught instanceof Error
@@ -327,14 +414,22 @@ export function LiveScoringPage() {
   )
 
   useEffect(() => {
-    if (!dirty || locked || saving || !memberId || !courseId) return
+    if (!dirty || locked || saving || !memberId || !courseId || !online) return
 
     const timer = window.setTimeout(() => {
       void save("draft", { silent: true })
     }, 5000)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, dirty, locked, memberId, save, saving])
+  }, [courseId, dirty, locked, memberId, online, save, saving])
+
+  useEffect(() => {
+    if (!online || !pendingSync || !dirty || locked || saving) return
+    const timer = window.setTimeout(() => {
+      void save("draft", { silent: true })
+    }, 750)
+    return () => window.clearTimeout(timer)
+  }, [dirty, locked, online, pendingSync, save, saving])
 
   function updateScore(stationId: string, value: string) {
     setScores((current) => ({
@@ -397,9 +492,13 @@ export function LiveScoringPage() {
 
   const saveStateLabel = saving
     ? "Saving…"
-    : dirty
-      ? "Unsaved changes"
-      : `Saved ${formatSavedTime(lastSavedAt)}`
+    : !online && pendingSync
+      ? `Saved on device ${formatSavedTime(localDraftSavedAt)}`
+      : pendingSync
+        ? "Pending sync"
+        : dirty
+          ? "Unsaved changes"
+          : `Saved ${formatSavedTime(lastSavedAt)}`
 
   return (
     <PageContainer>
@@ -425,6 +524,10 @@ export function LiveScoringPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${online ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}>
+                {online ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+                {online ? "Online" : "Offline · scores stay on this device"}
+              </div>
               <div
                 className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
                   saving
@@ -471,6 +574,22 @@ export function LiveScoringPage() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
+          </div>
+        ) : null}
+
+        {!online ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-start gap-3">
+              <WifiOff className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-bold">Connection lost — keep scoring.</p>
+                <p className="mt-1">Changes are being stored on this device and will automatically sync as a draft when the connection returns. Finalizing is disabled while offline.</p>
+              </div>
+            </div>
+          </div>
+        ) : pendingSync ? (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            Connection restored. ClayKeeper is synchronizing the locally saved scorecard.
           </div>
         ) : null}
 
@@ -896,7 +1015,7 @@ export function LiveScoringPage() {
               </Button>
               <Button
                 onClick={() => void save("finalized")}
-                disabled={saving || locked || stations.length === 0}
+                disabled={saving || locked || stations.length === 0 || !online}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -920,7 +1039,7 @@ export function LiveScoringPage() {
                 </Button>
                 <Button
                   onClick={() => void save("finalized")}
-                  disabled={saving || locked || stations.length === 0}
+                  disabled={saving || locked || stations.length === 0 || !online}
                   className="min-h-12"
                 >
                   {saving ? (
