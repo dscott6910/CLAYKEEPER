@@ -191,6 +191,48 @@ export function ReportsPage() {
   const totalFees = data.enrollments.reduce((sum, enrollment) => sum + Number(enrollment.total_fee || 0), 0)
   const totalPaid = data.registrations.reduce((sum, registration) => sum + Number(registration.amount_paid || 0), 0)
 
+  const performanceSummary = useMemo(() => {
+    const completed = standings.filter((row) => row.complete)
+    const scored = standings.filter((row) => row.enteredRounds > 0)
+    const totals = completed.map((row) => row.total)
+    const average = totals.length ? totals.reduce((sum, total) => sum + total, 0) / totals.length : 0
+    const high = totals.length ? Math.max(...totals) : 0
+    const low = totals.length ? Math.min(...totals) : 0
+    const completionRate = standings.length ? (completed.length / standings.length) * 100 : 0
+    const scoreEntryRate = expectedScoreCount ? (enteredScoreCount / expectedScoreCount) * 100 : 0
+    return { completed: completed.length, scored: scored.length, average, high, low, completionRate, scoreEntryRate }
+  }, [standings, enteredScoreCount, expectedScoreCount])
+
+  const classPerformance = useMemo(() => {
+    return data.classes.map((cls) => {
+      const rows = standings.filter((row) => row.classCode === cls.code)
+      const completed = rows.filter((row) => row.complete)
+      const average = completed.length ? completed.reduce((sum, row) => sum + row.total, 0) / completed.length : 0
+      return {
+        id: cls.id,
+        code: cls.code,
+        name: cls.display_name,
+        participants: rows.length,
+        completed: completed.length,
+        completionRate: rows.length ? (completed.length / rows.length) * 100 : 0,
+        average,
+        high: completed.length ? Math.max(...completed.map((row) => row.total)) : null,
+      }
+    }).filter((row) => row.participants > 0)
+  }, [data.classes, standings])
+
+  const squadPerformance = useMemo(() => {
+    const grouped = new Map<string, StandingRow[]>()
+    for (const row of standings) {
+      grouped.set(row.squadLabel, [...(grouped.get(row.squadLabel) || []), row])
+    }
+    return Array.from(grouped.entries()).map(([squadLabel, rows]) => {
+      const completed = rows.filter((row) => row.complete)
+      const average = completed.length ? completed.reduce((sum, row) => sum + row.total, 0) / completed.length : 0
+      return { squadLabel, participants: rows.length, completed: completed.length, average, high: completed.length ? Math.max(...completed.map((row) => row.total)) : null }
+    }).sort((a, b) => b.average - a.average || a.squadLabel.localeCompare(b.squadLabel))
+  }, [standings])
+
   const teamStandings = useMemo(() => {
     const grouped = new Map<string, StandingRow[]>()
     for (const row of standings) {
@@ -261,6 +303,31 @@ export function ReportsPage() {
             <Stat icon={DollarSign} label="Amount paid" value={money(totalPaid)} />
           </section>
 
+          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold"><BarChart3 className="h-5 w-5" />Tournament Performance</h2>
+              <p className="text-sm text-slate-500">Live performance metrics use completed scorecards for score averages and include incomplete data separately.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Completion" value={`${performanceSummary.completionRate.toFixed(0)}%`} detail={`${performanceSummary.completed} of ${standings.length} scorecards`} />
+              <Metric label="Score entry" value={`${performanceSummary.scoreEntryRate.toFixed(0)}%`} detail={`${enteredScoreCount} of ${expectedScoreCount} rounds`} />
+              <Metric label="Average total" value={performanceSummary.completed ? performanceSummary.average.toFixed(1) : "—"} detail="Completed scorecards only" />
+              <Metric label="High / Low" value={performanceSummary.completed ? `${performanceSummary.high} / ${performanceSummary.low}` : "—"} detail={`${performanceSummary.scored} participants with scoring activity`} />
+            </div>
+            {performanceSummary.completed < standings.length ? <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Provisional analytics:</strong> {standings.length - performanceSummary.completed} scorecard{standings.length - performanceSummary.completed === 1 ? " is" : "s are"} incomplete. Averages and high/low totals exclude incomplete scorecards.</span></div> : null}
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+              <header className="border-b px-5 py-4"><h2 className="flex items-center gap-2 text-lg font-semibold"><Medal className="h-5 w-5" />Class Performance</h2><p className="text-sm text-slate-500">Participation, completion, and completed-score averages by class.</p></header>
+              {classPerformance.length ? <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Class</th><th className="px-3 py-3 text-center">Athletes</th><th className="px-3 py-3 text-center">Complete</th><th className="px-3 py-3 text-center">Avg</th><th className="px-3 py-3 text-center">High</th></tr></thead><tbody>{classPerformance.map((row) => <tr key={row.id} className="border-t"><td className="px-4 py-3"><div className="font-semibold">{row.name}</div><div className="text-xs text-slate-500">{row.code}</div></td><td className="px-3 py-3 text-center">{row.participants}</td><td className="px-3 py-3 text-center"><span className="font-semibold">{row.completed}/{row.participants}</span><div className="text-xs text-slate-500">{row.completionRate.toFixed(0)}%</div></td><td className="px-3 py-3 text-center font-semibold">{row.completed ? row.average.toFixed(1) : "—"}</td><td className="px-3 py-3 text-center font-semibold">{row.high ?? "—"}</td></tr>)}</tbody></table></div> : <div className="p-8 text-center text-sm text-slate-500">No class participation is available for this shoot.</div>}
+            </div>
+            <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+              <header className="border-b px-5 py-4"><h2 className="flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5" />Squad Performance</h2><p className="text-sm text-slate-500">Current squad completion and completed-score performance.</p></header>
+              {squadPerformance.length ? <div className="divide-y">{squadPerformance.slice(0, 12).map((row) => <div key={row.squadLabel} className="flex items-center justify-between gap-4 px-5 py-3"><div><p className="font-semibold">{row.squadLabel}</p><p className="text-sm text-slate-500">{row.completed}/{row.participants} complete</p></div><div className="text-right"><p className="font-bold">{row.completed ? row.average.toFixed(1) : "—"} avg</p><p className="text-xs text-slate-500">High {row.high ?? "—"}</p></div></div>)}</div> : <div className="p-8 text-center text-sm text-slate-500">Assign participants to squads to calculate squad performance.</div>}
+            </div>
+          </section>
+
           <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
               <div><h2 className="text-lg font-semibold">Individual Standings</h2><p className="text-sm text-slate-500">{selectedShoot ? `${selectedShoot.name} · ${selectedShoot.targets_per_round} targets per round · ${selectedShoot.number_of_rounds} rounds` : "Select a shoot"}</p></div>
@@ -287,4 +354,8 @@ export function ReportsPage() {
 
 function Stat({ icon: Icon, label, value }: { icon: typeof Trophy; label: string; value: string | number }) {
   return <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm"><div className="rounded-lg bg-slate-100 p-2"><Icon className="h-5 w-5" /></div><div><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="text-xl font-bold">{value}</p></div></div>
+}
+
+function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="rounded-xl border bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>
 }
