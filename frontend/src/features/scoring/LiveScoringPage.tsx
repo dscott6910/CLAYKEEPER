@@ -100,6 +100,13 @@ export function LiveScoringPage() {
   const [pendingSync, setPendingSync] = useState(false)
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
+  const [lastSaveError, setLastSaveError] = useState("")
+  const [lastServerConfirmation, setLastServerConfirmation] = useState<{
+    at: Date
+    status: "draft" | "finalized"
+    score: number
+    targets: number
+  } | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
 
@@ -445,7 +452,15 @@ export function LiveScoringPage() {
         setDirty(false)
         setPendingSync(false)
         setLocalDraftSavedAt(null)
-        setLastSavedAt(new Date())
+        const confirmedAt = new Date()
+        setLastSavedAt(confirmedAt)
+        setLastSaveError("")
+        setLastServerConfirmation({
+          at: confirmedAt,
+          status,
+          score: totalScore,
+          targets: totalTargets,
+        })
 
         if (!options.silent) {
           toast.success(
@@ -460,6 +475,7 @@ export function LiveScoringPage() {
       } catch (caught) {
         if (isDigitalScorecardConflictError(caught)) {
           setPendingSync(false)
+          setLastSaveError("A newer server scorecard was found. Choose which version to keep before continuing.")
           toast.warning(
             "A newer server scorecard was found. ClayKeeper protected your device draft instead of overwriting it.",
           )
@@ -468,12 +484,13 @@ export function LiveScoringPage() {
         }
 
         setPendingSync(true)
+        const message =
+          caught instanceof Error
+            ? caught.message
+            : "Scorecard could not be saved."
+        setLastSaveError(message)
         if (!options.silent) {
-          toast.error(
-            caught instanceof Error
-              ? caught.message
-              : "Scorecard could not be saved.",
-          )
+          toast.error(message)
         }
         return false
       } finally {
@@ -498,6 +515,8 @@ export function LiveScoringPage() {
       shootId,
       stationRows,
       stations.length,
+      totalScore,
+      totalTargets,
       verified1,
       verified2,
     ],
@@ -564,15 +583,25 @@ export function LiveScoringPage() {
     updateScore(stationId, String(next))
   }
 
-  async function moveToMember(targetId: string) {
-    if (!targetId || saving) return
+  async function protectBeforeNavigation(action: () => void) {
+    if (saving || Boolean(syncConflict)) return
 
     if (dirty && !locked) {
       const saved = await save("draft")
-      if (!saved) return
+      if (!saved) {
+        toast.error(
+          "ClayKeeper kept you on this scorecard because the pending work was not confirmed by the server.",
+        )
+        return
+      }
     }
 
-    setMemberId(targetId)
+    action()
+  }
+
+  async function moveToMember(targetId: string) {
+    if (!targetId || saving) return
+    await protectBeforeNavigation(() => setMemberId(targetId))
   }
 
   function focusStation(index: number) {
@@ -609,11 +638,22 @@ export function LiveScoringPage() {
     }
 
     const athlete = nameOf(participant?.athlete)
-    const confirmed = window.confirm(
-      `Finalize ${athlete}'s scorecard at ${totalScore} / ${totalTargets}?\n\nFinalized scorecards are locked from normal editing.`,
+    const confirmation = window.prompt(
+      `FINAL REVIEW\n\nAthlete: ${athlete}\nScore: ${totalScore} / ${totalTargets}\nStations: ${enteredCount} / ${stations.length}\n\nFinalized scorecards are locked from normal editing.\n\nType FINALIZE to confirm.`,
+      "",
     )
-    if (!confirmed) return
-    await save("finalized")
+
+    if (confirmation?.trim().toUpperCase() !== "FINALIZE") {
+      toast.message("Finalization cancelled. The scorecard remains editable.")
+      return
+    }
+
+    const finalized = await save("finalized")
+    if (!finalized) {
+      toast.error(
+        "Finalization was not confirmed by the server. Your protected draft remains available.",
+      )
+    }
   }
 
 
@@ -741,6 +781,37 @@ export function LiveScoringPage() {
           </div>
         ) : null}
 
+        {lastSaveError && !syncConflict ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold">Server confirmation failed</p>
+              <p className="mt-1">{lastSaveError}</p>
+              <p className="mt-1 text-xs">Your current work remains protected on this device until the server confirms a save.</p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={!online || saving || locked}
+              onClick={() => void save("draft")}
+              className="shrink-0"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Retry Save
+            </Button>
+          </div>
+        ) : null}
+
+        {lastServerConfirmation && !dirty && !pendingSync && !syncConflict ? (
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <ShieldCheck className="h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-bold">Server confirmed</p>
+              <p className="mt-1">
+                {lastServerConfirmation.status === "finalized" ? "Finalized scorecard" : "Draft"} confirmed at {formatSavedTime(lastServerConfirmation.at)} · {lastServerConfirmation.score}/{lastServerConfirmation.targets}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {syncConflict ? (
           <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm text-red-900 shadow-sm">
             <div className="flex items-start gap-3">
@@ -794,8 +865,7 @@ export function LiveScoringPage() {
             label="Shoot"
             value={shootId}
             setValue={(value) => {
-              setShootId(value)
-              setDirty(false)
+              void protectBeforeNavigation(() => setShootId(value))
             }}
             options={data.shoots.map((row) => ({
               value: row.id,
@@ -806,8 +876,7 @@ export function LiveScoringPage() {
             label="Squad"
             value={squadId}
             setValue={(value) => {
-              setSquadId(value)
-              setDirty(false)
+              void protectBeforeNavigation(() => setSquadId(value))
             }}
             options={squads.map((row) => ({
               value: row.id,
@@ -840,8 +909,7 @@ export function LiveScoringPage() {
             label="Course"
             value={courseId}
             setValue={(value) => {
-              setCourseId(value)
-              setDirty(false)
+              void protectBeforeNavigation(() => setCourseId(value))
             }}
             options={data.courses.map((row) => ({
               value: row.id,
