@@ -609,6 +609,64 @@ export function DirectorDashboardPage() {
           ))}
         </section>
 
+
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <Clock3 className="h-5 w-5 text-emerald-700" />
+              <div>
+                <h2 className="text-lg font-bold">Live Activity Feed</h2>
+                <p className="text-sm text-slate-500">
+                  Most recent scoring and awards activity for this event.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">Latest 12 updates</span>
+          </div>
+
+          {data.recentActivity.length ? (
+            <div className="mt-4 divide-y rounded-xl border">
+              {data.recentActivity.map((item) => (
+                <div key={item.id} className="flex gap-3 p-4">
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    item.kind === "score_finalized"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : item.kind === "awards"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-sky-100 text-sky-700"
+                  }`}>
+                    {item.kind === "awards" ? (
+                      <Award className="h-4 w-4" />
+                    ) : item.kind === "score_finalized" ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Target className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-slate-950">{item.title}</p>
+                      <time className="text-xs font-semibold text-slate-500" dateTime={item.occurredAt}>
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        }).format(new Date(item.occurredAt))}
+                      </time>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600">{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">
+              Activity will appear here as digital scorecards and awards are updated.
+            </div>
+          )}
+        </section>
+
         <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">

@@ -17,6 +17,14 @@ export type OperationsEvent = {
   host_sponsor: string | null
 }
 
+export type OperationsActivity = {
+  id: string
+  occurredAt: string
+  kind: "score_started" | "score_finalized" | "awards"
+  title: string
+  detail: string
+}
+
 export type OperationsSnapshot = {
   event: OperationsEvent
   shoots: number
@@ -53,6 +61,7 @@ export type OperationsSnapshot = {
   awardsProgressPercent: number
   publicPortalOpen: boolean
   publicLiveScores: boolean
+  recentActivity: OperationsActivity[]
 }
 
 function throwIfError(error: { message?: string } | null) {
@@ -245,6 +254,30 @@ export async function loadTournamentOperations(
   const awardsStatus =
     ((awardsResult.data ?? [])[0]?.status as OperationsSnapshot["awardsStatus"]) ??
     null
+  const recentActivity: OperationsActivity[] = [
+    ...currentScorecards
+      .filter((row) => Boolean(row.updated_at))
+      .map((row) => ({
+        id: `scorecard-${row.id}-${row.updated_at}`,
+        occurredAt: row.updated_at as string,
+        kind: row.status === "finalized" ? ("score_finalized" as const) : ("score_started" as const),
+        title: row.status === "finalized" ? "Scorecard finalized" : "Scorecard activity",
+        detail: row.status === "finalized"
+          ? "A digital scorecard was finalized and is included in event progress."
+          : "A digital scorecard was updated and remains in progress.",
+      })),
+    ...(awardsResult.data ?? [])
+      .filter((row) => Boolean(row.updated_at))
+      .map((row) => ({
+        id: `awards-${row.status}-${row.updated_at}`,
+        occurredAt: row.updated_at as string,
+        kind: "awards" as const,
+        title: `Awards ${String(row.status ?? "updated")}`,
+        detail: "The event awards workflow was updated.",
+      })),
+  ]
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .slice(0, 12)
   const awardsReady = members.length > 0 && scoringCompletionPercent === 100
   const awardsProgressPercent =
     awardsStatus === "published"
@@ -310,6 +343,7 @@ export async function loadTournamentOperations(
     awardsProgressPercent,
     publicPortalOpen: Boolean(publicSettingsResult.data?.is_public),
     publicLiveScores: Boolean(publicSettingsResult.data?.show_live_scores),
+    recentActivity,
     collected: activeRegistrations.reduce(
       (total, row) => total + numeric(row.amount_paid),
       0,
