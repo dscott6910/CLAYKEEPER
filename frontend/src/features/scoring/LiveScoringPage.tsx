@@ -101,6 +101,7 @@ export function LiveScoringPage() {
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
+  const stationCardRefs = useRef<Array<HTMLElement | null>>([])
 
   const load = useCallback(async () => {
     if (!eventId) {
@@ -342,6 +343,23 @@ export function LiveScoringPage() {
         row.parsed > row.station.bird_count),
   )
 
+  const firstIncompleteStationIndex = stationRows.findIndex(
+    (row) => row.parsed === null,
+  )
+  const firstInvalidStationIndex = stationRows.findIndex(
+    (row) =>
+      row.parsed !== null &&
+      (!Number.isInteger(row.parsed) ||
+        row.parsed < 0 ||
+        row.parsed > row.station.bird_count),
+  )
+  const activeStationIndex =
+    firstInvalidStationIndex >= 0
+      ? firstInvalidStationIndex
+      : firstIncompleteStationIndex >= 0
+        ? firstIncompleteStationIndex
+        : Math.max(0, stationRows.length - 1)
+
   const currentMemberIndex = members.findIndex((row) => row.id === memberId)
   const previousMember =
     currentMemberIndex > 0 ? members[currentMemberIndex - 1] : undefined
@@ -536,6 +554,7 @@ export function LiveScoringPage() {
       [stationId]: value.replace(/[^0-9]/g, ""),
     }))
     setDirty(true)
+    if (error) setError("")
   }
 
   function adjustScore(stationId: string, birdCount: number, delta: number) {
@@ -557,10 +576,46 @@ export function LiveScoringPage() {
   }
 
   function focusStation(index: number) {
-    const target = scoreInputRefs.current[index]
-    target?.focus()
-    target?.select()
+    const safeIndex = Math.min(Math.max(index, 0), stationRows.length - 1)
+    if (safeIndex < 0) return
+    stationCardRefs.current[safeIndex]?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    })
+    window.setTimeout(() => {
+      const target = scoreInputRefs.current[safeIndex]
+      target?.focus()
+      target?.select()
+    }, 250)
   }
+
+  function setScoreAndAdvance(
+    stationId: string,
+    value: string,
+    stationIndex: number,
+  ) {
+    updateScore(stationId, value)
+    const nextIndex = stationRows.findIndex(
+      (row, index) => index > stationIndex && row.parsed === null,
+    )
+    if (nextIndex >= 0) focusStation(nextIndex)
+  }
+
+  async function finalizeWithConfirmation() {
+    if (locked || saving || !online || Boolean(syncConflict)) return
+    if (enteredCount !== stations.length || invalid.length > 0) {
+      await save("finalized")
+      return
+    }
+
+    const athlete = nameOf(participant?.athlete)
+    const confirmed = window.confirm(
+      `Finalize ${athlete}'s scorecard at ${totalScore} / ${totalTargets}?\n\nFinalized scorecards are locked from normal editing.`,
+    )
+    if (!confirmed) return
+    await save("finalized")
+  }
+
 
   if (loading) {
     return (
@@ -677,8 +732,12 @@ export function LiveScoringPage() {
         </header>
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
+          <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+            <Button variant="outline" onClick={() => void load()} className="shrink-0">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
           </div>
         ) : null}
 
@@ -800,9 +859,16 @@ export function LiveScoringPage() {
             <section className="sticky top-2 z-20 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur md:static md:shadow-sm">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Current athlete
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Current athlete · {currentMemberIndex >= 0 ? currentMemberIndex + 1 : 0} of {members.length}
+                    </p>
+                    {locked ? (
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-800">
+                        Finalized · Read Only
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xl font-black text-slate-950">
                     {nameOf(participant?.athlete)}
                   </p>
@@ -841,6 +907,58 @@ export function LiveScoringPage() {
                   Next Athlete
                   <ChevronRight className="h-5 w-5" />
                 </Button>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Station progress</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {enteredCount === stations.length
+                      ? "All active stations entered"
+                      : `Next attention: Station ${stationRows[activeStationIndex]?.station.station_number ?? "—"}`}
+                  </p>
+                </div>
+                {enteredCount < stations.length ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => focusStation(activeStationIndex)}
+                    className="min-h-11"
+                  >
+                    Go to Next Station
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {stationRows.map((row, index) => {
+                  const bad =
+                    row.parsed !== null &&
+                    (row.parsed < 0 ||
+                      row.parsed > row.station.bird_count ||
+                      !Number.isInteger(row.parsed))
+                  const complete = row.parsed !== null && !bad
+                  return (
+                    <button
+                      key={row.station.id}
+                      type="button"
+                      onClick={() => focusStation(index)}
+                      className={`min-h-10 min-w-10 rounded-lg border px-3 text-sm font-black transition ${
+                        bad
+                          ? "border-red-300 bg-red-50 text-red-800"
+                          : complete
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : index === activeStationIndex
+                              ? "border-slate-950 bg-slate-950 text-white"
+                              : "bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                      aria-label={`Go to station ${row.station.station_number}`}
+                    >
+                      {row.station.station_number}
+                    </button>
+                  )
+                })}
               </div>
             </section>
 
@@ -899,6 +1017,9 @@ export function LiveScoringPage() {
                 return (
                   <article
                     key={row.station.id}
+                    ref={(element) => {
+                      stationCardRefs.current[index] = element
+                    }}
                     className={`rounded-2xl border p-4 shadow-sm ${
                       bad
                         ? "border-red-300 bg-red-50"
@@ -973,18 +1094,18 @@ export function LiveScoringPage() {
                       <button
                         type="button"
                         disabled={locked || Boolean(syncConflict)}
-                        onClick={() => updateScore(row.station.id, "0")}
+                        onClick={() => setScoreAndAdvance(row.station.id, "0", index)}
                         className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
                       >
-                        Set 0
+                        Set 0 & Next
                       </button>
                       <button
                         type="button"
                         disabled={locked || Boolean(syncConflict)}
-                        onClick={() => updateScore(row.station.id, String(row.station.bird_count))}
+                        onClick={() => setScoreAndAdvance(row.station.id, String(row.station.bird_count), index)}
                         className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
                       >
-                        Hit All ({row.station.bird_count})
+                        Hit All & Next ({row.station.bird_count})
                       </button>
                     </div>
 
@@ -1035,6 +1156,9 @@ export function LiveScoringPage() {
                       return (
                         <tr
                           key={row.station.id}
+                          ref={(element) => {
+                            if (window.innerWidth >= 768) stationCardRefs.current[index] = element
+                          }}
                           className={complete ? "bg-emerald-50/30" : ""}
                         >
                           <td className="p-4 font-bold">
@@ -1151,7 +1275,7 @@ export function LiveScoringPage() {
                 Save Draft
               </Button>
               <Button
-                onClick={() => void save("finalized")}
+                onClick={() => void finalizeWithConfirmation()}
                 disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
               >
                 {saving ? (
@@ -1164,7 +1288,12 @@ export function LiveScoringPage() {
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur md:hidden">
-              <div className="mx-auto grid max-w-xl grid-cols-2 gap-2">
+              <div className="mx-auto max-w-xl">
+                <div className="mb-2 flex items-center justify-between px-1 text-xs font-bold text-slate-600">
+                  <span>{nameOf(participant?.athlete)}</span>
+                  <span className="tabular-nums">{totalScore}/{totalTargets} · {enteredCount}/{stations.length} stations</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   onClick={() => void save("draft")}
@@ -1175,7 +1304,7 @@ export function LiveScoringPage() {
                   Save Draft
                 </Button>
                 <Button
-                  onClick={() => void save("finalized")}
+                  onClick={() => void finalizeWithConfirmation()}
                   disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
                   className="min-h-12"
                 >
@@ -1186,6 +1315,7 @@ export function LiveScoringPage() {
                   )}
                   Finalize
                 </Button>
+                </div>
               </div>
             </div>
           </>
