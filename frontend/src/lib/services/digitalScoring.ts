@@ -118,6 +118,17 @@ function check(error: { message?: string } | null) {
   if (error) throw new Error(error.message || "Database request failed.")
 }
 
+export class DigitalScorecardConflictError extends Error {
+  constructor(message = "This scorecard changed on the server after your device loaded it.") {
+    super(message)
+    this.name = "DigitalScorecardConflictError"
+  }
+}
+
+export function isDigitalScorecardConflictError(error: unknown) {
+  return error instanceof DigitalScorecardConflictError
+}
+
 export async function loadDigitalScoring(eventId: string): Promise<DigitalScoringData> {
   const eventResult = await supabase
     .from("events")
@@ -184,6 +195,7 @@ export async function saveDigitalScorecard(input: {
   enteredByName: string
   notes: string
   status: "draft" | "finalized"
+  expectedUpdatedAt?: string | null
   stationScores: Array<{ stationId: string; hits: number; targets: number }>
 }) {
   const totalScore = input.stationScores.reduce((sum, row) => sum + row.hits, 0)
@@ -208,11 +220,43 @@ export async function saveDigitalScorecard(input: {
 
   let scorecardId = input.scorecardId ?? null
   if (scorecardId) {
-    const result = await supabase.from("digital_scorecards").update(payload).eq("id", scorecardId).eq("status", "draft").select("id").single()
+    let updateQuery = supabase
+      .from("digital_scorecards")
+      .update(payload)
+      .eq("id", scorecardId)
+      .eq("status", "draft")
+
+    if (input.expectedUpdatedAt) {
+      updateQuery = updateQuery.eq("updated_at", input.expectedUpdatedAt)
+    }
+
+    const result = await updateQuery.select("id,updated_at").maybeSingle()
     check(result.error)
-    scorecardId = result.data?.id as string
+    if (!result.data?.id) {
+      throw new DigitalScorecardConflictError()
+    }
+    scorecardId = result.data.id as string
   } else {
-    const result = await supabase.from("digital_scorecards").upsert(payload, { onConflict: "squad_member_id" }).select("id").single()
+    const existingResult = await supabase
+      .from("digital_scorecards")
+      .select("id,status,updated_at")
+      .eq("organization_id", input.organizationId)
+      .eq("event_id", input.eventId)
+      .eq("squad_member_id", input.squadMemberId)
+      .maybeSingle()
+    check(existingResult.error)
+
+    if (existingResult.data?.id) {
+      throw new DigitalScorecardConflictError(
+        "Another device created this scorecard while your device was offline.",
+      )
+    }
+
+    const result = await supabase
+      .from("digital_scorecards")
+      .insert(payload)
+      .select("id")
+      .single()
     check(result.error)
     scorecardId = result.data?.id as string
   }

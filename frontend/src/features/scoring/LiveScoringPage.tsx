@@ -25,6 +25,7 @@ import { toast } from "sonner"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
+  isDigitalScorecardConflictError,
   loadDigitalScoring,
   saveDigitalScorecard,
   type DigitalScoringData,
@@ -45,6 +46,12 @@ type OfflineDraft = {
   enteredBy: string
   notes: string
   savedAt: string
+  baseUpdatedAt: string | null
+}
+
+type SyncConflict = {
+  draft: OfflineDraft
+  serverUpdatedAt: string | null
 }
 
 function offlineDraftKey(eventId: string, memberId: string, courseId: string) {
@@ -58,6 +65,17 @@ function formatSavedTime(value: Date | null) {
     minute: "2-digit",
     second: "2-digit",
   }).format(value)
+}
+
+function formatConflictTime(value: string | null) {
+  if (!value) return "No previous server save"
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(value))
 }
 
 export function LiveScoringPage() {
@@ -81,6 +99,7 @@ export function LiveScoringPage() {
   const [online, setOnline] = useState(() => navigator.onLine)
   const [pendingSync, setPendingSync] = useState(false)
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
+  const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
 
   const load = useCallback(async () => {
@@ -212,6 +231,27 @@ export function LiveScoringPage() {
     if (stored && !locked) {
       try {
         const draft = JSON.parse(stored) as OfflineDraft
+        const serverUpdatedAt = scorecard?.updated_at ?? null
+        const baseUpdatedAt = draft.baseUpdatedAt ?? null
+        const serverIsNewer = Boolean(
+          serverUpdatedAt &&
+            baseUpdatedAt &&
+            new Date(serverUpdatedAt).getTime() >
+              new Date(baseUpdatedAt).getTime(),
+        )
+        const serverAppearedAfterOfflineWork = Boolean(
+          serverUpdatedAt && !baseUpdatedAt,
+        )
+
+        if (serverIsNewer || serverAppearedAfterOfflineWork) {
+          setSyncConflict({ draft, serverUpdatedAt })
+          setLocalDraftSavedAt(new Date(draft.savedAt))
+          setPendingSync(false)
+          setDirty(false)
+          return
+        }
+
+        setSyncConflict(null)
         setScores((current) => ({ ...current, ...draft.scores }))
         setMalfunctions(draft.malfunctions)
         setVerified1(draft.verified1)
@@ -227,6 +267,7 @@ export function LiveScoringPage() {
       }
     }
 
+    setSyncConflict(null)
     setPendingSync(false)
     setLocalDraftSavedAt(null)
     setDirty(false)
@@ -243,6 +284,7 @@ export function LiveScoringPage() {
       enteredBy,
       notes,
       savedAt: new Date().toISOString(),
+      baseUpdatedAt: scorecard?.updated_at ?? null,
     }
     const timer = window.setTimeout(() => {
       window.localStorage.setItem(
@@ -254,7 +296,7 @@ export function LiveScoringPage() {
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, dirty, enteredBy, eventId, locked, malfunctions, memberId, notes, scores, verified1, verified2])
+  }, [courseId, dirty, enteredBy, eventId, locked, malfunctions, memberId, notes, scorecard?.updated_at, scores, verified1, verified2])
 
   const participant = useMemo(() => {
     if (!data || !memberId) return null
@@ -333,6 +375,24 @@ export function LiveScoringPage() {
         return false
       }
 
+      if (dirty) {
+        const protectedDraft: OfflineDraft = {
+          scores,
+          malfunctions,
+          verified1,
+          verified2,
+          enteredBy,
+          notes,
+          savedAt: new Date().toISOString(),
+          baseUpdatedAt: scorecard?.updated_at ?? null,
+        }
+        window.localStorage.setItem(
+          offlineDraftKey(eventId, memberId, courseId),
+          JSON.stringify(protectedDraft),
+        )
+        setLocalDraftSavedAt(new Date(protectedDraft.savedAt))
+      }
+
       setSaving(true)
 
       try {
@@ -349,6 +409,7 @@ export function LiveScoringPage() {
           enteredByName: enteredBy,
           notes,
           status,
+          expectedUpdatedAt: scorecard?.updated_at ?? null,
           stationScores: stationRows
             .filter((row) => row.parsed !== null)
             .map((row) => ({
@@ -379,6 +440,15 @@ export function LiveScoringPage() {
         await load()
         return true
       } catch (caught) {
+        if (isDigitalScorecardConflictError(caught)) {
+          setPendingSync(false)
+          toast.warning(
+            "A newer server scorecard was found. ClayKeeper protected your device draft instead of overwriting it.",
+          )
+          await load()
+          return false
+        }
+
         setPendingSync(true)
         if (!options.silent) {
           toast.error(
@@ -395,6 +465,7 @@ export function LiveScoringPage() {
     [
       courseId,
       data,
+      dirty,
       enteredBy,
       enteredCount,
       eventId,
@@ -405,6 +476,7 @@ export function LiveScoringPage() {
       memberId,
       notes,
       scorecard?.id,
+      scorecard?.updated_at,
       shootId,
       stationRows,
       stations.length,
@@ -414,22 +486,49 @@ export function LiveScoringPage() {
   )
 
   useEffect(() => {
-    if (!dirty || locked || saving || !memberId || !courseId || !online) return
+    if (!dirty || locked || saving || !memberId || !courseId || !online || syncConflict) return
 
     const timer = window.setTimeout(() => {
       void save("draft", { silent: true })
     }, 5000)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, dirty, locked, memberId, online, save, saving])
+  }, [courseId, dirty, locked, memberId, online, save, saving, syncConflict])
 
   useEffect(() => {
-    if (!online || !pendingSync || !dirty || locked || saving) return
+    if (!online || !pendingSync || !dirty || locked || saving || syncConflict) return
     const timer = window.setTimeout(() => {
       void save("draft", { silent: true })
     }, 750)
     return () => window.clearTimeout(timer)
-  }, [dirty, locked, online, pendingSync, save, saving])
+  }, [dirty, locked, online, pendingSync, save, saving, syncConflict])
+
+  function keepServerVersion() {
+    if (!eventId || !memberId || !courseId) return
+    window.localStorage.removeItem(offlineDraftKey(eventId, memberId, courseId))
+    setSyncConflict(null)
+    setPendingSync(false)
+    setLocalDraftSavedAt(null)
+    setDirty(false)
+    toast.success("Server scorecard kept. The older device draft was discarded.")
+  }
+
+  function restoreDeviceDraft() {
+    if (!syncConflict) return
+    const draft = syncConflict.draft
+    setScores((current) => ({ ...current, ...draft.scores }))
+    setMalfunctions(draft.malfunctions)
+    setVerified1(draft.verified1)
+    setVerified2(draft.verified2)
+    setEnteredBy(draft.enteredBy)
+    setNotes(draft.notes)
+    setSyncConflict(null)
+    setPendingSync(true)
+    setDirty(true)
+    toast.warning(
+      "Device draft restored. Review it carefully, then save to intentionally replace the newer server draft.",
+    )
+  }
 
   function updateScore(stationId: string, value: string) {
     setScores((current) => ({
@@ -490,8 +589,10 @@ export function LiveScoringPage() {
     )
   }
 
-  const saveStateLabel = saving
-    ? "Saving…"
+  const saveStateLabel = syncConflict
+    ? "Sync conflict — choose a version"
+    : saving
+      ? "Saving…"
     : !online && pendingSync
       ? `Saved on device ${formatSavedTime(localDraftSavedAt)}`
       : pendingSync
@@ -530,14 +631,18 @@ export function LiveScoringPage() {
               </div>
               <div
                 className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
-                  saving
-                    ? "bg-blue-50 text-blue-700"
+                  syncConflict
+                    ? "bg-red-50 text-red-800"
+                    : saving
+                      ? "bg-blue-50 text-blue-700"
                     : dirty
                       ? "bg-amber-50 text-amber-800"
                       : "bg-emerald-50 text-emerald-800"
                 }`}
               >
-                {saving ? (
+                {syncConflict ? (
+                  <CircleAlert className="h-4 w-4" />
+                ) : saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : dirty ? (
                   <CircleAlert className="h-4 w-4" />
@@ -574,6 +679,38 @@ export function LiveScoringPage() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
+          </div>
+        ) : null}
+
+        {syncConflict ? (
+          <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm text-red-900 shadow-sm">
+            <div className="flex items-start gap-3">
+              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-black">Score sync conflict — nothing was overwritten.</p>
+                <p className="mt-1">
+                  This device has a locally protected draft, but the server scorecard changed after that draft began. Choose which version you want to continue with.
+                </p>
+                <div className="mt-3 grid gap-2 rounded-lg bg-white/70 p-3 text-xs sm:grid-cols-2">
+                  <div>
+                    <span className="font-bold">Device draft saved:</span>{" "}
+                    {formatConflictTime(syncConflict.draft.savedAt)}
+                  </div>
+                  <div>
+                    <span className="font-bold">Server updated:</span>{" "}
+                    {formatConflictTime(syncConflict.serverUpdatedAt)}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={keepServerVersion}>
+                    Keep Server Version
+                  </Button>
+                  <Button onClick={restoreDeviceDraft}>
+                    Restore Device Draft
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -792,7 +929,7 @@ export function LiveScoringPage() {
                     <div className="mt-4 grid grid-cols-[64px_1fr_64px] items-center gap-3">
                       <button
                         type="button"
-                        disabled={locked}
+                        disabled={locked || Boolean(syncConflict)}
                         onClick={() => adjustScore(row.station.id, row.station.bird_count, -1)}
                         className="min-h-16 rounded-xl border bg-white text-3xl font-black shadow-sm disabled:opacity-40"
                         aria-label={`Decrease station ${row.station.station_number} score`}
@@ -803,7 +940,7 @@ export function LiveScoringPage() {
                         ref={(element) => {
                           scoreInputRefs.current[index] = element
                         }}
-                        disabled={locked}
+                        disabled={locked || Boolean(syncConflict)}
                         inputMode="numeric"
                         value={row.raw}
                         onFocus={(event) => event.currentTarget.select()}
@@ -823,7 +960,7 @@ export function LiveScoringPage() {
                       />
                       <button
                         type="button"
-                        disabled={locked}
+                        disabled={locked || Boolean(syncConflict)}
                         onClick={() => adjustScore(row.station.id, row.station.bird_count, 1)}
                         className="min-h-16 rounded-xl border bg-white text-3xl font-black shadow-sm disabled:opacity-40"
                         aria-label={`Increase station ${row.station.station_number} score`}
@@ -835,7 +972,7 @@ export function LiveScoringPage() {
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        disabled={locked}
+                        disabled={locked || Boolean(syncConflict)}
                         onClick={() => updateScore(row.station.id, "0")}
                         className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
                       >
@@ -843,7 +980,7 @@ export function LiveScoringPage() {
                       </button>
                       <button
                         type="button"
-                        disabled={locked}
+                        disabled={locked || Boolean(syncConflict)}
                         onClick={() => updateScore(row.station.id, String(row.station.bird_count))}
                         className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
                       >
@@ -909,7 +1046,7 @@ export function LiveScoringPage() {
                               ref={(element) => {
                                 scoreInputRefs.current[index] = element
                               }}
-                              disabled={locked}
+                              disabled={locked || Boolean(syncConflict)}
                               inputMode="numeric"
                               value={row.raw}
                               onFocus={(event) => event.currentTarget.select()}
@@ -949,7 +1086,7 @@ export function LiveScoringPage() {
               <label>
                 <span className="text-sm font-semibold">Malfunctions (0–3)</span>
                 <input
-                  disabled={locked}
+                  disabled={locked || Boolean(syncConflict)}
                   type="number"
                   min={0}
                   max={3}
@@ -970,7 +1107,7 @@ export function LiveScoringPage() {
                   setVerified1(value)
                   setDirty(true)
                 }}
-                disabled={locked}
+                disabled={locked || Boolean(syncConflict)}
               />
               <Field
                 label="Verified by #2"
@@ -979,7 +1116,7 @@ export function LiveScoringPage() {
                   setVerified2(value)
                   setDirty(true)
                 }}
-                disabled={locked}
+                disabled={locked || Boolean(syncConflict)}
               />
               <Field
                 label="Entered by"
@@ -988,12 +1125,12 @@ export function LiveScoringPage() {
                   setEnteredBy(value)
                   setDirty(true)
                 }}
-                disabled={locked}
+                disabled={locked || Boolean(syncConflict)}
               />
               <label className="md:col-span-2 xl:col-span-4">
                 <span className="text-sm font-semibold">Notes</span>
                 <textarea
-                  disabled={locked}
+                  disabled={locked || Boolean(syncConflict)}
                   value={notes}
                   onChange={(event) => {
                     setNotes(event.target.value)
@@ -1008,14 +1145,14 @@ export function LiveScoringPage() {
               <Button
                 variant="outline"
                 onClick={() => void save("draft")}
-                disabled={saving || locked}
+                disabled={saving || locked || Boolean(syncConflict)}
               >
                 <Save className="h-4 w-4" />
                 Save Draft
               </Button>
               <Button
                 onClick={() => void save("finalized")}
-                disabled={saving || locked || stations.length === 0 || !online}
+                disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1031,7 +1168,7 @@ export function LiveScoringPage() {
                 <Button
                   variant="outline"
                   onClick={() => void save("draft")}
-                  disabled={saving || locked}
+                  disabled={saving || locked || Boolean(syncConflict)}
                   className="min-h-12"
                 >
                   <Save className="h-5 w-5" />
@@ -1039,7 +1176,7 @@ export function LiveScoringPage() {
                 </Button>
                 <Button
                   onClick={() => void save("finalized")}
-                  disabled={saving || locked || stations.length === 0 || !online}
+                  disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
                   className="min-h-12"
                 >
                   {saving ? (
