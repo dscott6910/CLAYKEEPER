@@ -30,6 +30,16 @@ import {
 } from "@/lib/services/tournamentOperations"
 
 type Health = "healthy" | "warning" | "disabled"
+type AlertSeverity = "critical" | "warning" | "info"
+
+type OperationsAlert = {
+  id: string
+  severity: AlertSeverity
+  title: string
+  detail: string
+  href: string
+  action: string
+}
 
 type SystemCard = {
   title: string
@@ -215,35 +225,128 @@ export function DirectorDashboardPage() {
     ]
   }, [data, eventId])
 
-  const alerts = useMemo(() => {
-    if (!data) return []
-    const next: string[] = []
-    if (data.unpaidRegistrations > 0) {
-      next.push(`${data.unpaidRegistrations} registrations need payment review.`)
+  const alerts = useMemo<OperationsAlert[]>(() => {
+    if (!data || !eventId) return []
+
+    const next: OperationsAlert[] = []
+
+    if (data.scorecardsMissing > 0 && data.scorecardsStarted > 0) {
+      next.push({
+        id: "missing-scorecards",
+        severity: "critical",
+        title: `${data.scorecardsMissing} scorecards have not been started`,
+        detail: "Assigned athletes are missing scorecard activity while scoring is underway.",
+        href: `/events/${eventId}/live-scoring`,
+        action: "Review scoring",
+      })
     }
-    if (data.unassignedEnrollments > 0) {
-      next.push(`${data.unassignedEnrollments} shoot enrollments are not assigned to squads.`)
-    }
+
     if (data.scorecardsDraft > 0) {
-      next.push(`${data.scorecardsDraft} scorecards are currently in draft.`)
+      next.push({
+        id: "draft-scorecards",
+        severity: "warning",
+        title: `${data.scorecardsDraft} scorecards remain in draft`,
+        detail: "Draft scorecards must be finalized before event scoring can be considered complete.",
+        href: `/events/${eventId}/live-scoring`,
+        action: "Open live scoring",
+      })
     }
-    if (data.scorecardsMissing > 0) {
-      next.push(`${data.scorecardsMissing} assigned athletes have not started a scorecard.`)
+
+    if (data.unassignedEnrollments > 0) {
+      next.push({
+        id: "unassigned-enrollments",
+        severity: "critical",
+        title: `${data.unassignedEnrollments} shoot enrollments are not assigned to squads`,
+        detail: "These athletes cannot progress normally through squad-based tournament operations.",
+        href: `/events/${eventId}/operations`,
+        action: "Review assignments",
+      })
     }
+
+    if (data.unpaidRegistrations > 0) {
+      next.push({
+        id: "payment-review",
+        severity: "warning",
+        title: `${data.unpaidRegistrations} registrations need payment review`,
+        detail: "Resolve payment eligibility before relying on final registration and check-in totals.",
+        href: "/registration-payments",
+        action: "Review payments",
+      })
+    }
+
     if (data.refundsPending > 0) {
-      next.push(`${data.refundsPending} refunds require review.`)
+      next.push({
+        id: "refund-review",
+        severity: "warning",
+        title: `${data.refundsPending} refunds require review`,
+        detail: "Pending refund decisions remain open for this event.",
+        href: "/registration-payments",
+        action: "Review refunds",
+      })
     }
-    if (data.squadsInProgress > 0) {
-      next.push(`${data.squadsInProgress} squads are currently in scoring progress.`)
+
+    if (data.noShows > 0) {
+      next.push({
+        id: "no-shows",
+        severity: "info",
+        title: `${data.noShows} athletes are marked as no-shows`,
+        detail: "Confirm attendance records before finalizing tournament participation totals.",
+        href: `/events/${eventId}/check-in`,
+        action: "Review check-in",
+      })
     }
-    if (!data.publicPortalOpen) {
-      next.push("The public spectator portal is closed.")
+
+    if (data.squadsNotStarted > 0 && data.squadsInProgress + data.squadsComplete > 0) {
+      next.push({
+        id: "squads-not-started",
+        severity: "warning",
+        title: `${data.squadsNotStarted} squads have not started`,
+        detail: "Other squads have begun or completed scoring. Confirm the remaining squads are on schedule.",
+        href: `/events/${eventId}/leaderboard`,
+        action: "View squad progress",
+      })
     }
+
     if (data.awardsReady && data.awardsStatus !== "published") {
-      next.push("Scoring is complete and awards are ready for review or publication.")
+      next.push({
+        id: "awards-ready",
+        severity: data.awardsStatus === "approved" ? "warning" : "info",
+        title: data.awardsStatus === "approved" ? "Awards are approved but not published" : "Awards are ready for review",
+        detail: "Scoring is complete. Finish the awards workflow when official results are ready.",
+        href: `/events/${eventId}/awards`,
+        action: "Open awards",
+      })
     }
-    return next
-  }, [data])
+
+    if (!data.publicPortalOpen) {
+      next.push({
+        id: "public-portal-closed",
+        severity: "info",
+        title: "Public spectator portal is closed",
+        detail: "Spectators cannot access this event's public results page until the portal is opened.",
+        href: `/events/${eventId}/public`,
+        action: "Manage portal",
+      })
+    } else if (!data.publicLiveScores && data.scoringEnabledShoots > 0) {
+      next.push({
+        id: "public-live-scores-hidden",
+        severity: "info",
+        title: "Public live scores are hidden",
+        detail: "The public portal is open, but live scoring results are not currently visible.",
+        href: `/events/${eventId}/public`,
+        action: "Manage portal",
+      })
+    }
+
+    const priority: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 }
+    return next.sort((a, b) => priority[a.severity] - priority[b.severity])
+  }, [data, eventId])
+
+  const alertCounts = useMemo(() => ({
+    critical: alerts.filter((alert) => alert.severity === "critical").length,
+    warning: alerts.filter((alert) => alert.severity === "warning").length,
+    info: alerts.filter((alert) => alert.severity === "info").length,
+  }), [alerts])
 
   if (loading) {
     return (
@@ -454,24 +557,25 @@ export function DirectorDashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-2">
-              {alerts.length ? (
-                alerts.map((alert) => (
-                  <div
-                    key={alert}
-                    className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-                  >
-                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                    {alert}
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-                  <CheckCircle2 className="h-5 w-5" />
-                  No immediate operational warnings.
+            {alerts.length ? (
+              <>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
+                  {alertCounts.critical > 0 ? <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-red-700">{alertCounts.critical} critical</span> : null}
+                  {alertCounts.warning > 0 ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700">{alertCounts.warning} warning</span> : null}
+                  {alertCounts.info > 0 ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-sky-700">{alertCounts.info} advisory</span> : null}
                 </div>
-              )}
-            </div>
+                <div className="mt-3 space-y-3">
+                  {alerts.map((alert) => (
+                    <OperationalAlert key={alert.id} alert={alert} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                <CheckCircle2 className="h-5 w-5" />
+                No immediate operational warnings.
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -499,6 +603,39 @@ export function DirectorDashboardPage() {
         </section>
       </div>
     </PageContainer>
+  )
+}
+
+function OperationalAlert(props: { alert: OperationsAlert }) {
+  const styles =
+    props.alert.severity === "critical"
+      ? "border-red-200 bg-red-50 text-red-900"
+      : props.alert.severity === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : "border-sky-200 bg-sky-50 text-sky-900"
+
+  return (
+    <div className={`rounded-xl border p-4 ${styles}`}>
+      <div className="flex items-start gap-3">
+        <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-bold">{props.alert.title}</p>
+            <span className="text-[11px] font-black uppercase tracking-wide opacity-70">
+              {props.alert.severity === "info" ? "Advisory" : props.alert.severity}
+            </span>
+          </div>
+          <p className="mt-1 text-sm opacity-80">{props.alert.detail}</p>
+          <Link
+            to={props.alert.href}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-bold underline-offset-4 hover:underline"
+          >
+            {props.alert.action}
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }
 
