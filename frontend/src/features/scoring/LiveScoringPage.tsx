@@ -8,12 +8,14 @@ import {
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
-  Clock3,
   Loader2,
   Lock,
   RefreshCw,
   Save,
+  ShieldCheck,
 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
@@ -90,6 +92,17 @@ export function LiveScoringPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (!dirty) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", warnBeforeLeaving)
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving)
+  }, [dirty])
 
   const squads = useMemo(
     () => data?.squads.filter((row) => row.shoot_id === shootId) ?? [],
@@ -208,29 +221,37 @@ export function LiveScoringPage() {
         row.parsed > row.station.bird_count),
   )
 
+  const currentMemberIndex = members.findIndex((row) => row.id === memberId)
+  const previousMember =
+    currentMemberIndex > 0 ? members[currentMemberIndex - 1] : undefined
+  const nextMember =
+    currentMemberIndex >= 0 && currentMemberIndex < members.length - 1
+      ? members[currentMemberIndex + 1]
+      : undefined
+
   const save = useCallback(
     async (
       status: "draft" | "finalized",
       options: { silent?: boolean } = {},
-    ) => {
-      if (!data || !eventId || !shootId || !memberId || !courseId) return
+    ): Promise<boolean> => {
+      if (!data || !eventId || !shootId || !memberId || !courseId) return false
       if (locked) {
         if (!options.silent) toast.error("This scorecard is finalized and locked.")
-        return
+        return false
       }
       if (invalid.length) {
         if (!options.silent) {
           toast.error("Correct the highlighted station scores before saving.")
         }
-        return
+        return false
       }
       if (status === "finalized" && enteredCount !== stations.length) {
         toast.error("Enter a score for every active station before finalizing.")
-        return
+        return false
       }
       if (status === "finalized" && !enteredBy.trim()) {
         toast.error("Entered by is required before finalizing.")
-        return
+        return false
       }
 
       setSaving(true)
@@ -270,6 +291,7 @@ export function LiveScoringPage() {
         }
 
         await load()
+        return true
       } catch (caught) {
         if (!options.silent) {
           toast.error(
@@ -278,6 +300,7 @@ export function LiveScoringPage() {
               : "Scorecard could not be saved.",
           )
         }
+        return false
       } finally {
         setSaving(false)
       }
@@ -321,6 +344,30 @@ export function LiveScoringPage() {
     setDirty(true)
   }
 
+  function adjustScore(stationId: string, birdCount: number, delta: number) {
+    const currentRaw = scores[stationId] ?? ""
+    const current = currentRaw === "" ? 0 : Number(currentRaw)
+    const next = Math.min(birdCount, Math.max(0, current + delta))
+    updateScore(stationId, String(next))
+  }
+
+  async function moveToMember(targetId: string) {
+    if (!targetId || saving) return
+
+    if (dirty && !locked) {
+      const saved = await save("draft")
+      if (!saved) return
+    }
+
+    setMemberId(targetId)
+  }
+
+  function focusStation(index: number) {
+    const target = scoreInputRefs.current[index]
+    target?.focus()
+    target?.select()
+  }
+
   if (loading) {
     return (
       <PageContainer>
@@ -348,10 +395,16 @@ export function LiveScoringPage() {
     )
   }
 
+  const saveStateLabel = saving
+    ? "Saving…"
+    : dirty
+      ? "Unsaved changes"
+      : `Saved ${formatSavedTime(lastSavedAt)}`
+
   return (
     <PageContainer>
-      <div className="space-y-6">
-        <header className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="space-y-4 pb-28 md:space-y-6 md:pb-0">
+        <header className="rounded-2xl border bg-white p-4 shadow-sm md:p-6">
           <Link
             to={`/events/${eventId}/operations`}
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"
@@ -360,19 +413,35 @@ export function LiveScoringPage() {
             Operations Center
           </Link>
 
-          <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-bold text-emerald-700">
-                Tournament Scoring
+                Mobile Tournament Scoring
               </p>
-              <h1 className="mt-1 text-3xl font-bold">Digital Score Entry</h1>
-              <p className="mt-2 text-sm text-slate-600">{data.event.name}</p>
+              <h1 className="mt-1 text-2xl font-bold md:text-3xl">
+                Digital Score Entry
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">{data.event.name}</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <Clock3 className="h-4 w-4" />
-                {dirty ? "Unsaved changes" : `Last saved: ${formatSavedTime(lastSavedAt)}`}
+              <div
+                className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                  saving
+                    ? "bg-blue-50 text-blue-700"
+                    : dirty
+                      ? "bg-amber-50 text-amber-800"
+                      : "bg-emerald-50 text-emerald-800"
+                }`}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : dirty ? (
+                  <CircleAlert className="h-4 w-4" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {saveStateLabel}
               </div>
               <Button variant="outline" onClick={() => void load()}>
                 <RefreshCw className="h-4 w-4" />
@@ -381,12 +450,14 @@ export function LiveScoringPage() {
             </div>
           </div>
 
-          <div className="mt-6">
+          <div className="mt-5">
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold text-slate-700">
                 Scorecard progress
               </span>
-              <span className="font-bold text-slate-950">{progress}%</span>
+              <span className="font-bold text-slate-950">
+                {enteredCount}/{stations.length} · {progress}%
+              </span>
             </div>
             <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
               <div
@@ -403,7 +474,7 @@ export function LiveScoringPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-3 rounded-2xl border bg-white p-5 shadow-sm md:grid-cols-4">
+        <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-4 md:p-5">
           <Select
             label="Shoot"
             value={shootId}
@@ -432,8 +503,7 @@ export function LiveScoringPage() {
             label="Athlete / Post"
             value={memberId}
             setValue={(value) => {
-              setMemberId(value)
-              setDirty(false)
+              void moveToMember(value)
             }}
             options={members.map((member) => {
               const enrollment = data.enrollments.find(
@@ -471,6 +541,53 @@ export function LiveScoringPage() {
           </div>
         ) : (
           <>
+            <section className="sticky top-2 z-20 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur md:static md:shadow-sm">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Current athlete
+                  </p>
+                  <p className="mt-1 text-xl font-black text-slate-950">
+                    {nameOf(participant?.athlete)}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {participant?.team?.name || "No team"} · Squad {selectedSquad?.squad_number ?? "—"} · {participant?.member?.position_label || `Post ${participant?.member?.position ?? "—"}`}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-3 md:justify-end">
+                  <div className="text-right">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Running score
+                    </p>
+                    <p className="text-3xl font-black tabular-nums text-slate-950">
+                      {totalScore}/{totalTargets}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!previousMember || saving}
+                  onClick={() => previousMember && void moveToMember(previousMember.id)}
+                  className="min-h-12"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                  Previous Athlete
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!nextMember || saving}
+                  onClick={() => nextMember && void moveToMember(nextMember.id)}
+                  className="min-h-12"
+                >
+                  Next Athlete
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
+            </section>
+
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Summary
                 label="Athlete"
@@ -511,7 +628,130 @@ export function LiveScoringPage() {
               </div>
             ) : null}
 
-            <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+            <section className="space-y-3 md:hidden">
+              {stationRows.map((row, index) => {
+                const running = stationRows
+                  .slice(0, index + 1)
+                  .reduce((sum, item) => sum + (item.parsed ?? 0), 0)
+                const bad =
+                  row.parsed !== null &&
+                  (row.parsed < 0 ||
+                    row.parsed > row.station.bird_count ||
+                    !Number.isInteger(row.parsed))
+                const complete = row.parsed !== null && !bad
+
+                return (
+                  <article
+                    key={row.station.id}
+                    className={`rounded-2xl border p-4 shadow-sm ${
+                      bad
+                        ? "border-red-300 bg-red-50"
+                        : complete
+                          ? "border-emerald-200 bg-emerald-50/60"
+                          : "bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          Station
+                        </p>
+                        <p className="text-2xl font-black text-slate-950">
+                          {row.station.station_number}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          Running total
+                        </p>
+                        <p className="text-2xl font-black tabular-nums">
+                          {running}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-[64px_1fr_64px] items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => adjustScore(row.station.id, row.station.bird_count, -1)}
+                        className="min-h-16 rounded-xl border bg-white text-3xl font-black shadow-sm disabled:opacity-40"
+                        aria-label={`Decrease station ${row.station.station_number} score`}
+                      >
+                        −
+                      </button>
+                      <input
+                        ref={(element) => {
+                          scoreInputRefs.current[index] = element
+                        }}
+                        disabled={locked}
+                        inputMode="numeric"
+                        value={row.raw}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) => updateScore(row.station.id, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return
+                          event.preventDefault()
+                          focusStation(index + 1)
+                        }}
+                        className={`min-h-20 w-full rounded-xl border px-3 text-center text-4xl font-black tabular-nums ${
+                          bad
+                            ? "border-red-400 bg-red-50"
+                            : complete
+                              ? "border-emerald-400 bg-white"
+                              : "bg-white"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => adjustScore(row.station.id, row.station.bird_count, 1)}
+                        className="min-h-16 rounded-xl border bg-white text-3xl font-black shadow-sm disabled:opacity-40"
+                        aria-label={`Increase station ${row.station.station_number} score`}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => updateScore(row.station.id, "0")}
+                        className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
+                      >
+                        Set 0
+                      </button>
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => updateScore(row.station.id, String(row.station.bird_count))}
+                        className="min-h-11 rounded-lg border bg-white px-3 text-sm font-bold disabled:opacity-40"
+                      >
+                        Hit All ({row.station.bird_count})
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between rounded-lg bg-white/80 px-3 py-2 text-sm">
+                      <span>
+                        Targets: <strong>{row.station.bird_count}</strong>
+                      </span>
+                      <span>
+                        Misses: <strong>{row.parsed === null ? "—" : row.station.bird_count - row.parsed}</strong>
+                      </span>
+                    </div>
+
+                    {row.station.notes ? (
+                      <p className="mt-3 text-sm text-slate-600">
+                        {row.station.notes}
+                      </p>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </section>
+
+            <section className="hidden overflow-hidden rounded-2xl border bg-white shadow-sm md:block">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -553,14 +793,12 @@ export function LiveScoringPage() {
                               disabled={locked}
                               inputMode="numeric"
                               value={row.raw}
-                              onChange={(event) =>
-                                updateScore(row.station.id, event.target.value)
-                              }
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) => updateScore(row.station.id, event.target.value)}
                               onKeyDown={(event) => {
                                 if (event.key !== "Enter") return
                                 event.preventDefault()
-                                scoreInputRefs.current[index + 1]?.focus()
-                                scoreInputRefs.current[index + 1]?.select()
+                                focusStation(index + 1)
                               }}
                               className={`h-14 w-28 rounded-lg border px-3 text-center text-2xl font-black ${
                                 bad
@@ -588,7 +826,7 @@ export function LiveScoringPage() {
               </div>
             </section>
 
-            <section className="grid gap-4 rounded-2xl border bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-4 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-2 md:p-5 xl:grid-cols-4">
               <label>
                 <span className="text-sm font-semibold">Malfunctions (0–3)</span>
                 <input
@@ -603,7 +841,7 @@ export function LiveScoringPage() {
                     )
                     setDirty(true)
                   }}
-                  className="mt-1 min-h-11 w-full rounded-lg border px-3"
+                  className="mt-1 min-h-12 w-full rounded-lg border px-3 text-lg"
                 />
               </label>
               <Field
@@ -647,7 +885,7 @@ export function LiveScoringPage() {
               </label>
             </section>
 
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="hidden flex-wrap justify-end gap-2 md:flex">
               <Button
                 variant="outline"
                 onClick={() => void save("draft")}
@@ -668,6 +906,32 @@ export function LiveScoringPage() {
                 Finalize Scorecard
               </Button>
             </div>
+
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur md:hidden">
+              <div className="mx-auto grid max-w-xl grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void save("draft")}
+                  disabled={saving || locked}
+                  className="min-h-12"
+                >
+                  <Save className="h-5 w-5" />
+                  Save Draft
+                </Button>
+                <Button
+                  onClick={() => void save("finalized")}
+                  disabled={saving || locked || stations.length === 0}
+                  className="min-h-12"
+                >
+                  {saving ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5" />
+                  )}
+                  Finalize
+                </Button>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -687,7 +951,7 @@ function Select(props: {
       <select
         value={props.value}
         onChange={(event) => props.setValue(event.target.value)}
-        className="mt-1 min-h-11 w-full rounded-lg border bg-white px-3"
+        className="mt-1 min-h-12 w-full rounded-lg border bg-white px-3 text-base"
       >
         <option value="">Select…</option>
         {props.options.map((option) => (
@@ -713,7 +977,7 @@ function Field(props: {
         disabled={props.disabled}
         value={props.value}
         onChange={(event) => props.setValue(event.target.value)}
-        className="mt-1 min-h-11 w-full rounded-lg border px-3"
+        className="mt-1 min-h-12 w-full rounded-lg border px-3 text-base"
       />
     </label>
   )
