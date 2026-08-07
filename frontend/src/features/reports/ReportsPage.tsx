@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, BarChart3, CheckCircle2, DollarSign, Download, Medal, Printer, RefreshCw, Trophy, Users } from "lucide-react"
+import { Link, useParams } from "react-router-dom"
+import { AlertCircle, ArrowLeft, BarChart3, CheckCircle2, DollarSign, Download, Medal, Printer, RefreshCw, Trophy, Users } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -71,13 +72,15 @@ function csvValue(value: string | number | null) {
 }
 
 export function ReportsPage() {
+  const { eventId: routeEventId } = useParams()
   const [organizationId, setOrganizationId] = useState("")
   const [events, setEvents] = useState<ReportEvent[]>([])
   const [shoots, setShoots] = useState<ReportShoot[]>([])
-  const [eventId, setEventId] = useState("")
+  const [eventId, setEventId] = useState(routeEventId ?? "")
   const [shootId, setShootId] = useState("")
   const [classFilter, setClassFilter] = useState("all")
   const [teamFilter, setTeamFilter] = useState("all")
+  const [completionFilter, setCompletionFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [data, setData] = useState<ReportData>(emptyData)
   const [loading, setLoading] = useState(true)
@@ -94,7 +97,7 @@ export function ReportsPage() {
       setOrganizationId(base.organizationId)
       setEvents(base.events)
       setShoots(base.shoots)
-      const nextEvent = eventId || base.events[0]?.id || ""
+      const nextEvent = routeEventId || eventId || base.events[0]?.id || ""
       const nextShoot = shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
       setEventId(nextEvent)
       setShootId(nextShoot)
@@ -175,10 +178,12 @@ export function ReportsPage() {
     return standings.filter((row) => {
       if (classFilter !== "all" && row.classCode !== classFilter) return false
       if (teamFilter !== "all" && row.teamName !== teamFilter) return false
+      if (completionFilter === "complete" && !row.complete) return false
+      if (completionFilter === "incomplete" && row.complete) return false
       if (!needle) return true
       return [row.athleteName, row.cyssaNumber || "", row.teamName, row.classCode, row.className, row.squadLabel].some((value) => value.toLowerCase().includes(needle))
     })
-  }, [standings, classFilter, teamFilter, search])
+  }, [standings, classFilter, teamFilter, completionFilter, search])
 
   const completeCount = standings.filter((row) => row.complete).length
   const enteredScoreCount = standings.reduce((sum, row) => sum + row.enteredRounds, 0)
@@ -222,6 +227,12 @@ export function ReportsPage() {
       <AppHeader title="Reports" description="View competition results, standings, and financial summaries" />
       <PageContainer>
         <div className="space-y-5">
+          {routeEventId ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4 shadow-sm print:hidden">
+              <Link to={`/events/${routeEventId}/operations`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />Operations Center</Link>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Event-scoped reporting</span>
+            </div>
+          ) : null}
           <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto] print:hidden">
             <label className="space-y-1 text-sm font-medium">Event
               <select className="w-full rounded-lg border bg-white px-3 py-2" value={eventId} onChange={(event) => { const id = event.target.value; setEventId(id); setShootId(shoots.find((shoot) => shoot.event_id === id)?.id || "") }}>
@@ -256,7 +267,7 @@ export function ReportsPage() {
               <div className="flex flex-wrap gap-2 print:hidden">
                 <input className="w-56 rounded-lg border px-3 py-2 text-sm" placeholder="Search participant, team…" value={search} onChange={(event) => setSearch(event.target.value)} />
                 <select className="rounded-lg border bg-white px-3 py-2 text-sm" value={classFilter} onChange={(event) => setClassFilter(event.target.value)}><option value="all">All classes</option>{data.classes.map((cls) => <option key={cls.id} value={cls.code}>{cls.display_name}</option>)}</select>
-                <select className="rounded-lg border bg-white px-3 py-2 text-sm" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="all">All teams</option>{Array.from(new Set(standings.map((row) => row.teamName).filter((name) => name !== "No team"))).sort().map((name) => <option key={name} value={name}>{name}</option>)}</select>
+                <select className="rounded-lg border bg-white px-3 py-2 text-sm" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="all">All teams</option>{Array.from(new Set(standings.map((row) => row.teamName).filter((name) => name !== "No team"))).sort().map((name) => <option key={name} value={name}>{name}</option>)}</select><select className="rounded-lg border bg-white px-3 py-2 text-sm" value={completionFilter} onChange={(event) => setCompletionFilter(event.target.value)}><option value="all">All scorecards</option><option value="complete">Complete only</option><option value="incomplete">Incomplete only</option></select>
               </div>
             </header>
             {loading ? <div className="p-12 text-center text-slate-500">Loading report data…</div> : filteredStandings.length === 0 ? <div className="p-12 text-center"><Trophy className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-semibold">No standings are available yet</h3><p className="mt-1 text-sm text-slate-500">Register participants, assign squads, and enter scores to populate this report.</p></div> : (

@@ -347,7 +347,7 @@ export function TournamentOperationsCenterPage() {
             : data.event.status === "completed"
               ? "ready"
               : "not_started",
-        href: "/reports",
+        href: `/events/${eventId}/reports`,
         action: "Open Reports",
         icon: FileText,
       },

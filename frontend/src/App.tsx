@@ -447,6 +447,15 @@ function App() {
                 />
                 
                 <Route
+                  path="events/:eventId/reports"
+                  element={
+                    <LazyRoute>
+                      <ReportsPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
                   path="reports"
                   element={
                     <LazyRoute>
