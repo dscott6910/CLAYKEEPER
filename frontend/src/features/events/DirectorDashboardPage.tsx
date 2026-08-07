@@ -74,32 +74,48 @@ function healthClasses(health: Health) {
   return "border-slate-200 bg-slate-100 text-slate-600"
 }
 
+function awardsLabel(data: OperationsSnapshot) {
+  if (data.awardsStatus === "published") return "Published"
+  if (data.awardsStatus === "approved") return "Approved"
+  if (data.awardsStatus === "provisional") return "Provisional"
+  if (data.awardsReady) return "Ready"
+  return "Pending"
+}
+
 export function DirectorDashboardPage() {
   const { eventId } = useParams()
   const [data, setData] = useState<OperationsSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
 
-  const load = useCallback(async () => {
-    if (!eventId) return
-    setLoading(true)
-    setError("")
-    try {
-      setData(await loadTournamentOperations(eventId))
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "The director dashboard could not be loaded.",
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [eventId])
+  const load = useCallback(
+    async (background = false) => {
+      if (!eventId) return
+      if (background) setRefreshing(true)
+      else setLoading(true)
+      setError("")
+      try {
+        setData(await loadTournamentOperations(eventId))
+        setRefreshedAt(new Date())
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The director dashboard could not be loaded.",
+        )
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [eventId],
+  )
 
   useEffect(() => {
     void load()
-    const timer = window.setInterval(() => void load(), 30000)
+    const timer = window.setInterval(() => void load(true), 30000)
     return () => window.clearInterval(timer)
   }, [load])
 
@@ -109,11 +125,11 @@ export function DirectorDashboardPage() {
     return [
       {
         title: "Registration",
-        value: String(data.eligibleRegistrations),
+        value: `${data.registrationReadyPercent}%`,
         detail:
           data.unpaidRegistrations > 0
-            ? `${data.unpaidRegistrations} registrations need attention`
-            : "Eligible registrations are ready",
+            ? `${data.unpaidRegistrations} registrations need payment review`
+            : `${data.eligibleRegistrations} eligible registrations are ready`,
         health:
           data.registrations === 0
             ? "disabled"
@@ -126,8 +142,8 @@ export function DirectorDashboardPage() {
       },
       {
         title: "Check-In",
-        value: `${data.checkedIn} / ${data.eligibleRegistrations}`,
-        detail: `${data.lateArrivals} late · ${data.noShows} no-shows`,
+        value: `${data.checkInPercent}%`,
+        detail: `${data.checkedIn} checked in · ${data.lateArrivals} late · ${data.noShows} no-shows`,
         health:
           data.eligibleRegistrations === 0
             ? "disabled"
@@ -141,7 +157,7 @@ export function DirectorDashboardPage() {
       {
         title: "Live Scoring",
         value: `${data.scoringCompletionPercent}%`,
-        detail: `${data.scorecardsFinalized} finalized · ${data.scorecardsMissing} missing`,
+        detail: `${data.athletesCurrentlyShooting} in progress · ${data.athletesFinished} finished`,
         health:
           data.scoringEnabledShoots === 0
             ? "disabled"
@@ -153,30 +169,34 @@ export function DirectorDashboardPage() {
         action: "Open Scoring",
       },
       {
-        title: "Leaderboards",
-        value: `${data.scorecardsFinalized}`,
-        detail: `Last score: ${formatTime(data.lastScoreAt)}`,
+        title: "Squad Progress",
+        value: `${data.squadsComplete} / ${data.squads}`,
+        detail: `${data.squadsInProgress} shooting · ${data.squadsNotStarted} not started`,
         health:
-          data.scorecardsFinalized > 0 ? "healthy" : "disabled",
-        icon: Trophy,
+          data.squads === 0
+            ? "disabled"
+            : data.squadsInProgress > 0 || data.squadsNotStarted > 0
+              ? "warning"
+              : "healthy",
+        icon: Activity,
         href: `/events/${eventId}/leaderboard`,
-        action: "View Leaderboards",
+        action: "View Progress",
       },
       {
         title: "Awards",
-        value: data.awardsStatus ?? "Not Started",
+        value: awardsLabel(data),
         detail:
           data.awardsStatus === "published"
             ? "Official results are published"
-            : "Awards remain in the official workflow",
+            : data.awardsReady
+              ? "Scoring is complete; awards can be finalized"
+              : "Awards are waiting on scoring completion",
         health:
-          data.awardsStatus === "published"
+          data.awardsStatus === "published" || data.awardsStatus === "approved"
             ? "healthy"
-            : data.awardsStatus === "approved"
-              ? "healthy"
-              : data.awardsStatus === "provisional"
-                ? "warning"
-                : "disabled",
+            : data.awardsReady || data.awardsStatus === "provisional"
+              ? "warning"
+              : "disabled",
         icon: Award,
         href: `/events/${eventId}/awards`,
         action: "Open Awards",
@@ -185,8 +205,8 @@ export function DirectorDashboardPage() {
         title: "Public Portal",
         value: data.publicPortalOpen ? "Open" : "Closed",
         detail: data.publicLiveScores
-          ? "Live scores are visible"
-          : "Live scores are hidden",
+          ? "Live scores are visible to spectators"
+          : "Live scores are hidden from spectators",
         health: data.publicPortalOpen ? "healthy" : "disabled",
         icon: Globe2,
         href: `/events/${eventId}/public`,
@@ -204,17 +224,23 @@ export function DirectorDashboardPage() {
     if (data.unassignedEnrollments > 0) {
       next.push(`${data.unassignedEnrollments} shoot enrollments are not assigned to squads.`)
     }
+    if (data.scorecardsDraft > 0) {
+      next.push(`${data.scorecardsDraft} scorecards are currently in draft.`)
+    }
     if (data.scorecardsMissing > 0) {
-      next.push(`${data.scorecardsMissing} scorecards have not been started.`)
+      next.push(`${data.scorecardsMissing} assigned athletes have not started a scorecard.`)
     }
     if (data.refundsPending > 0) {
       next.push(`${data.refundsPending} refunds require review.`)
     }
+    if (data.squadsInProgress > 0) {
+      next.push(`${data.squadsInProgress} squads are currently in scoring progress.`)
+    }
     if (!data.publicPortalOpen) {
       next.push("The public spectator portal is closed.")
     }
-    if (data.awardsStatus !== "published") {
-      next.push("Official awards have not been published.")
+    if (data.awardsReady && data.awardsStatus !== "published") {
+      next.push("Scoring is complete and awards are ready for review or publication.")
     }
     return next
   }, [data])
@@ -264,17 +290,35 @@ export function DirectorDashboardPage() {
                 {data.event.name} · {formatDate(data.event.start_date)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Automatically refreshes every 30 seconds
+                {refreshing ? "Refreshing live data…" : "Automatically refreshes every 30 seconds"}
+                {refreshedAt
+                  ? ` · Last refreshed ${new Intl.DateTimeFormat("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    }).format(refreshedAt)}`
+                  : ""}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Link to={`/events/${eventId}/operations`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50">
-                  <MonitorUp className="h-4 w-4" />
-                  Operations Center
-                </Link>
-              <Button variant="outline" onClick={() => void load()}>
-                <RefreshCw className="h-4 w-4" />
+              <Link
+                to={`/events/${eventId}/operations`}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+              >
+                <MonitorUp className="h-4 w-4" />
+                Operations Center
+              </Link>
+              <Button
+                variant="outline"
+                onClick={() => void load(true)}
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
                 Refresh Now
               </Button>
             </div>
@@ -287,7 +331,7 @@ export function DirectorDashboardPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <Summary
             label="Registered"
             value={data.registrations}
@@ -296,21 +340,68 @@ export function DirectorDashboardPage() {
           <Summary
             label="Checked In"
             value={data.checkedIn}
-            detail={`${data.lateArrivals} late arrivals`}
+            detail={`${data.checkInPercent}% of eligible`}
           />
           <Summary
-            label="Scoring Complete"
-            value={`${data.scoringCompletionPercent}%`}
+            label="On Course"
+            value={data.athletesCurrentlyShooting}
+            detail={`${data.squadsInProgress} squads in progress`}
+          />
+          <Summary
+            label="Finished"
+            value={data.athletesFinished}
+            detail={`${data.scoringCompletionPercent}% scoring complete`}
+          />
+          <Summary
+            label="Missing Scores"
+            value={data.scorecardsMissing}
+            detail={`${data.scorecardsDraft} drafts open`}
+          />
+          <Summary
+            label="Last Score"
+            value={formatTime(data.lastScoreAt)}
             detail={`${data.scorecardsFinalized} finalized`}
           />
-          <Summary
-            label="Collected"
-            value={new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).format(data.collected)}
-            detail={`${data.refundsPending} refunds pending`}
-          />
+        </section>
+
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Activity className="h-5 w-5 text-emerald-700" />
+            <div>
+              <h2 className="text-lg font-bold">Live Event Progress</h2>
+              <p className="text-sm text-slate-500">
+                Operational completion from registration through awards.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <ProgressRow
+              label="Registration Ready"
+              value={data.registrationReadyPercent}
+              detail={`${data.eligibleRegistrations} of ${data.registrations} registrations eligible`}
+            />
+            <ProgressRow
+              label="Check-In"
+              value={data.checkInPercent}
+              detail={`${data.checkedIn} of ${data.eligibleRegistrations} eligible athletes checked in`}
+            />
+            <ProgressRow
+              label="Scoring"
+              value={data.scoringCompletionPercent}
+              detail={`${data.scorecardsFinalized} of ${data.assignedMembers} assigned athletes finalized`}
+            />
+            <ProgressRow
+              label="Awards"
+              value={data.awardsProgressPercent}
+              detail={
+                data.awardsStatus === "published"
+                  ? "Official awards published"
+                  : data.awardsReady
+                    ? "Scoring complete; awards ready"
+                    : "Waiting for finalized scoring"
+              }
+            />
+          </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
@@ -325,9 +416,7 @@ export function DirectorDashboardPage() {
                     <system.icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-slate-950">
-                      {system.title}
-                    </h2>
+                    <h2 className="font-bold text-slate-950">{system.title}</h2>
                     <p className="mt-1 text-2xl font-black capitalize">
                       {system.value}
                     </p>
@@ -413,6 +502,24 @@ export function DirectorDashboardPage() {
   )
 }
 
+function ProgressRow(props: { label: string; value: number; detail: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-4 text-sm">
+        <span className="font-semibold text-slate-800">{props.label}</span>
+        <span className="font-bold text-slate-950">{props.value}%</span>
+      </div>
+      <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${props.value}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-xs text-slate-500">{props.detail}</p>
+    </div>
+  )
+}
+
 function Summary(props: {
   label: string
   value: string | number
@@ -423,9 +530,7 @@ function Summary(props: {
       <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
         {props.label}
       </p>
-      <p className="mt-1 text-2xl font-black text-slate-950">
-        {props.value}
-      </p>
+      <p className="mt-1 text-2xl font-black text-slate-950">{props.value}</p>
       <p className="mt-1 text-xs text-slate-500">{props.detail}</p>
     </div>
   )
@@ -439,9 +544,9 @@ function QuickLink(props: {
   return (
     <Link
       to={props.href}
-      className="flex min-h-12 items-center gap-3 rounded-xl border p-3 text-sm font-semibold hover:bg-slate-50"
+      className="flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
     >
-      <props.icon className="h-5 w-5 text-emerald-700" />
+      <props.icon className="h-4 w-4" />
       {props.label}
     </Link>
   )
