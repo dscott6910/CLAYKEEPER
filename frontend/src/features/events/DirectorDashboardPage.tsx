@@ -51,6 +51,16 @@ type SystemCard = {
   action: string
 }
 
+type QuickAction = {
+  id: string
+  label: string
+  detail: string
+  href: string
+  icon: LucideIcon
+  badge?: string
+  emphasis?: "primary" | "attention" | "standard"
+}
+
 function formatDate(value: string | null) {
   if (!value) return "Date not set"
   return new Intl.DateTimeFormat("en-US", {
@@ -348,6 +358,60 @@ export function DirectorDashboardPage() {
     info: alerts.filter((alert) => alert.severity === "info").length,
   }), [alerts])
 
+  const suggestedAction = useMemo(() => {
+    if (!eventId || !data) return null
+    if (alerts.length > 0) {
+      const alert = alerts[0]
+      return {
+        title: alert.title,
+        detail: alert.detail,
+        href: alert.href,
+        action: alert.action,
+        severity: alert.severity,
+      }
+    }
+    if (data.checkedIn < data.eligibleRegistrations) {
+      return {
+        title: "Continue athlete check-in",
+        detail: `${data.eligibleRegistrations - data.checkedIn} eligible athletes have not checked in yet.`,
+        href: `/events/${eventId}/check-in`,
+        action: "Open Check-In",
+        severity: "info" as AlertSeverity,
+      }
+    }
+    if (data.scorecardsFinalized < data.assignedMembers) {
+      return {
+        title: "Continue tournament scoring",
+        detail: `${data.assignedMembers - data.scorecardsFinalized} assigned scorecards are not finalized yet.`,
+        href: `/events/${eventId}/live-scoring`,
+        action: "Open Live Scoring",
+        severity: "info" as AlertSeverity,
+      }
+    }
+    return {
+      title: "Review final results",
+      detail: "Tournament operations are current. Review leaderboards, awards, and publication status.",
+      href: `/events/${eventId}/awards`,
+      action: "Open Awards",
+      severity: "info" as AlertSeverity,
+    }
+  }, [alerts, data, eventId])
+
+  const quickActions = useMemo<QuickAction[]>(() => {
+    if (!data || !eventId) return []
+    return [
+      { id: "operations", label: "Operations Center", detail: "Full event workflow and readiness", href: `/events/${eventId}/operations`, icon: MonitorUp, emphasis: "primary" },
+      { id: "check-in", label: "Check-In / QR", detail: `${data.checkedIn} checked in · ${data.eligibleRegistrations - data.checkedIn} remaining`, href: `/events/${eventId}/check-in`, icon: ScanLine, badge: `${data.checkInPercent}%`, emphasis: data.checkedIn < data.eligibleRegistrations ? "attention" : "standard" },
+      { id: "scoring", label: "Live Scoring", detail: `${data.athletesCurrentlyShooting} active · ${data.scorecardsDraft} drafts`, href: `/events/${eventId}/live-scoring`, icon: Target, badge: `${data.scoringCompletionPercent}%`, emphasis: data.scorecardsDraft > 0 || data.scorecardsMissing > 0 ? "attention" : "standard" },
+      { id: "scorecards", label: "Scorecards", detail: "Print and manage event scorecards", href: `/events/${eventId}/scoring`, icon: Printer },
+      { id: "leaderboard", label: "Leaderboards", detail: `${data.scorecardsFinalized} finalized scores`, href: `/events/${eventId}/leaderboard`, icon: Trophy },
+      { id: "awards", label: "Awards", detail: data.awardsStatus === "published" ? "Official results published" : data.awardsReady ? "Ready for awards review" : "Waiting on scoring", href: `/events/${eventId}/awards`, icon: Award, badge: awardsLabel(data), emphasis: data.awardsReady && data.awardsStatus !== "published" ? "attention" : "standard" },
+      { id: "public", label: "Public Portal", detail: data.publicPortalOpen ? (data.publicLiveScores ? "Open · live scores visible" : "Open · scores hidden") : "Closed to spectators", href: `/events/${eventId}/public`, icon: Globe2, badge: data.publicPortalOpen ? "Open" : "Closed" },
+      { id: "payments", label: "Payments / Refunds", detail: `${data.unpaidRegistrations} payment reviews · ${data.refundsPending} refunds`, href: "/registration-payments", icon: BadgeDollarSign, emphasis: data.unpaidRegistrations > 0 || data.refundsPending > 0 ? "attention" : "standard" },
+      { id: "reports", label: "Reports", detail: "Official reports and exports", href: "/reports", icon: Clock3 },
+    ]
+  }, [data, eventId])
+
   if (loading) {
     return (
       <PageContainer>
@@ -584,20 +648,36 @@ export function DirectorDashboardPage() {
               <div>
                 <h2 className="text-lg font-bold">Quick Actions</h2>
                 <p className="text-sm text-slate-500">
-                  Common tournament-day tools.
+                  One-click access to tournament-day tools.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <QuickLink href={`/events/${eventId}/check-in`} icon={ScanLine} label="Check In" />
-              <QuickLink href={`/events/${eventId}/live-scoring`} icon={Target} label="Live Scores" />
-              <QuickLink href={`/events/${eventId}/leaderboard`} icon={Trophy} label="Leaderboards" />
-              <QuickLink href={`/events/${eventId}/awards`} icon={Award} label="Awards" />
-              <QuickLink href={`/events/${eventId}/public`} icon={Globe2} label="Public Portal" />
-              <QuickLink href={`/events/${eventId}/scoring`} icon={Printer} label="Scorecards" />
-              <QuickLink href="/registration-payments" icon={BadgeDollarSign} label="Refunds" />
-              <QuickLink href="/reports" icon={Clock3} label="Reports" />
+            {suggestedAction ? (
+              <div className={`mt-4 rounded-xl border p-4 ${
+                suggestedAction.severity === "critical"
+                  ? "border-red-200 bg-red-50"
+                  : suggestedAction.severity === "warning"
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-emerald-200 bg-emerald-50"
+              }`}>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Recommended Next Action</p>
+                <p className="mt-1 font-bold text-slate-950">{suggestedAction.title}</p>
+                <p className="mt-1 text-sm text-slate-600">{suggestedAction.detail}</p>
+                <Link
+                  to={suggestedAction.href}
+                  className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white transition hover:bg-slate-800"
+                >
+                  {suggestedAction.action}
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {quickActions.map((action) => (
+                <QuickLink key={action.id} action={action} />
+              ))}
             </div>
           </div>
         </section>
@@ -673,18 +753,36 @@ function Summary(props: {
   )
 }
 
-function QuickLink(props: {
-  href: string
-  icon: LucideIcon
-  label: string
-}) {
+function QuickLink(props: { action: QuickAction }) {
+  const emphasis = props.action.emphasis ?? "standard"
+  const classes =
+    emphasis === "primary"
+      ? "border-slate-950 bg-slate-950 text-white hover:bg-slate-800"
+      : emphasis === "attention"
+        ? "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100"
+        : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+
   return (
     <Link
-      to={props.href}
-      className="flex min-h-12 items-center gap-3 rounded-xl border px-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+      to={props.action.href}
+      className={`group flex min-h-[76px] items-start gap-3 rounded-xl border p-3 transition ${classes}`}
     >
-      <props.icon className="h-4 w-4" />
-      {props.label}
+      <div className={`mt-0.5 rounded-lg p-2 ${emphasis === "primary" ? "bg-white/10" : "bg-slate-100/80"}`}>
+        <props.action.icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-bold">{props.action.label}</span>
+          {props.action.badge ? (
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black ${emphasis === "primary" ? "bg-white/15 text-white" : "bg-white/80 text-slate-700"}`}>
+              {props.action.badge}
+            </span>
+          ) : null}
+        </div>
+        <p className={`mt-1 text-xs ${emphasis === "primary" ? "text-slate-300" : "text-slate-500"}`}>
+          {props.action.detail}
+        </p>
+      </div>
     </Link>
   )
 }
