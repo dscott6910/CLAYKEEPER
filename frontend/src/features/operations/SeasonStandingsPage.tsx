@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  GraduationCap,
   Loader2,
   RefreshCw,
   Trophy,
@@ -120,9 +121,14 @@ export function SeasonStandingsPage() {
                 {formatDate(data.season.start_date)} – {formatDate(data.season.end_date)} · {data.events.length} event{data.events.length === 1 ? "" : "s"}
               </p>
             </div>
-            <Button variant="outline" onClick={() => void load()}>
-              <RefreshCw className="h-4 w-4" />Refresh
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/seasons/${data.season.id}/qualification`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50">
+                <GraduationCap className="mr-2 h-4 w-4" />Qualification
+              </Link>
+              <Button variant="outline" onClick={() => void load()}>
+                <RefreshCw className="h-4 w-4" />Refresh
+              </Button>
+            </div>
           </div>
         </header>
 

@@ -9,13 +9,16 @@ export type Season = {
   status: "planning" | "active" | "closed" | "archived"
   closed_at: string | null
   notes: string | null
+  qualification_enabled: boolean
+  qualification_min_events: number
+  qualification_notes: string | null
 }
 
 export async function listSeasons(): Promise<Season[]> {
   const { organizationId } = await getCurrentOrganizationContext()
   const { data, error } = await supabase
     .from("seasons")
-    .select("id,name,start_date,end_date,status,closed_at,notes")
+    .select("id,name,start_date,end_date,status,closed_at,notes,qualification_enabled,qualification_min_events,qualification_notes")
     .eq("organization_id", organizationId)
     .order("start_date", { ascending: false })
   if (error) throw error
@@ -81,13 +84,45 @@ export async function updateSeason(input: { id: string; name: string; startDate:
     .update({ name, start_date: input.startDate, end_date: input.endDate })
     .eq("organization_id", organizationId)
     .eq("id", input.id)
-    .select("id,name,start_date,end_date,status,closed_at,notes")
+    .select("id,name,start_date,end_date,status,closed_at,notes,qualification_enabled,qualification_min_events,qualification_notes")
     .single()
 
   if (error) {
     if (error.code === "23505") throw new Error(`A season named '${name}' already exists.`)
     throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ""}`)
   }
+  return data as Season
+}
+
+export async function updateSeasonQualificationSettings(input: {
+  seasonId: string
+  enabled: boolean
+  minEvents: number
+  notes?: string
+}) {
+  if (!input.seasonId) throw new Error("Season ID is required.")
+  if (!Number.isInteger(input.minEvents) || input.minEvents < 1 || input.minEvents > 100) {
+    throw new Error("Minimum qualifying events must be a whole number between 1 and 100.")
+  }
+
+  const { organizationId, role } = await getCurrentOrganizationContext()
+  if (role !== "owner" && role !== "admin") {
+    throw new Error(`Your organization role is '${role}'. Only an owner or administrator can edit qualification rules.`)
+  }
+
+  const { data, error } = await supabase
+    .from("seasons")
+    .update({
+      qualification_enabled: input.enabled,
+      qualification_min_events: input.minEvents,
+      qualification_notes: input.notes?.trim() || null,
+    })
+    .eq("organization_id", organizationId)
+    .eq("id", input.seasonId)
+    .select("id,name,start_date,end_date,status,closed_at,notes,qualification_enabled,qualification_min_events,qualification_notes")
+    .single()
+
+  if (error) throw new Error(error.message)
   return data as Season
 }
 
