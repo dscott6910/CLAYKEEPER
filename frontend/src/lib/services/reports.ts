@@ -120,3 +120,19 @@ export async function loadShootReportData(organizationId: string, eventId: strin
     shootOffScores: (shootOffScores.data ?? []) as ReportShootOffScore[],
   }
 }
+
+export type HistoricalRegistration = ReportRegistration & { event_id: string }
+export type HistoricalEnrollment = ReportEnrollment
+export async function loadHistoricalReportData(organizationId: string) {
+  const [registrations, enrollments] = await Promise.all([
+    supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, checked_in, status").eq("organization_id", organizationId),
+    supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status, historical_total_score, historical_first_100_total, result_note").eq("organization_id", organizationId),
+  ])
+
+  for (const result of [registrations, enrollments]) throwIfError(result.error)
+
+  return {
+    registrations: (registrations.data ?? []) as HistoricalRegistration[],
+    enrollments: (enrollments.data ?? []) as HistoricalEnrollment[],
+  }
+}

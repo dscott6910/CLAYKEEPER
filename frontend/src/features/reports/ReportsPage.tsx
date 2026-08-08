@@ -6,10 +6,13 @@ import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
+  loadHistoricalReportData,
   loadReportBaseData,
   loadShootReportData,
   type ReportAthlete,
   type ReportClass,
+  type HistoricalEnrollment,
+  type HistoricalRegistration,
   type ReportEnrollment,
   type ReportEvent,
   type ReportMember,
@@ -34,6 +37,14 @@ type ReportData = {
   shootOffRounds: ReportShootOffRound[]
   shootOffScores: ReportShootOffScore[]
 }
+
+
+type HistoricalData = {
+  registrations: HistoricalRegistration[]
+  enrollments: HistoricalEnrollment[]
+}
+
+const emptyHistoricalData: HistoricalData = { registrations: [], enrollments: [] }
 
 type StandingRow = {
   memberId: string | null
@@ -83,6 +94,7 @@ export function ReportsPage() {
   const [completionFilter, setCompletionFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [data, setData] = useState<ReportData>(emptyData)
+  const [historicalData, setHistoricalData] = useState<HistoricalData>(emptyHistoricalData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -97,6 +109,7 @@ export function ReportsPage() {
       setOrganizationId(base.organizationId)
       setEvents(base.events)
       setShoots(base.shoots)
+      setHistoricalData(await loadHistoricalReportData(base.organizationId))
       const nextEvent = routeEventId || eventId || base.events[0]?.id || ""
       const nextShoot = shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
       setEventId(nextEvent)
@@ -261,6 +274,48 @@ export function ReportsPage() {
     return alerts
   }, [operationalSummary])
 
+  const historicalAnalytics = useMemo(() => {
+    const shootById = new Map(shoots.map((row) => [row.id, row]))
+    const eventRows = events.map((event) => {
+      const registrations = historicalData.registrations.filter((row) => row.event_id === event.id && !["cancelled", "withdrawn"].includes(row.status))
+      const registrationIds = new Set(registrations.map((row) => row.id))
+      const enrollments = historicalData.enrollments.filter((row) => registrationIds.has(row.registration_id) && !["cancelled", "withdrawn"].includes(row.status))
+      const completedTotals = enrollments
+        .filter((enrollment) => shootById.has(enrollment.shoot_id) && enrollment.historical_total_score !== null)
+        .map((enrollment) => Number(enrollment.historical_total_score))
+      const average = completedTotals.length ? completedTotals.reduce((sum, total) => sum + total, 0) / completedTotals.length : null
+      const checkedIn = registrations.filter((row) => row.checked_in).length
+      const paid = registrations.filter((row) => ["paid", "waived"].includes(row.payment_status || "")).length
+      return {
+        event,
+        participants: registrations.length,
+        enrollments: enrollments.length,
+        completed: completedTotals.length,
+        checkInRate: registrations.length ? (checkedIn / registrations.length) * 100 : 0,
+        paymentRate: registrations.length ? (paid / registrations.length) * 100 : 0,
+        average,
+      }
+    }).filter((row) => row.participants > 0 || row.enrollments > 0)
+      .sort((a, b) => (b.event.start_date || "").localeCompare(a.event.start_date || ""))
+
+    const selectedIndex = eventRows.findIndex((row) => row.event.id === eventId)
+    const selected = selectedIndex >= 0 ? eventRows[selectedIndex] : null
+    const previous = selectedIndex >= 0 ? eventRows[selectedIndex + 1] || null : null
+    return { eventRows, selected, previous }
+  }, [historicalData, events, shoots, eventId])
+
+  const classTrends = useMemo(() => {
+    const classById = new Map(data.classes.map((row) => [row.id, row]))
+    const counts = new Map<string, number>()
+    for (const registration of historicalData.registrations) {
+      if (["cancelled", "withdrawn"].includes(registration.status)) continue
+      const cls = classById.get(registration.class_id || "")
+      if (!cls) continue
+      counts.set(cls.display_name, (counts.get(cls.display_name) || 0) + 1)
+    }
+    return Array.from(counts.entries()).map(([name, participants]) => ({ name, participants })).sort((a, b) => b.participants - a.participants).slice(0, 8)
+  }, [historicalData.registrations, data.classes])
+
   const teamStandings = useMemo(() => {
     const grouped = new Map<string, StandingRow[]>()
     for (const row of standings) {
@@ -374,6 +429,30 @@ export function ReportsPage() {
               <header className="border-b px-5 py-4"><h2 className="flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5" />Squad Performance</h2><p className="text-sm text-slate-500">Current squad completion and completed-score performance.</p></header>
               {squadPerformance.length ? <div className="divide-y">{squadPerformance.slice(0, 12).map((row) => <div key={row.squadLabel} className="flex items-center justify-between gap-4 px-5 py-3"><div><p className="font-semibold">{row.squadLabel}</p><p className="text-sm text-slate-500">{row.completed}/{row.participants} complete</p></div><div className="text-right"><p className="font-bold">{row.completed ? row.average.toFixed(1) : "—"} avg</p><p className="text-xs text-slate-500">High {row.high ?? "—"}</p></div></div>)}</div> : <div className="p-8 text-center text-sm text-slate-500">Assign participants to squads to calculate squad performance.</div>}
             </div>
+          </section>
+
+          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold"><BarChart3 className="h-5 w-5" />Historical & Comparative Analytics</h2>
+              <p className="text-sm text-slate-500">Compare participation, operational readiness, and finalized historical performance across events.</p>
+            </div>
+            {historicalAnalytics.selected ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Event participation" value={String(historicalAnalytics.selected.participants)} detail={historicalAnalytics.previous ? `${historicalAnalytics.selected.participants - historicalAnalytics.previous.participants >= 0 ? "+" : ""}${historicalAnalytics.selected.participants - historicalAnalytics.previous.participants} vs previous event` : "No previous event to compare"} />
+              <Metric label="Check-in rate" value={`${historicalAnalytics.selected.checkInRate.toFixed(0)}%`} detail={historicalAnalytics.previous ? `${(historicalAnalytics.selected.checkInRate - historicalAnalytics.previous.checkInRate).toFixed(0)} pts vs previous` : "Current event"} />
+              <Metric label="Payment ready" value={`${historicalAnalytics.selected.paymentRate.toFixed(0)}%`} detail={historicalAnalytics.previous ? `${(historicalAnalytics.selected.paymentRate - historicalAnalytics.previous.paymentRate).toFixed(0)} pts vs previous` : "Paid or waived registrations"} />
+              <Metric label="Historical avg" value={historicalAnalytics.selected.average !== null ? historicalAnalytics.selected.average.toFixed(1) : "—"} detail="Finalized/imported totals only" />
+            </div> : null}
+            <div className="grid gap-5 xl:grid-cols-[2fr_1fr]">
+              <div className="overflow-hidden rounded-xl border">
+                <div className="border-b bg-slate-50 px-4 py-3"><h3 className="font-semibold">Event Comparison</h3><p className="text-xs text-slate-500">Most recent events with registration or shoot enrollment activity.</p></div>
+                {historicalAnalytics.eventRows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead className="text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-left">Event</th><th className="px-3 py-3 text-center">Participants</th><th className="px-3 py-3 text-center">Check-in</th><th className="px-3 py-3 text-center">Payment</th><th className="px-3 py-3 text-center">Final totals</th><th className="px-3 py-3 text-center">Avg</th></tr></thead><tbody>{historicalAnalytics.eventRows.slice(0, 8).map((row) => <tr key={row.event.id} className={`border-t ${row.event.id === eventId ? "bg-emerald-50/60" : ""}`}><td className="px-4 py-3"><p className="font-semibold">{row.event.name}</p><p className="text-xs text-slate-500">{row.event.start_date || "Date not set"}</p></td><td className="px-3 py-3 text-center font-semibold">{row.participants}</td><td className="px-3 py-3 text-center">{row.checkInRate.toFixed(0)}%</td><td className="px-3 py-3 text-center">{row.paymentRate.toFixed(0)}%</td><td className="px-3 py-3 text-center">{row.completed}/{row.enrollments}</td><td className="px-3 py-3 text-center font-semibold">{row.average !== null ? row.average.toFixed(1) : "—"}</td></tr>)}</tbody></table></div> : <div className="p-6 text-center text-sm text-slate-500">Historical event data will appear as tournaments are recorded in ClayKeeper.</div>}
+              </div>
+              <div className="overflow-hidden rounded-xl border">
+                <div className="border-b bg-slate-50 px-4 py-3"><h3 className="font-semibold">Class Participation Trend</h3><p className="text-xs text-slate-500">Organization-wide active registrations by class.</p></div>
+                {classTrends.length ? <div className="divide-y">{classTrends.map((row) => <div key={row.name} className="flex items-center justify-between gap-3 px-4 py-3"><span className="font-medium">{row.name}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold">{row.participants}</span></div>)}</div> : <div className="p-6 text-center text-sm text-slate-500">No class history is available yet.</div>}
+              </div>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800"><strong>Historical scoring note:</strong> score averages use finalized historical/imported totals when they are available. ClayKeeper does not infer a completed historical score from partial live score entries.</div>
           </section>
 
           <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
