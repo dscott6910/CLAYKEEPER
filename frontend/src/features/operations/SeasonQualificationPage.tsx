@@ -131,6 +131,8 @@ export function SeasonQualificationPage() {
     return <PageContainer><div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error || "Qualification tracking is unavailable."}</div></PageContainer>
   }
 
+  const locked = data.season.status === "archived"
+
   return (
     <PageContainer>
       <div className="space-y-6">
@@ -165,12 +167,16 @@ export function SeasonQualificationPage() {
             <div><h2 className="text-lg font-bold">Qualification Rules</h2><p className="mt-1 text-sm text-slate-500">A qualifying event counts only after all of that athlete&apos;s assigned scorecards for the tournament are finalized.</p></div>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-[220px_240px_1fr] lg:items-end">
-            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 text-sm font-semibold"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="h-4 w-4 rounded border-slate-300" />Enable qualification tracking</label>
-            <label className="text-sm font-semibold">Minimum completed events<input type="number" min={1} max={100} value={minEvents} onChange={(event) => setMinEvents(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} className={`${inputClass} mt-1`} /></label>
-            <label className="text-sm font-semibold">Director notes<input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Example: Top qualifiers advance to State Finals" className={`${inputClass} mt-1`} /></label>
+            <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 text-sm font-semibold"><input type="checkbox" checked={enabled} disabled={locked} onChange={(event) => setEnabled(event.target.checked)} className="h-4 w-4 rounded border-slate-300" />Enable qualification tracking</label>
+            <label className="text-sm font-semibold">Minimum completed events<input type="number" min={1} max={100} value={minEvents} disabled={locked} onChange={(event) => setMinEvents(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} className={`${inputClass} mt-1`} /></label>
+            <label className="text-sm font-semibold">Director notes<input value={notes} disabled={locked} onChange={(event) => setNotes(event.target.value)} placeholder="Example: Top qualifiers advance to State Finals" className={`${inputClass} mt-1`} /></label>
           </div>
-          <div className="mt-4 flex justify-end"><Button onClick={() => void saveSettings()} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Qualification Rules</Button></div>
+          <div className="mt-4 flex justify-end"><Button onClick={() => void saveSettings()} disabled={saving || locked}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Qualification Rules</Button></div>
         </section>
+
+        {locked ? (
+          <section className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Historical qualification rules are locked.</p><p className="mt-1 text-emerald-800">This season has been finalized and archived. Qualification settings are read-only to preserve the historical championship record.</p></div></section>
+        ) : null}
 
         {!data.season.qualification_enabled ? (
           <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Qualification tracking is currently disabled.</p><p className="mt-1 text-blue-800">You can review participation below, but ClayKeeper will not label athletes Qualified, On Track, At Risk, or Not Qualified until the rule is enabled.</p></div></section>

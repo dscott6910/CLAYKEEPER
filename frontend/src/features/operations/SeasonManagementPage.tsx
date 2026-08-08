@@ -57,6 +57,7 @@ function statusClasses(status: Season["status"]) {
   if (status === "active") return "bg-emerald-100 text-emerald-800"
   if (status === "planning") return "bg-blue-100 text-blue-800"
   if (status === "closed") return "bg-slate-200 text-slate-700"
+  if (status === "archived") return "bg-slate-950 text-white"
   return "bg-amber-100 text-amber-800"
 }
 
@@ -254,7 +255,7 @@ export function SeasonManagementPage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           <Summary label="Active Season" value={activeSeason?.name ?? "None"} detail={activeSeason ? `${formatDate(activeSeason.start_date)} – ${formatDate(activeSeason.end_date)}` : "Create or activate a season"} />
-          <Summary label="Seasons" value={String(seasons.length)} detail={`${seasons.filter((season) => season.status === "planning").length} planning · ${seasons.filter((season) => season.status === "closed").length} closed`} />
+          <Summary label="Seasons" value={String(seasons.length)} detail={`${seasons.filter((season) => season.status === "planning").length} planning · ${seasons.filter((season) => season.status === "closed").length} closed · ${seasons.filter((season) => season.status === "archived").length} archived`} />
           <Summary label="Unassigned Events" value={String(unassignedEvents.length)} detail={unassignedEvents.length ? "Assign these before season standings" : "All events are grouped"} attention={unassignedEvents.length > 0} />
         </section>
 
@@ -302,8 +303,9 @@ export function SeasonManagementPage() {
                   <Link to={`/seasons/${season.id}/standings`} className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><Trophy className="mr-1.5 h-3.5 w-3.5" />Standings</Link>
                   <Link to={`/seasons/${season.id}/qualification`} className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><GraduationCap className="mr-1.5 h-3.5 w-3.5" />Qualification</Link>
                   <Link to={`/seasons/${season.id}/teams`} className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><Medal className="mr-1.5 h-3.5 w-3.5" />Teams</Link>
-                  <Button size="sm" variant="outline" onClick={() => beginEdit(season)}><Pencil className="h-3.5 w-3.5" />Edit</Button>
-                  {season.status !== "active" && season.status !== "closed" ? (
+                  <Link to={`/seasons/${season.id}/finals`} className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><Trophy className="mr-1.5 h-3.5 w-3.5" />Finals</Link>
+                  {season.status !== "archived" ? <Button size="sm" variant="outline" onClick={() => beginEdit(season)}><Pencil className="h-3.5 w-3.5" />Edit</Button> : null}
+                  {season.status === "planning" ? (
                     <Button size="sm" variant="outline" onClick={() => void handleActivate(season)} disabled={busy === `activate:${season.id}`}>
                       {busy === `activate:${season.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Make Active
                     </Button>
@@ -348,7 +350,7 @@ export function SeasonManagementPage() {
 
           {selectedSeason ? (
             <div className="mt-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-bold text-slate-950">{selectedSeason.name} Events</h3><p className="text-sm text-slate-500">{selectedEvents.length} assigned tournament{selectedEvents.length === 1 ? "" : "s"}</p></div><div className="flex flex-wrap gap-2"><Link to={`/seasons/${selectedSeason.id}/standings`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />View Standings</Link><Link to={`/seasons/${selectedSeason.id}/qualification`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><GraduationCap className="mr-2 h-4 w-4" />Qualification</Link><Link to={`/seasons/${selectedSeason.id}/teams`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Medal className="mr-2 h-4 w-4" />Team Rankings</Link></div></div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-bold text-slate-950">{selectedSeason.name} Events</h3><p className="text-sm text-slate-500">{selectedEvents.length} assigned tournament{selectedEvents.length === 1 ? "" : "s"}</p></div><div className="flex flex-wrap gap-2"><Link to={`/seasons/${selectedSeason.id}/standings`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />View Standings</Link><Link to={`/seasons/${selectedSeason.id}/qualification`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><GraduationCap className="mr-2 h-4 w-4" />Qualification</Link><Link to={`/seasons/${selectedSeason.id}/teams`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Medal className="mr-2 h-4 w-4" />Team Rankings</Link><Link to={`/seasons/${selectedSeason.id}/finals`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />Season Finals</Link></div></div>
               <div className="mt-3 space-y-2">
                 {selectedEvents.map((event) => (
                   <EventAssignmentRow key={event.id} event={event} seasons={seasons} busy={busy === `event:${event.id}`} onAssign={handleAssignment} />
@@ -375,11 +377,11 @@ function EventAssignmentRow(props: {
       <select
         className={inputClass}
         value={props.event.season_id ?? ""}
-        disabled={props.busy}
+        disabled={props.busy || props.seasons.find((season) => season.id === props.event.season_id)?.status === "archived"}
         onChange={(event) => void props.onAssign(props.event, event.target.value || null)}
       >
         <option value="">Unassigned</option>
-        {props.seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}
+        {props.seasons.map((season) => <option key={season.id} value={season.id} disabled={season.status === "archived" && season.id !== props.event.season_id}>{season.name} ({season.status})</option>)}
       </select>
     </div>
   )

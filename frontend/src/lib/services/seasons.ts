@@ -14,6 +14,26 @@ export type Season = {
   qualification_notes: string | null
 }
 
+async function getSeasonStatus(seasonId: string) {
+  const { organizationId } = await getCurrentOrganizationContext()
+  const { data, error } = await supabase
+    .from("seasons")
+    .select("status")
+    .eq("organization_id", organizationId)
+    .eq("id", seasonId)
+    .single()
+  if (error) throw new Error(error.message)
+  return data.status as Season["status"]
+}
+
+async function assertSeasonMutable(seasonId: string) {
+  const status = await getSeasonStatus(seasonId)
+  if (status === "archived") {
+    throw new Error("This season has been finalized and archived. Its configuration is locked.")
+  }
+  return status
+}
+
 export async function listSeasons(): Promise<Season[]> {
   const { organizationId } = await getCurrentOrganizationContext()
   const { data, error } = await supabase
@@ -74,6 +94,8 @@ export async function updateSeason(input: { id: string; name: string; startDate:
   if (!input.startDate || !input.endDate) throw new Error("Season start and end dates are required.")
   if (input.endDate < input.startDate) throw new Error("Season end date must be on or after the start date.")
 
+  await assertSeasonMutable(input.id)
+
   const { organizationId, role } = await getCurrentOrganizationContext()
   if (role !== "owner" && role !== "admin") {
     throw new Error(`Your organization role is '${role}'. Only an owner or administrator can edit a season.`)
@@ -105,6 +127,8 @@ export async function updateSeasonQualificationSettings(input: {
     throw new Error("Minimum qualifying events must be a whole number between 1 and 100.")
   }
 
+  await assertSeasonMutable(input.seasonId)
+
   const { organizationId, role } = await getCurrentOrganizationContext()
   if (role !== "owner" && role !== "admin") {
     throw new Error(`Your organization role is '${role}'. Only an owner or administrator can edit qualification rules.`)
@@ -127,6 +151,8 @@ export async function updateSeasonQualificationSettings(input: {
 }
 
 export async function activateSeason(id: string) {
+  const status = await assertSeasonMutable(id)
+  if (status !== "planning") throw new Error("Only a planning season can be activated.")
   const { error } = await supabase.rpc("activate_season", { p_season_id: id })
   if (error) throw error
 }
@@ -197,6 +223,28 @@ export async function assignEventToSeason(input: {
   const { organizationId, role } = await getCurrentOrganizationContext()
   if (role !== "owner" && role !== "admin") {
     throw new Error(`Your organization role is '${role}'. Only an owner or administrator can assign events to seasons.`)
+  }
+
+  const { data: currentEvent, error: currentEventError } = await supabase
+    .from("events")
+    .select("season_id")
+    .eq("organization_id", organizationId)
+    .eq("id", input.eventId)
+    .single()
+  if (currentEventError) throw new Error(currentEventError.message)
+
+  if (currentEvent.season_id) {
+    const currentStatus = await getSeasonStatus(currentEvent.season_id)
+    if (currentStatus === "archived") {
+      throw new Error("This event belongs to a finalized season and cannot be reassigned.")
+    }
+  }
+
+  if (input.seasonId) {
+    const targetStatus = await getSeasonStatus(input.seasonId)
+    if (targetStatus === "archived") {
+      throw new Error("Events cannot be assigned to a finalized season.")
+    }
   }
 
   if (input.seasonId) {
