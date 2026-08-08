@@ -106,6 +106,12 @@ const SeasonManagementPage = lazy(() =>
   })),
 )
 
+const SeasonStandingsPage = lazy(() =>
+  import("@/features/operations/SeasonStandingsPage").then((module) => ({
+    default: module.SeasonStandingsPage,
+  })),
+)
+
 const SettingsPage = lazy(() =>
   import("@/features/settings/SettingsPage").then((module) => ({
     default: module.SettingsPage,
@@ -547,6 +553,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <SeasonManagementPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="seasons/:seasonId/standings"
+                  element={
+                    <LazyRoute>
+                      <SeasonStandingsPage />
                     </LazyRoute>
                   }
                 />

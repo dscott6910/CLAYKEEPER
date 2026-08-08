@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Save,
   Sparkles,
+  Trophy,
   Unlink,
 } from "lucide-react"
 import { Link } from "react-router-dom"
@@ -296,6 +297,7 @@ export function SeasonManagementPage() {
                   <p className="mt-4 text-sm text-slate-600">{seasonCounts.get(season.id) ?? 0} event{(seasonCounts.get(season.id) ?? 0) === 1 ? "" : "s"}</p>
                 </button>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <Link to={`/seasons/${season.id}/standings`} className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"><Trophy className="mr-1.5 h-3.5 w-3.5" />Standings</Link>
                   <Button size="sm" variant="outline" onClick={() => beginEdit(season)}><Pencil className="h-3.5 w-3.5" />Edit</Button>
                   {season.status !== "active" && season.status !== "closed" ? (
                     <Button size="sm" variant="outline" onClick={() => void handleActivate(season)} disabled={busy === `activate:${season.id}`}>
@@ -342,7 +344,7 @@ export function SeasonManagementPage() {
 
           {selectedSeason ? (
             <div className="mt-5">
-              <div className="flex items-center justify-between gap-3"><div><h3 className="font-bold text-slate-950">{selectedSeason.name} Events</h3><p className="text-sm text-slate-500">{selectedEvents.length} assigned tournament{selectedEvents.length === 1 ? "" : "s"}</p></div></div>
+              <div className="flex items-center justify-between gap-3"><div><h3 className="font-bold text-slate-950">{selectedSeason.name} Events</h3><p className="text-sm text-slate-500">{selectedEvents.length} assigned tournament{selectedEvents.length === 1 ? "" : "s"}</p></div><Link to={`/seasons/${selectedSeason.id}/standings`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />View Standings</Link></div>
               <div className="mt-3 space-y-2">
                 {selectedEvents.map((event) => (
                   <EventAssignmentRow key={event.id} event={event} seasons={seasons} busy={busy === `event:${event.id}`} onAssign={handleAssignment} />
