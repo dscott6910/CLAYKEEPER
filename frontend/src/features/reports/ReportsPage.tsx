@@ -100,6 +100,7 @@ export function ReportsPage() {
 
   const eventShoots = useMemo(() => shoots.filter((shoot) => shoot.event_id === eventId), [shoots, eventId])
   const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
+  const selectedEvent = events.find((event) => event.id === eventId)
 
   async function loadBase() {
     setLoading(true)
@@ -331,6 +332,57 @@ export function ReportsPage() {
     }).sort((a, b) => b.total - a.total || a.teamName.localeCompare(b.teamName))
   }, [standings, selectedShoot])
 
+  function downloadCsv(filename: string, rows: Array<Array<string | number | null>>) {
+    const blob = new Blob([rows.map((row) => row.map(csvValue).join(",")).join("\n")], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportDirectorSummary() {
+    if (!selectedShoot) return
+    const eventName = selectedEvent?.name || "Event"
+    const eventDates = [selectedEvent?.start_date, selectedEvent?.end_date].filter(Boolean).join(" to ") || "Date not set"
+    const status = performanceSummary.completed < standings.length ? "PROVISIONAL" : "FINAL"
+    const rows: Array<Array<string | number | null>> = [
+      ["ClayKeeper Director Report"],
+      ["Event", eventName],
+      ["Event dates", eventDates],
+      ["Shoot", selectedShoot.name],
+      ["Report status", status],
+      [],
+      ["Operational Summary"],
+      ["Active registrations", operationalSummary.activeRegistrations],
+      ["Checked in", operationalSummary.checkedIn],
+      ["Check-in rate", `${operationalSummary.checkInRate.toFixed(0)}%`],
+      ["Squad assigned", operationalSummary.assigned],
+      ["Unassigned", operationalSummary.unassigned],
+      ["Payment review", operationalSummary.paymentReview],
+      ["Scorecards complete", completeCount],
+      ["Scorecards incomplete", operationalSummary.incomplete],
+      ["Draft score entries", operationalSummary.draftEntries],
+      ["Finalized score entries", operationalSummary.finalizedEntries],
+      [],
+      ["Performance Summary"],
+      ["Completion rate", `${performanceSummary.completionRate.toFixed(0)}%`],
+      ["Score-entry rate", `${performanceSummary.scoreEntryRate.toFixed(0)}%`],
+      ["Average completed total", performanceSummary.completed ? performanceSummary.average.toFixed(1) : null],
+      ["High completed total", performanceSummary.completed ? performanceSummary.high : null],
+      ["Low completed total", performanceSummary.completed ? performanceSummary.low : null],
+      [],
+      ["Financial Summary"],
+      ["Shoot fees", money(totalFees)],
+      ["Amount paid", money(totalPaid)],
+      [],
+      ["Current Alerts"],
+      ...(operationalAlerts.length ? operationalAlerts.map((alert) => [alert.label, alert.detail]) : [["Status", "No current operational warnings detected."]]),
+    ]
+    downloadCsv(`${eventName}-${selectedShoot.name}-director-report`.replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".csv", rows)
+  }
+
   function exportCsv() {
     if (!selectedShoot) return
     const headers = ["Place", "Participant", "CYSSA #", "Team", "Class", "Squad", "Position", ...Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => `R${i + 1}`), "Total", ...data.shootOffRounds.map((round) => round.label || `SO${round.round_number}`), "Complete"]
@@ -371,12 +423,33 @@ export function ReportsPage() {
             </label>
             <div className="flex items-end gap-2">
               <Button variant="outline" onClick={() => void loadReport()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button>
-              <Button variant="outline" onClick={() => window.print()}><Printer />Print</Button>
-              <Button onClick={exportCsv} disabled={!filteredStandings.length}><Download />CSV</Button>
+              <Button variant="outline" onClick={() => window.print()}><Printer />Print / PDF</Button>
+              <Button variant="outline" onClick={exportDirectorSummary} disabled={!selectedShoot}><Download />Director CSV</Button>
+              <Button onClick={exportCsv} disabled={!filteredStandings.length}><Download />Standings CSV</Button>
             </div>
           </section>
 
           {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Reports could not load.</strong><p>{error}</p></div></div> : null}
+
+          <section className="rounded-2xl border bg-white p-5 shadow-sm print:border-0 print:p-0 print:shadow-none">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">ClayKeeper Director Report</p>
+                <h1 className="mt-1 text-2xl font-bold">{selectedEvent?.name || "Event Report"}</h1>
+                <p className="mt-1 text-sm text-slate-600">{selectedShoot?.name || "Select a shoot"}{selectedEvent?.start_date ? ` · ${selectedEvent.start_date}${selectedEvent.end_date && selectedEvent.end_date !== selectedEvent.start_date ? ` to ${selectedEvent.end_date}` : ""}` : ""}</p>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-xs font-bold ${performanceSummary.completed < standings.length ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                {performanceSummary.completed < standings.length ? "PROVISIONAL" : "FINAL / COMPLETE"}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <DirectorMetric label="Check-in" value={`${operationalSummary.checkInRate.toFixed(0)}%`} detail={`${operationalSummary.checkedIn}/${operationalSummary.activeRegistrations} active`} />
+              <DirectorMetric label="Scoring" value={`${performanceSummary.completionRate.toFixed(0)}%`} detail={`${completeCount}/${standings.length} complete`} />
+              <DirectorMetric label="Payment review" value={String(operationalSummary.paymentReview)} detail={`${operationalSummary.paid} paid/waived`} />
+              <DirectorMetric label="Completed avg" value={performanceSummary.completed ? performanceSummary.average.toFixed(1) : "—"} detail={performanceSummary.completed < standings.length ? "Complete cards only" : "All completed cards"} />
+            </div>
+            {performanceSummary.completed < standings.length ? <p className="mt-3 text-xs text-amber-800"><strong>Provisional:</strong> incomplete scorecards are excluded from averages and high/low performance values.</p> : <p className="mt-3 text-xs text-emerald-800"><strong>Complete:</strong> all scorecards for the selected shoot are complete.</p>}
+          </section>
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Stat icon={Users} label="Registered" value={standings.length} />
@@ -489,4 +562,8 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 
 function OperationalDetail({ label, value, detail }: { label: string; value: string | number; detail: string }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><div className="mt-1 flex items-end justify-between gap-2"><p className="text-xl font-bold">{value}</p><p className="text-xs text-slate-500">{detail}</p></div></div>
+}
+
+function DirectorMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="rounded-xl border bg-slate-50 p-3 print:bg-white"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-xl font-bold">{value}</p><p className="text-xs text-slate-500">{detail}</p></div>
 }
