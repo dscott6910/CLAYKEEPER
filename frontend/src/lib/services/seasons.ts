@@ -127,3 +127,63 @@ export async function closeSeasonAndRollover(input: {
   if (error) throw new Error(error.message)
   return data as SeasonCloseoutSummary
 }
+
+
+export type SeasonEvent = {
+  id: string
+  organization_id: string
+  season_id: string | null
+  name: string
+  event_year: number | null
+  discipline: string | null
+  event_type: string | null
+  location_name: string | null
+  start_date: string | null
+  status: string
+  active: boolean
+}
+
+export async function listSeasonEvents(): Promise<SeasonEvent[]> {
+  const { organizationId } = await getCurrentOrganizationContext()
+  const { data, error } = await supabase
+    .from("events")
+    .select("id,organization_id,season_id,name,event_year,discipline,event_type,location_name,start_date,status,active")
+    .eq("organization_id", organizationId)
+    .order("start_date", { ascending: false, nullsFirst: false })
+
+  if (error) throw error
+  return (data ?? []) as SeasonEvent[]
+}
+
+export async function assignEventToSeason(input: {
+  eventId: string
+  seasonId: string | null
+}) {
+  const { organizationId, role } = await getCurrentOrganizationContext()
+  if (role !== "owner" && role !== "admin") {
+    throw new Error(`Your organization role is '${role}'. Only an owner or administrator can assign events to seasons.`)
+  }
+
+  if (input.seasonId) {
+    const { data: season, error: seasonError } = await supabase
+      .from("seasons")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("id", input.seasonId)
+      .maybeSingle()
+
+    if (seasonError) throw seasonError
+    if (!season) throw new Error("The selected season could not be found for this organization.")
+  }
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({ season_id: input.seasonId })
+    .eq("organization_id", organizationId)
+    .eq("id", input.eventId)
+    .select("id,season_id")
+    .single()
+
+  if (error) throw error
+  return data as { id: string; season_id: string | null }
+}

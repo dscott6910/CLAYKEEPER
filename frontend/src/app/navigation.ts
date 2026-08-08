@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   BarChart3,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   DatabaseBackup,
   Wrench,
@@ -135,6 +136,11 @@ export const navigationSections: NavigationSection[] = [
         label: "Live Leaderboard",
         path: "/leaderboard",
         icon: Tv,
+      },
+      {
+        label: "Season Management",
+        path: "/seasons",
+        icon: CalendarRange,
       },
       {
         label: "Seasons & Imports",
