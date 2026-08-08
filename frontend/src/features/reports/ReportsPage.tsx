@@ -233,6 +233,34 @@ export function ReportsPage() {
     }).sort((a, b) => b.average - a.average || a.squadLabel.localeCompare(b.squadLabel))
   }, [standings])
 
+  const operationalSummary = useMemo(() => {
+    const activeRegistrations = data.registrations.filter((row) => !["cancelled", "withdrawn"].includes(row.status))
+    const checkedIn = activeRegistrations.filter((row) => row.checked_in).length
+    const paid = activeRegistrations.filter((row) => row.payment_status === "paid").length
+    const paymentReview = activeRegistrations.filter((row) => !["paid", "waived"].includes(row.payment_status || "")).length
+    const assigned = standings.filter((row) => row.memberId !== null).length
+    const unassigned = standings.length - assigned
+    const started = standings.filter((row) => row.enteredRounds > 0).length
+    const notStarted = standings.length - started
+    const incomplete = standings.length - completeCount
+    const draftEntries = data.scores.filter((row) => row.status !== "finalized").length
+    const finalizedEntries = data.scores.filter((row) => row.status === "finalized").length
+    const checkInRate = activeRegistrations.length ? (checkedIn / activeRegistrations.length) * 100 : 0
+    const assignmentRate = standings.length ? (assigned / standings.length) * 100 : 0
+    const completionRate = standings.length ? (completeCount / standings.length) * 100 : 0
+    return { activeRegistrations: activeRegistrations.length, checkedIn, paid, paymentReview, assigned, unassigned, started, notStarted, incomplete, draftEntries, finalizedEntries, checkInRate, assignmentRate, completionRate }
+  }, [data.registrations, data.scores, standings, completeCount])
+
+  const operationalAlerts = useMemo(() => {
+    const alerts: Array<{ label: string; detail: string; tone: "amber" | "red" }> = []
+    if (operationalSummary.unassigned > 0) alerts.push({ label: "Squad assignments", detail: `${operationalSummary.unassigned} participant${operationalSummary.unassigned === 1 ? " is" : "s are"} not assigned to a squad.`, tone: "amber" })
+    if (operationalSummary.paymentReview > 0) alerts.push({ label: "Payment review", detail: `${operationalSummary.paymentReview} registration${operationalSummary.paymentReview === 1 ? " needs" : "s need"} payment review.`, tone: "amber" })
+    if (operationalSummary.incomplete > 0 && operationalSummary.started > 0) alerts.push({ label: "Scoring incomplete", detail: `${operationalSummary.incomplete} scorecard${operationalSummary.incomplete === 1 ? " remains" : "s remain"} incomplete.`, tone: "amber" })
+    if (operationalSummary.draftEntries > 0) alerts.push({ label: "Draft scoring data", detail: `${operationalSummary.draftEntries} score entr${operationalSummary.draftEntries === 1 ? "y is" : "ies are"} still in draft status.`, tone: "amber" })
+    if (operationalSummary.activeRegistrations > 0 && operationalSummary.checkedIn === 0) alerts.push({ label: "Check-in", detail: "No active registrations are checked in yet.", tone: "red" })
+    return alerts
+  }, [operationalSummary])
+
   const teamStandings = useMemo(() => {
     const grouped = new Map<string, StandingRow[]>()
     for (const row of standings) {
@@ -305,6 +333,26 @@ export function ReportsPage() {
 
           <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
             <div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold"><CheckCircle2 className="h-5 w-5" />Operational Analytics</h2>
+              <p className="text-sm text-slate-500">Registration, check-in, squad readiness, scoring workflow, and payment health for the selected shoot.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Check-in" value={`${operationalSummary.checkInRate.toFixed(0)}%`} detail={`${operationalSummary.checkedIn} of ${operationalSummary.activeRegistrations} active registrations`} />
+              <Metric label="Squad ready" value={`${operationalSummary.assignmentRate.toFixed(0)}%`} detail={`${operationalSummary.assigned} assigned · ${operationalSummary.unassigned} unassigned`} />
+              <Metric label="Scoring complete" value={`${operationalSummary.completionRate.toFixed(0)}%`} detail={`${completeCount} complete · ${operationalSummary.notStarted} not started`} />
+              <Metric label="Payment ready" value={`${operationalSummary.paid} / ${operationalSummary.activeRegistrations}`} detail={`${operationalSummary.paymentReview} registration${operationalSummary.paymentReview === 1 ? "" : "s"} need review`} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <OperationalDetail label="Checked in" value={operationalSummary.checkedIn} detail={`${operationalSummary.activeRegistrations - operationalSummary.checkedIn} outstanding`} />
+              <OperationalDetail label="Scoring started" value={operationalSummary.started} detail={`${operationalSummary.notStarted} not started`} />
+              <OperationalDetail label="Finalized entries" value={operationalSummary.finalizedEntries} detail={`${operationalSummary.draftEntries} draft entries`} />
+              <OperationalDetail label="Incomplete cards" value={operationalSummary.incomplete} detail={`${completeCount} complete`} />
+            </div>
+            {operationalAlerts.length ? <div className="space-y-2">{operationalAlerts.map((alert) => <div key={alert.label} className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${alert.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>{alert.label}:</strong> {alert.detail}</span></div>)}</div> : <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Operationally ready:</strong> no current registration, assignment, payment, or scoring workflow warnings were detected for this shoot.</span></div>}
+          </section>
+
+          <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
+            <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold"><BarChart3 className="h-5 w-5" />Tournament Performance</h2>
               <p className="text-sm text-slate-500">Live performance metrics use completed scorecards for score averages and include incomplete data separately.</p>
             </div>
@@ -358,4 +406,8 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Trophy; label: string
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return <div className="rounded-xl border bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>
+}
+
+function OperationalDetail({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><div className="mt-1 flex items-end justify-between gap-2"><p className="text-xl font-bold">{value}</p><p className="text-xs text-slate-500">{detail}</p></div></div>
 }
