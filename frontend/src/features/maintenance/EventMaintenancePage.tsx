@@ -85,7 +85,6 @@ export function EventMaintenancePage() {
       toast.success(`${result?.eventName ?? event.name} was deleted.`)
     } catch (deleteError) {
       const message = deleteError instanceof Error ? deleteError.message : "The event could not be deleted."
-      window.alert(`Delete failed\n\n${message}`)
       toast.error(message)
     } finally {
       setDeletingId(null)

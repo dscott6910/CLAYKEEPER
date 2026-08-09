@@ -136,6 +136,12 @@ const SettingsPage = lazy(() =>
   })),
 )
 
+const NotFoundPage = lazy(() =>
+  import("@/features/system/NotFoundPage").then((module) => ({
+    default: module.NotFoundPage,
+  })),
+)
+
 const SquadsPage = lazy(() =>
   import("@/features/squads/SquadsPage").then((module) => ({
     default: module.SquadsPage,
@@ -673,6 +679,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <SettingsPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="*"
+                  element={
+                    <LazyRoute>
+                      <NotFoundPage />
                     </LazyRoute>
                   }
                 />
