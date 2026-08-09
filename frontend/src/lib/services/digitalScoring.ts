@@ -198,85 +198,36 @@ export async function saveDigitalScorecard(input: {
   expectedUpdatedAt?: string | null
   stationScores: Array<{ stationId: string; hits: number; targets: number }>
 }) {
-  const totalScore = input.stationScores.reduce((sum, row) => sum + row.hits, 0)
-  const totalTargets = input.stationScores.reduce((sum, row) => sum + row.targets, 0)
-  const payload = {
-    organization_id: input.organizationId,
-    event_id: input.eventId,
-    shoot_id: input.shootId,
-    squad_member_id: input.squadMemberId,
-    course_id: input.courseId,
-    status: input.status,
-    malfunction_count: input.malfunctionCount,
-    verified_by_1: input.verifiedBy1.trim() || null,
-    verified_by_2: input.verifiedBy2.trim() || null,
-    entered_by_name: input.enteredByName.trim() || null,
-    notes: input.notes.trim() || null,
-    total_score: totalScore,
-    total_targets: totalTargets,
-    finalized_at: input.status === "finalized" ? new Date().toISOString() : null,
-    updated_at: new Date().toISOString(),
-  }
+  const { data, error } = await supabase.rpc("save_digital_scorecard_atomic", {
+    p_organization_id: input.organizationId,
+    p_event_id: input.eventId,
+    p_shoot_id: input.shootId,
+    p_squad_member_id: input.squadMemberId,
+    p_course_id: input.courseId,
+    p_scorecard_id: input.scorecardId ?? null,
+    p_status: input.status,
+    p_malfunction_count: input.malfunctionCount,
+    p_verified_by_1: input.verifiedBy1,
+    p_verified_by_2: input.verifiedBy2,
+    p_entered_by_name: input.enteredByName,
+    p_notes: input.notes,
+    p_expected_updated_at: input.expectedUpdatedAt ?? null,
+    p_station_scores: input.stationScores,
+  })
 
-  let scorecardId = input.scorecardId ?? null
-  if (scorecardId) {
-    let updateQuery = supabase
-      .from("digital_scorecards")
-      .update(payload)
-      .eq("id", scorecardId)
-      .eq("status", "draft")
-
-    if (input.expectedUpdatedAt) {
-      updateQuery = updateQuery.eq("updated_at", input.expectedUpdatedAt)
-    }
-
-    const result = await updateQuery.select("id,updated_at").maybeSingle()
-    check(result.error)
-    if (!result.data?.id) {
-      throw new DigitalScorecardConflictError()
-    }
-    scorecardId = result.data.id as string
-  } else {
-    const existingResult = await supabase
-      .from("digital_scorecards")
-      .select("id,status,updated_at")
-      .eq("organization_id", input.organizationId)
-      .eq("event_id", input.eventId)
-      .eq("squad_member_id", input.squadMemberId)
-      .maybeSingle()
-    check(existingResult.error)
-
-    if (existingResult.data?.id) {
+  if (error) {
+    if (error.message?.includes("CK_SCORECARD_CONFLICT")) {
       throw new DigitalScorecardConflictError(
-        "Another device created this scorecard while your device was offline.",
+        input.scorecardId
+          ? "A newer server scorecard was found."
+          : "Another device created this scorecard while your device was offline.",
       )
     }
-
-    const result = await supabase
-      .from("digital_scorecards")
-      .insert(payload)
-      .select("id")
-      .single()
-    check(result.error)
-    scorecardId = result.data?.id as string
+    check(error)
   }
 
+  const row = Array.isArray(data) ? data[0] : data
+  const scorecardId = row?.scorecard_id as string | undefined
   if (!scorecardId) throw new Error("No scorecard ID was returned.")
-
-  const deleteResult = await supabase.from("digital_scorecard_station_scores").delete().eq("scorecard_id", scorecardId)
-  check(deleteResult.error)
-  if (input.stationScores.length) {
-    const insertResult = await supabase.from("digital_scorecard_station_scores").insert(
-      input.stationScores.map((row) => ({
-        organization_id: input.organizationId,
-        event_id: input.eventId,
-        shoot_id: input.shootId,
-        scorecard_id: scorecardId,
-        station_id: row.stationId,
-        hits: row.hits,
-      })),
-    )
-    check(insertResult.error)
-  }
   return scorecardId
 }
