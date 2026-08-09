@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react"
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { AppShell } from "@/app/AppShell"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
@@ -145,12 +145,6 @@ const NotFoundPage = lazy(() =>
 const SquadsPage = lazy(() =>
   import("@/features/squads/SquadsPage").then((module) => ({
     default: module.SquadsPage,
-  })),
-)
-
-const TeamsPage = lazy(() =>
-  import("@/features/teams/TeamsPage").then((module) => ({
-    default: module.TeamsPage,
   })),
 )
 
@@ -350,14 +344,7 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="teams"
-                  element={
-                    <LazyRoute>
-                      <TeamsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route path="teams" element={<Navigate to="/coach" replace />} />
 
                 <Route
                   path="coach"

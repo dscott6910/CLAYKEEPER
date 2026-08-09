@@ -10,7 +10,6 @@ import {
   RadioTower,
   Medal,
   LayoutDashboard,
-  School,
   GraduationCap,
   Settings,
   Target,
@@ -56,11 +55,6 @@ export const navigationSections: NavigationSection[] = [
         label: "ActiveNet Import",
         path: "/participants/activenet",
         icon: FileInput,
-      },
-      {
-        label: "Teams",
-        path: "/teams",
-        icon: School,
       },
       {
         label: "Coach Portal",

@@ -141,7 +141,7 @@ export function AnalyticsPage() {
             </div>
           </DashboardSection>
 
-          <DashboardSection title="Top Teams" description="Ranked by average round score" action={<Link className="text-sm font-semibold text-emerald-700 hover:text-emerald-800" to="/teams">Open teams</Link>}>
+          <DashboardSection title="Top Teams" description="Ranked by average round score" action={<Link className="text-sm font-semibold text-emerald-700 hover:text-emerald-800" to="/coach">Open Coach Portal</Link>}>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500"><th className="pb-3">Team</th><th className="pb-3 text-right">Avg.</th><th className="pb-3 text-right">Participants</th><th className="pb-3 text-right">Rounds</th></tr></thead>
