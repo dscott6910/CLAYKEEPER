@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
+import { Menu } from "lucide-react"
 import { Outlet } from "react-router-dom"
 
 import { AppSidebar } from "@/app/AppSidebar"
 import {
   MobileNavigationContext,
 } from "@/app/MobileNavigationContext"
+import { Button } from "@/components/ui/button"
 import { GlobalSearch } from "@/components/system/GlobalSearch"
 
 export function AppShell() {
@@ -28,7 +30,10 @@ export function AppShell() {
     }
 
     document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+    }
   }, [mobileNavigationOpen])
 
   useEffect(() => {
@@ -70,9 +75,28 @@ export function AppShell() {
           </div>
         ) : null}
 
-        <main className="min-w-0 flex-1">
-          <Outlet />
-        </main>
+        <div className="min-w-0 flex-1">
+          <div className="sticky top-0 z-40 flex h-14 items-center border-b border-slate-200 bg-white px-3 shadow-sm md:hidden">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Open navigation"
+              aria-haspopup="dialog"
+              onClick={() => setMobileNavigationOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+
+            <span className="ml-2 text-sm font-semibold text-slate-700">
+              ClayKeeper
+            </span>
+          </div>
+
+          <main className="min-w-0">
+            <Outlet />
+          </main>
+        </div>
 
         <GlobalSearch />
       </div>

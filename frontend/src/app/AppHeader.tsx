@@ -1,6 +1,5 @@
-import { Bell, CalendarDays, ChevronDown, Menu } from "lucide-react"
+import { Bell, CalendarDays, ChevronDown } from "lucide-react"
 
-import { useMobileNavigation } from "@/app/MobileNavigationContext"
 import { Button } from "@/components/ui/button"
 
 type AppHeaderProps = {
@@ -14,23 +13,9 @@ export function AppHeader({
   description,
   seasonLabel,
 }: AppHeaderProps) {
-  const { openMobileNavigation } = useMobileNavigation()
-
   return (
     <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          aria-label="Open navigation"
-          aria-haspopup="dialog"
-          onClick={openMobileNavigation}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-
         <div className="min-w-0">
           <h2 className="truncate text-xl font-semibold text-slate-950">
             {title}
