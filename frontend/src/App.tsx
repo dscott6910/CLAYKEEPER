@@ -186,6 +186,18 @@ const PublicPortalPage = lazy(() =>
   })),
 )
 
+const PublicEventPage = lazy(() =>
+  import("@/features/public/PublicEventPage").then((module) => ({
+    default: module.PublicEventPage,
+  })),
+)
+
+const PublicEventSettingsPage = lazy(() =>
+  import("@/features/events/PublicEventSettingsPage").then((module) => ({
+    default: module.PublicEventSettingsPage,
+  })),
+)
+
 const MobileOperationsPage = lazy(() =>
   import("@/features/mobile/MobileOperationsPage").then((module) => ({
     default: module.MobileOperationsPage,
@@ -272,6 +284,15 @@ function App() {
               element={
                 <LazyRoute>
                   <PublicPortalPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/public/events/:eventId"
+              element={
+                <LazyRoute>
+                  <PublicEventPage />
                 </LazyRoute>
               }
             />
@@ -382,6 +403,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <TournamentOperationsCenterPage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="events/:eventId/public"
+                  element={
+                    <LazyRoute>
+                      <PublicEventSettingsPage />
                     </LazyRoute>
                   }
                 />

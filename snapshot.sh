@@ -32,7 +32,10 @@ tar \
   --exclude='node_modules' \
   --exclude='dist' \
   --exclude='*.log' \
-  --exclude='frontend/.env.backup' \
+  --exclude='CLAYKEEPER/frontend/.env' \
+  --exclude='CLAYKEEPER/frontend/.env.*' \
+  --exclude='frontend/.env' \
+  --exclude='frontend/.env.*' \
   -czf "$ARCHIVE_PATH" \
   -C "$(dirname "$PROJECT_ROOT")" \
   "$(basename "$PROJECT_ROOT")"
