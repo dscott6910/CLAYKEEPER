@@ -114,11 +114,11 @@ export async function loadEventOperations(requestedEventId?: string): Promise<Ev
   const incompleteScores = Math.max(0, memberRows.length - completedParticipants)
 
   const alerts: OperationsAlert[] = []
-  if (registrations.length && registrations.some((row) => !row.checked_in)) alerts.push({ id: "checkin", severity: "warning", title: "Check-in incomplete", detail: `${registrations.filter((row) => !row.checked_in).length} participant(s) still need check-in.`, path: "/registration" })
+  if (registrations.length && registrations.some((row) => !row.checked_in)) alerts.push({ id: "checkin", severity: "warning", title: "Check-in incomplete", detail: `${registrations.filter((row) => !row.checked_in).length} participant(s) still need check-in.`, path: `/events/${eventId}/check-in` })
   if (unassigned) alerts.push({ id: "unassigned", severity: "urgent", title: "Participants need squad assignments", detail: `${unassigned} shoot enrollment(s) are not assigned to a squad.`, path: "/squads" })
-  if (incompleteScores && scoreRows.length) alerts.push({ id: "scores", severity: "warning", title: "Scorecards incomplete", detail: `${incompleteScores} assigned participant(s) still have incomplete scorecards.`, path: "/scoring" })
+  if (incompleteScores && scoreRows.length) alerts.push({ id: "scores", severity: "warning", title: "Scorecards incomplete", detail: `${incompleteScores} assigned participant(s) still have incomplete scorecards.`, path: `/events/${eventId}/live-scoring` })
   if (unpaid) alerts.push({ id: "payments", severity: "info", title: "Payment follow-up", detail: `${unpaid} registration(s) are not marked paid.`, path: "/treasurer" })
-  if (shoots.length && publications.filter((row) => ["published", "locked"].includes(row.status)).length < shoots.length && completedParticipants >= enrollments.length && enrollments.length > 0) alerts.push({ id: "awards", severity: "success", title: "Results may be ready", detail: "Scoring appears complete. Review and publish awards.", path: "/awards" })
+  if (shoots.length && publications.filter((row) => ["published", "locked"].includes(row.status)).length < shoots.length && completedParticipants >= enrollments.length && enrollments.length > 0) alerts.push({ id: "awards", severity: "success", title: "Results may be ready", detail: "Scoring appears complete. Review and publish awards.", path: `/events/${eventId}/awards` })
   if (!alerts.length) alerts.push({ id: "clear", severity: "success", title: "Operations look healthy", detail: "No immediate action items were detected for this event.", path: "/" })
 
   const timeline: OperationsTimelineItem[] = [

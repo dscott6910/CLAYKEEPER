@@ -31,8 +31,14 @@ export function EventOperationsPage() {
   const revenue = pct(snapshot?.amountPaid ?? 0, snapshot?.expectedRevenue ?? 0)
   const squadCounts = useMemo(() => ({ waiting: snapshot?.squads.filter((row) => row.status === "waiting").length ?? 0, active: snapshot?.squads.filter((row) => row.status === "in_progress").length ?? 0, complete: snapshot?.squads.filter((row) => row.status === "complete").length ?? 0 }), [snapshot])
 
+  const selectedEventId = snapshot?.selectedEvent?.id ?? eventId
   const actions = [
-    ["Registration", "/registration", ClipboardCheck], ["Squadding", "/squads", Users], ["Live Scoring", "/scoring", Target], ["Awards", "/awards", Trophy], ["Treasurer", "/treasurer", BadgeDollarSign], ["Reports", "/reports", CalendarDays],
+    ["Check-in", selectedEventId ? `/events/${selectedEventId}/check-in` : "/registration", ClipboardCheck],
+    ["Squadding", "/squads", Users],
+    ["Live Scoring", selectedEventId ? `/events/${selectedEventId}/live-scoring` : "/scoring", Target],
+    ["Awards", selectedEventId ? `/events/${selectedEventId}/awards` : "/awards", Trophy],
+    ["Treasurer", "/treasurer", BadgeDollarSign],
+    ["Reports", selectedEventId ? `/events/${selectedEventId}/reports` : "/reports", CalendarDays],
   ] as const
 
   return <div className="min-h-screen">
