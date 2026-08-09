@@ -14,10 +14,24 @@ import {
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
-import { loadCoachPortalData } from "@/lib/services/coachPortal"
+import {
+  assignCoachToTeam,
+  endCoachTeamAssignment,
+  loadCoachManagementData,
+  loadCoachPortalData,
+  updateCoachPortalTeam,
+  type CoachManagementRecord,
+  type TeamCoachAssignment,
+} from "@/lib/services/coachPortal"
 
 type PortalData = Awaited<ReturnType<typeof loadCoachPortalData>>
-type Tab = "overview" | "roster" | "events" | "scores" | "history"
+type Tab =
+  | "overview"
+  | "roster"
+  | "events"
+  | "scores"
+  | "history"
+  | "management"
 
 function athleteName(athlete: PortalData["athletes"][number]) {
   return `${athlete.preferred_name?.trim() || athlete.first_name} ${athlete.last_name}`.trim()
@@ -40,6 +54,26 @@ export function CoachPortalPage() {
   const [tab, setTab] = useState<Tab>("overview")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+
+  const [managementCoaches, setManagementCoaches] = useState<
+    CoachManagementRecord[]
+  >([])
+  const [managementAssignments, setManagementAssignments] = useState<
+    TeamCoachAssignment[]
+  >([])
+  const [managementLoaded, setManagementLoaded] = useState(false)
+  const [managementBusy, setManagementBusy] = useState(false)
+  const [managementError, setManagementError] = useState("")
+  const [managementMessage, setManagementMessage] = useState("")
+  const [teamName, setTeamName] = useState("")
+  const [schoolClubName, setSchoolClubName] = useState("")
+  const [mascot, setMascot] = useState("")
+  const [primaryColor, setPrimaryColor] = useState("")
+  const [secondaryColor, setSecondaryColor] = useState("")
+  const [teamNotes, setTeamNotes] = useState("")
+  const [coachIdToAssign, setCoachIdToAssign] = useState("")
+  const [coachRole, setCoachRole] = useState("coach")
+  const [headCoach, setHeadCoach] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -303,6 +337,151 @@ export function CoachPortalPage() {
       ),
     )[0]
 
+  const selectedTeam = data?.teams.find((team) => team.id === teamId)
+
+  async function loadManagement() {
+    if (!data?.isManager) return
+
+    setManagementBusy(true)
+    setManagementError("")
+
+    try {
+      const result = await loadCoachManagementData()
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(result.assignments)
+      setManagementLoaded(true)
+
+      setCoachIdToAssign((current) =>
+        current && result.coaches.some((coach) => coach.id === current)
+          ? current
+          : result.coaches[0]?.id || "",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load team management.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedTeam) {
+      setTeamName("")
+      setSchoolClubName("")
+      setMascot("")
+      setPrimaryColor("")
+      setSecondaryColor("")
+      setTeamNotes("")
+      return
+    }
+
+    setTeamName(selectedTeam.name)
+    setSchoolClubName(selectedTeam.school_club_name ?? "")
+    setMascot(selectedTeam.mascot ?? "")
+    setPrimaryColor(selectedTeam.primary_color ?? "")
+    setSecondaryColor(selectedTeam.secondary_color ?? "")
+    setTeamNotes(selectedTeam.notes ?? "")
+  }, [selectedTeam])
+
+  useEffect(() => {
+    if (tab === "management" && data?.isManager && !managementLoaded) {
+      void loadManagement()
+    }
+  }, [tab, data?.isManager, managementLoaded])
+
+  async function saveTeam() {
+    if (!teamId) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await updateCoachPortalTeam(teamId, {
+        name: teamName,
+        school_club_name: schoolClubName,
+        mascot,
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+        notes: teamNotes,
+      })
+
+      await refresh()
+      setManagementMessage("Team details saved.")
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to save team details.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function assignCoach() {
+    if (!teamId || !coachIdToAssign) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await assignCoachToTeam({
+        teamId,
+        coachId: coachIdToAssign,
+        role: coachRole,
+        isHeadCoach: headCoach,
+      })
+
+      const result = await loadCoachManagementData()
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(result.assignments)
+      setManagementMessage("Coach assigned to team.")
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to assign coach.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function endAssignment(assignmentId: string) {
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await endCoachTeamAssignment(assignmentId)
+
+      const result = await loadCoachManagementData()
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(result.assignments)
+      setManagementMessage("Coach assignment ended.")
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to end coach assignment.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  const activeTeamAssignments = managementAssignments.filter(
+    (assignment) =>
+      assignment.team_id === teamId &&
+      (!assignment.end_date ||
+        assignment.end_date >= new Date().toISOString().slice(0, 10)),
+  )
+
   return (
     <div className="min-h-screen">
       <AppHeader
@@ -379,6 +558,9 @@ export function CoachPortalPage() {
                 ["events", "Event Readiness"],
                 ["scores", "Scores"],
                 ["history", "Athlete History"],
+                ...(data?.isManager
+                  ? ([["management", "Team Management"]] as const)
+                  : []),
               ] as const
             ).map(([key, label]) => (
               <Button
@@ -690,6 +872,204 @@ export function CoachPortalPage() {
                     })}
                   </div>
                 </section>
+              ) : null}
+
+              {tab === "management" && data.isManager ? (
+                <div className="space-y-6">
+                  {managementError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+                      {managementError}
+                    </div>
+                  ) : null}
+
+                  {managementMessage ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                      {managementMessage}
+                    </div>
+                  ) : null}
+
+                  <section className="rounded-2xl border bg-white shadow-sm">
+                    <div className="border-b p-5">
+                      <h2 className="text-lg font-bold">Team details</h2>
+                      <p className="text-sm text-slate-500">
+                        Manage the selected team's identity and organization information.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 p-5 md:grid-cols-2">
+                      <label className="text-sm font-medium">
+                        Team name
+                        <input
+                          value={teamName}
+                          onChange={(event) => setTeamName(event.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <label className="text-sm font-medium">
+                        School / club
+                        <input
+                          value={schoolClubName}
+                          onChange={(event) => setSchoolClubName(event.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <label className="text-sm font-medium">
+                        Mascot
+                        <input
+                          value={mascot}
+                          onChange={(event) => setMascot(event.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <div />
+
+                      <label className="text-sm font-medium">
+                        Primary color
+                        <input
+                          value={primaryColor}
+                          onChange={(event) => setPrimaryColor(event.target.value)}
+                          placeholder="#000000"
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <label className="text-sm font-medium">
+                        Secondary color
+                        <input
+                          value={secondaryColor}
+                          onChange={(event) => setSecondaryColor(event.target.value)}
+                          placeholder="#000000"
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <label className="text-sm font-medium md:col-span-2">
+                        Notes
+                        <textarea
+                          value={teamNotes}
+                          onChange={(event) => setTeamNotes(event.target.value)}
+                          rows={4}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <div className="md:col-span-2">
+                        <Button
+                          onClick={() => void saveTeam()}
+                          disabled={managementBusy || !teamId}
+                        >
+                          {managementBusy ? "Saving…" : "Save team details"}
+                        </Button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border bg-white shadow-sm">
+                    <div className="border-b p-5">
+                      <h2 className="text-lg font-bold">Coach assignments</h2>
+                      <p className="text-sm text-slate-500">
+                        Assign coaches to the selected team or end an existing assignment.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 border-b p-5 lg:grid-cols-[1fr_220px_auto_auto]">
+                      <label className="text-sm font-medium">
+                        Coach
+                        <select
+                          value={coachIdToAssign}
+                          onChange={(event) => setCoachIdToAssign(event.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        >
+                          <option value="">Select coach</option>
+                          {managementCoaches.map((coach) => (
+                            <option key={coach.id} value={coach.id}>
+                              {`${coach.preferred_name?.trim() || coach.first_name} ${coach.last_name}`.trim()}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="text-sm font-medium">
+                        Role
+                        <input
+                          value={coachRole}
+                          onChange={(event) => setCoachRole(event.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                        />
+                      </label>
+
+                      <label className="flex items-end gap-2 pb-2 text-sm font-medium">
+                        <input
+                          type="checkbox"
+                          checked={headCoach}
+                          onChange={(event) => setHeadCoach(event.target.checked)}
+                        />
+                        Head coach
+                      </label>
+
+                      <div className="flex items-end">
+                        <Button
+                          onClick={() => void assignCoach()}
+                          disabled={managementBusy || !teamId || !coachIdToAssign}
+                        >
+                          Assign coach
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="divide-y">
+                      {managementBusy && !managementLoaded ? (
+                        <p className="p-5 text-sm text-slate-500">
+                          Loading coach assignments…
+                        </p>
+                      ) : null}
+
+                      {!managementBusy &&
+                      managementLoaded &&
+                      activeTeamAssignments.length === 0 ? (
+                        <p className="p-5 text-sm text-slate-500">
+                          No active coach assignments for this team.
+                        </p>
+                      ) : null}
+
+                      {activeTeamAssignments.map((assignment) => {
+                        const coach = managementCoaches.find(
+                          (item) => item.id === assignment.coach_id,
+                        )
+
+                        return (
+                          <div
+                            key={assignment.id}
+                            className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <p className="font-semibold">
+                                {coach
+                                  ? `${coach.preferred_name?.trim() || coach.first_name} ${coach.last_name}`.trim()
+                                  : "Coach"}
+                              </p>
+                              <p className="text-sm text-slate-500">
+                                {assignment.role}
+                                {assignment.is_head_coach ? " · Head coach" : ""}
+                              </p>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              disabled={managementBusy}
+                              onClick={() => void endAssignment(assignment.id)}
+                            >
+                              End assignment
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                </div>
               ) : null}
             </>
           ) : null}

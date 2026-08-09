@@ -1,7 +1,15 @@
 import { getCurrentOrganizationContext } from "@/lib/services/organizationContext"
 import { supabase } from "@/lib/supabase"
 
-export type CoachTeam = { id: string; name: string; school_club_name: string | null; primary_color: string | null }
+export type CoachTeam = {
+  id: string
+  name: string
+  school_club_name: string | null
+  mascot: string | null
+  primary_color: string | null
+  secondary_color: string | null
+  notes: string | null
+}
 export type CoachAthlete = { id: string; first_name: string; last_name: string; preferred_name: string | null; class_id: string | null; cyssa_number: string | null; email: string | null; phone: string | null }
 export type CoachEvent = { id: string; name: string; start_date: string | null; end_date: string | null; status: string }
 export type CoachShoot = { id: string; event_id: string; name: string; discipline: string; shoot_date: string | null; number_of_rounds: number; targets_per_round: number }
@@ -62,7 +70,7 @@ export async function loadCoachPortalData() {
     scores,
   ] = await Promise.all([
     supabase.from("coaches").select("id, first_name, last_name, preferred_name, email, user_id").eq("organization_id", context.organizationId),
-    supabase.from("teams").select("id, name, school_club_name, primary_color").eq("organization_id", context.organizationId).eq("active", true).order("name"),
+    supabase.from("teams").select("id, name, school_club_name, mascot, primary_color, secondary_color, notes").eq("organization_id", context.organizationId).eq("active", true).order("name"),
     supabase.from("events").select("id, name, start_date, end_date, status").eq("organization_id", context.organizationId).order("start_date", { ascending: false }),
     supabase.from("shoots").select("id, event_id, name, discipline, shoot_date, number_of_rounds, targets_per_round").eq("organization_id", context.organizationId).eq("active", true).order("shoot_date", { ascending: false }),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", context.organizationId).order("display_order"),
@@ -142,4 +150,151 @@ export async function loadCoachPortalData() {
     classes: (classesResult.data ?? []) as CoachClass[],
     announcements: (announcementsResult.data ?? []) as CoachAnnouncement[],
   }
+}
+
+export type TeamManagementPayload = {
+  name: string
+  school_club_name: string | null
+  mascot: string | null
+  primary_color: string | null
+  secondary_color: string | null
+  notes: string | null
+}
+
+export type CoachManagementRecord = {
+  id: string
+  first_name: string
+  last_name: string
+  preferred_name: string | null
+  email: string | null
+  phone: string | null
+  active: boolean
+}
+
+export type TeamCoachAssignment = {
+  id: string
+  team_id: string
+  coach_id: string
+  role: string
+  start_date: string | null
+  end_date: string | null
+  is_head_coach: boolean
+}
+
+function cleanOptional(value: string | null | undefined) {
+  const cleaned = value?.trim() ?? ""
+  return cleaned.length > 0 ? cleaned : null
+}
+
+export async function updateCoachPortalTeam(
+  teamId: string,
+  payload: TeamManagementPayload,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error("Only an owner or administrator can edit team details.")
+  }
+
+  const name = payload.name.trim()
+
+  if (!name) {
+    throw new Error("Team name is required.")
+  }
+
+  const { error } = await supabase
+    .from("teams")
+    .update({
+      name,
+      school_club_name: cleanOptional(payload.school_club_name),
+      mascot: cleanOptional(payload.mascot),
+      primary_color: cleanOptional(payload.primary_color),
+      secondary_color: cleanOptional(payload.secondary_color),
+      notes: cleanOptional(payload.notes),
+    })
+    .eq("organization_id", context.organizationId)
+    .eq("id", teamId)
+
+  assert(error)
+}
+
+export async function loadCoachManagementData() {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    return {
+      coaches: [] as CoachManagementRecord[],
+      assignments: [] as TeamCoachAssignment[],
+    }
+  }
+
+  const [coaches, assignments] = await Promise.all([
+    loadAllPages<CoachManagementRecord>((from, to) =>
+      supabase
+        .from("coaches")
+        .select(
+          "id, first_name, last_name, preferred_name, email, phone, active",
+        )
+        .eq("organization_id", context.organizationId)
+        .eq("active", true)
+        .order("last_name")
+        .order("first_name")
+        .range(from, to),
+    ),
+    loadAllPages<TeamCoachAssignment>((from, to) =>
+      supabase
+        .from("team_coaches")
+        .select(
+          "id, team_id, coach_id, role, start_date, end_date, is_head_coach",
+        )
+        .eq("organization_id", context.organizationId)
+        .range(from, to),
+    ),
+  ])
+
+  return { coaches, assignments }
+}
+
+export async function assignCoachToTeam(input: {
+  teamId: string
+  coachId: string
+  role: string
+  isHeadCoach: boolean
+}) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error("Only an owner or administrator can assign coaches.")
+  }
+
+  const role = input.role.trim() || "coach"
+
+  const { error } = await supabase.from("team_coaches").insert({
+    organization_id: context.organizationId,
+    team_id: input.teamId,
+    coach_id: input.coachId,
+    role,
+    is_head_coach: input.isHeadCoach,
+    start_date: new Date().toISOString().slice(0, 10),
+  })
+
+  assert(error)
+}
+
+export async function endCoachTeamAssignment(assignmentId: string) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error("Only an owner or administrator can change coach assignments.")
+  }
+
+  const { error } = await supabase
+    .from("team_coaches")
+    .update({
+      end_date: new Date().toISOString().slice(0, 10),
+    })
+    .eq("organization_id", context.organizationId)
+    .eq("id", assignmentId)
+
+  assert(error)
 }
