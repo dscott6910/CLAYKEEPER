@@ -23,9 +23,9 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult[]>
       .or(`first_name.ilike.${pattern},last_name.ilike.${pattern},preferred_name.ilike.${pattern},cyssa_number.ilike.${pattern},email.ilike.${pattern}`)
       .limit(8),
     supabase.from("teams")
-      .select("id,name,short_name")
+      .select("id,name")
       .eq("organization_id", organizationId)
-      .or(`name.ilike.${pattern},short_name.ilike.${pattern}`)
+      .ilike("name", pattern)
       .limit(6),
     supabase.from("events")
       .select("id,name,start_date,status")
@@ -55,7 +55,7 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult[]>
       id: row.id,
       type: "team" as const,
       title: row.name,
-      subtitle: row.short_name ? `Team · ${row.short_name}` : "Team",
+      subtitle: "Team",
       path: "/teams",
     }))),
     ...((events.data ?? []).map((row) => ({
