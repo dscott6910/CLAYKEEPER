@@ -68,10 +68,43 @@ echo
 echo "6. Backing up the currently deployed site..."
 mkdir -p "$BACKUP_DIR"
 
+BACKUP_PATH="$BACKUP_DIR/claykeeper-$TIMESTAMP.tar.gz"
+
 if [[ -d "$WEB_ROOT" ]]; then
-    sudo tar -czf "$BACKUP_DIR/claykeeper-$TIMESTAMP.tar.gz" \
+    sudo tar -czf "$BACKUP_PATH" \
         -C "$WEB_ROOT" .
 fi
+
+rollback_deployment() {
+    local rollback_dir
+
+    if [[ ! -f "$BACKUP_PATH" ]]; then
+        echo "ERROR: Deployment verification failed and no rollback backup exists."
+        return 1
+    fi
+
+    echo
+    echo "Deployment verification failed. Restoring previous production build..."
+
+    rollback_dir="$(mktemp -d)"
+
+    if ! tar -xzf "$BACKUP_PATH" -C "$rollback_dir"; then
+        rm -rf "$rollback_dir"
+        echo "ERROR: Could not extract rollback backup: $BACKUP_PATH"
+        return 1
+    fi
+
+    sudo rsync -a --delete "$rollback_dir/" "$WEB_ROOT/"
+    sudo chown -R www-data:www-data "$WEB_ROOT"
+    sudo find "$WEB_ROOT" -type d -exec chmod 755 {} \;
+    sudo find "$WEB_ROOT" -type f -exec chmod 644 {} \;
+    sudo systemctl reload nginx
+
+    rm -rf "$rollback_dir"
+
+    echo "Previous production build restored from:"
+    echo "  $BACKUP_PATH"
+}
 
 echo
 echo "7. Publishing the new build..."
@@ -86,11 +119,20 @@ sudo systemctl reload nginx
 
 echo
 echo "9. Verifying the live website..."
-HTTP_STATUS="$(curl -sS -o /dev/null -w "%{http_code}" https://claykeeper.live)"
+
+HTTP_STATUS="$(
+    curl -sS         --connect-timeout 10         --max-time 20         -o /dev/null         -w "%{http_code}"         https://claykeeper.live         || printf '000'
+)"
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
-    echo "Warning: the website returned HTTP status $HTTP_STATUS."
-    echo "The build was deployed, but the website should be checked."
+    echo "ERROR: the website returned HTTP status $HTTP_STATUS."
+
+    if rollback_deployment; then
+        echo "Deployment rolled back successfully."
+    else
+        echo "CRITICAL: Automatic rollback failed. Manual recovery is required."
+    fi
+
     exit 1
 fi
 
