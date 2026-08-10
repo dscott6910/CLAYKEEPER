@@ -1,4 +1,6 @@
 import type { LucideIcon } from "lucide-react"
+
+import type { OrganizationCapability } from "@/lib/permissions"
 import {
   BarChart3,
   CalendarDays,
@@ -26,6 +28,7 @@ export type NavigationItem = {
   label: string
   path: string
   icon: LucideIcon
+  capability?: OrganizationCapability
 }
 
 export type NavigationSection = {
@@ -55,6 +58,7 @@ export const navigationSections: NavigationSection[] = [
         label: "ActiveNet Import",
         path: "/participants/activenet",
         icon: FileInput,
+          capability: "manageImports",
       },
       {
         label: "Coach Portal",
@@ -85,6 +89,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Live Scoring",
         path: "/scoring",
         icon: Trophy,
+          capability: "score",
       },
     ],
   },
@@ -125,6 +130,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Registration & Payments",
         path: "/registration-payments",
         icon: CreditCard,
+          capability: "managePayments",
       },
       {
         label: "Live Leaderboard",
@@ -140,11 +146,13 @@ export const navigationSections: NavigationSection[] = [
         label: "Seasons & Imports",
         path: "/operations",
         icon: DatabaseBackup,
+          capability: "manageImports",
       },
       {
         label: "Event Maintenance",
         path: "/event-maintenance",
         icon: Wrench,
+          capability: "admin",
       },
       {
         label: "Public Portal",
@@ -155,6 +163,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Settings",
         path: "/settings",
         icon: Settings,
+          capability: "admin",
       },
     ],
   },

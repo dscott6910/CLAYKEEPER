@@ -6,6 +6,8 @@ import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { AuthProvider } from "@/features/auth/AuthProvider"
 import { LoginPage } from "@/features/auth/LoginPage"
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
+import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
+import { OrganizationProvider } from "@/features/organization/OrganizationProvider"
 
 const DashboardPage = lazy(() =>
   import("@/features/dashboard/DashboardPage").then((module) => ({
@@ -276,7 +278,8 @@ function App() {
     <AppErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <OrganizationProvider>
+            <Routes>
             <Route path="/login" element={<LoginPage />} />
 
             <Route
@@ -335,14 +338,16 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="participants/activenet"
-                  element={
-                    <LazyRoute>
-                      <ActiveNetImportPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageImports" />}>
+                  <Route
+                    path="participants/activenet"
+                    element={
+                      <LazyRoute>
+                        <ActiveNetImportPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route path="teams" element={<Navigate to="/coach" replace />} />
 
@@ -481,14 +486,16 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="scoring"
-                  element={
-                    <LazyRoute>
-                      <LiveScoringEventSelectorPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="score" />}>
+                  <Route
+                    path="scoring"
+                    element={
+                      <LazyRoute>
+                        <LiveScoringEventSelectorPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                   <Route
                     path="scorecard-templates"
@@ -553,14 +560,16 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="registration-payments"
-                  element={
-                    <LazyRoute>
-                      <RegistrationPaymentCenterPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="managePayments" />}>
+                  <Route
+                    path="registration-payments"
+                    element={
+                      <LazyRoute>
+                        <RegistrationPaymentCenterPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route
                   path="leaderboard"
@@ -634,23 +643,27 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="operations"
-                  element={
-                    <LazyRoute>
-                      <SeasonImportPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageImports" />}>
+                  <Route
+                    path="operations"
+                    element={
+                      <LazyRoute>
+                        <SeasonImportPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
-                <Route
-                  path="event-maintenance"
-                  element={
-                    <LazyRoute>
-                      <EventMaintenancePage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="admin" />}>
+                  <Route
+                    path="event-maintenance"
+                    element={
+                      <LazyRoute>
+                        <EventMaintenancePage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route
                   path="scorecard-scan-lab"
@@ -661,14 +674,16 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="settings"
-                  element={
-                    <LazyRoute>
-                      <SettingsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="admin" />}>
+                  <Route
+                    path="settings"
+                    element={
+                      <LazyRoute>
+                        <SettingsPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route
                   path="*"
@@ -680,7 +695,8 @@ function App() {
                 />
               </Route>
             </Route>
-          </Routes>
+            </Routes>
+          </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>
     </AppErrorBoundary>

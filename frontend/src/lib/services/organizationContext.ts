@@ -1,9 +1,13 @@
 import { supabase } from "@/lib/supabase"
+import {
+  normalizeOrganizationRole,
+  type OrganizationRole,
+} from "@/lib/permissions"
 
 export type OrganizationContext = {
   userId: string
   organizationId: string
-  role: string
+  role: OrganizationRole
 }
 
 export async function getCurrentOrganizationContext(): Promise<OrganizationContext> {
@@ -32,7 +36,7 @@ export async function getCurrentOrganizationContext(): Promise<OrganizationConte
   return {
     userId: user.id,
     organizationId: data.organization_id as string,
-    role: (data.role as string | null) ?? "member",
+    role: normalizeOrganizationRole(data.role as string | null),
   }
 }
 

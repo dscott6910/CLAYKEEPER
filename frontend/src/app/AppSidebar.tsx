@@ -1,7 +1,9 @@
 import { NavLink } from "react-router-dom"
 
 import { navigationSections } from "@/app/navigation"
+import { useOrganization } from "@/features/organization/OrganizationProvider"
 import { APP_VERSION, CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
+import { hasCapability } from "@/lib/permissions"
 
 type AppSidebarProps = {
   mobile?: boolean
@@ -13,6 +15,19 @@ export function AppSidebar({
   onNavigate,
 }: AppSidebarProps = {}) {
   const brand = useBrandSettings()
+  const { role, loading: organizationLoading } = useOrganization()
+
+  const visibleSections = navigationSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) =>
+          organizationLoading ||
+          !item.capability ||
+          hasCapability(role, item.capability),
+      ),
+    }))
+    .filter((section) => section.items.length > 0)
 
   return (
     <aside
@@ -31,7 +46,7 @@ export function AppSidebar({
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto p-4">
-        {navigationSections.map((section, sectionIndex) => (
+        {visibleSections.map((section, sectionIndex) => (
           <div key={section.label ?? `primary-${sectionIndex}`}>
             {section.label ? (
               <p className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
