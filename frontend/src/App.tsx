@@ -351,23 +351,27 @@ function App() {
 
                 <Route path="teams" element={<Navigate to="/coach" replace />} />
 
-                <Route
-                  path="coach"
-                  element={
-                    <LazyRoute>
-                      <CoachPortalPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageCoachPortal" />}>
+                  <Route
+                    path="coach"
+                    element={
+                      <LazyRoute>
+                        <CoachPortalPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
-                <Route
-                  path="events"
-                  element={
-                    <LazyRoute>
-                      <EventsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageEvents" />}>
+                  <Route
+                    path="events"
+                    element={
+                      <LazyRoute>
+                        <EventsPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route
                   path="events/:eventId"
@@ -468,23 +472,27 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="registration"
-                  element={
-                    <LazyRoute>
-                      <RegistrationPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageRegistration" />}>
+                  <Route
+                    path="registration"
+                    element={
+                      <LazyRoute>
+                        <RegistrationPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
-                <Route
-                  path="squads"
-                  element={
-                    <LazyRoute>
-                      <SquadsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
+                    path="squads"
+                    element={
+                      <LazyRoute>
+                        <SquadsPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="score" />}>
                   <Route
@@ -551,14 +559,16 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="treasurer"
-                  element={
-                    <LazyRoute>
-                      <TreasurerPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="managePayments" />}>
+                  <Route
+                    path="treasurer"
+                    element={
+                      <LazyRoute>
+                        <TreasurerPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="managePayments" />}>
                   <Route
@@ -580,32 +590,38 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="event-operations"
-                  element={
-                    <LazyRoute>
-                      <EventOperationsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
+                    path="event-operations"
+                    element={
+                      <LazyRoute>
+                        <EventOperationsPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
-                <Route
-                  path="mobile"
-                  element={
-                    <LazyRoute>
-                      <MobileOperationsPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
+                    path="mobile"
+                    element={
+                      <LazyRoute>
+                        <MobileOperationsPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
-                <Route
-                  path="seasons"
-                  element={
-                    <LazyRoute>
-                      <SeasonManagementPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="manageSeasons" />}>
+                  <Route
+                    path="seasons"
+                    element={
+                      <LazyRoute>
+                        <SeasonManagementPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route
                   path="seasons/:seasonId/standings"

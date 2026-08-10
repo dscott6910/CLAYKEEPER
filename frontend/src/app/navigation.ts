@@ -53,6 +53,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Participants",
         path: "/participants",
         icon: Users,
+        capability: "manageParticipants",
       },
       {
         label: "ActiveNet Import",
@@ -64,6 +65,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Coach Portal",
         path: "/coach",
         icon: GraduationCap,
+        capability: "manageCoachPortal",
       },
     ],
   },
@@ -74,16 +76,19 @@ export const navigationSections: NavigationSection[] = [
         label: "Events",
         path: "/events",
         icon: CalendarDays,
+        capability: "manageEvents",
       },
       {
         label: "Registration",
         path: "/registration",
         icon: ClipboardList,
+        capability: "manageRegistration",
       },
       {
         label: "Squadding",
         path: "/squads",
         icon: Target,
+        capability: "operateEvents",
       },
       {
         label: "Live Scoring",
@@ -100,11 +105,13 @@ export const navigationSections: NavigationSection[] = [
         label: "Mobile Operations",
         path: "/mobile",
         icon: Smartphone,
+        capability: "operateEvents",
       },
       {
         label: "Event Operations",
         path: "/event-operations",
         icon: RadioTower,
+        capability: "operateEvents",
       },
       {
         label: "Reports",
@@ -125,6 +132,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Treasurer Center",
         path: "/treasurer",
         icon: Landmark,
+        capability: "managePayments",
       },
       {
         label: "Registration & Payments",
@@ -141,6 +149,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Season Management",
         path: "/seasons",
         icon: CalendarRange,
+        capability: "manageSeasons",
       },
       {
         label: "Seasons & Imports",
@@ -158,6 +167,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Public Portal",
         path: "/public",
         icon: Globe2,
+        capability: "managePublicPortal",
       },
       {
         label: "Settings",
