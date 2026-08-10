@@ -114,24 +114,52 @@ export async function saveEventCourse(input: {
 courseId = result.data.id as string
   }
 
-  const deleteResult = await supabase
+  const existingStationsResult = await supabase
     .from("course_stations")
-    .delete()
+    .select("id,station_number")
     .eq("course_id", courseId)
     .eq("organization_id", input.organizationId)
-  throwIfError(deleteResult.error)
 
-  const rows = input.stations.map((station, index) => ({
-    organization_id: input.organizationId,
-    course_id: courseId,
-    station_number: station.stationNumber,
-    bird_count: station.birdCount,
-    notes: station.notes.trim() || null,
-    target_type: station.targetType.trim() || null,
-    display_order: index + 1,
-  }))
-  const stationResult = await supabase.from("course_stations").insert(rows)
-  throwIfError(stationResult.error)
+  throwIfError(existingStationsResult.error)
+
+  const existingStations = new Map(
+    (existingStationsResult.data ?? []).map((station) => [
+      station.station_number as number,
+      station.id as string,
+    ]),
+  )
+
+  for (const [index, station] of input.stations.entries()) {
+    const stationPayload = {
+      organization_id: input.organizationId,
+      course_id: courseId,
+      station_number: station.stationNumber,
+      bird_count: station.birdCount,
+      notes: station.notes.trim() || null,
+      target_type: station.targetType.trim() || null,
+      display_order: index + 1,
+    }
+
+    const existingStationId = existingStations.get(station.stationNumber)
+
+    if (existingStationId) {
+      const stationResult = await supabase
+        .from("course_stations")
+        .update(stationPayload)
+        .eq("id", existingStationId)
+        .eq("organization_id", input.organizationId)
+        .eq("course_id", courseId)
+
+      throwIfError(stationResult.error)
+    } else {
+      const stationResult = await supabase
+        .from("course_stations")
+        .insert(stationPayload)
+
+      throwIfError(stationResult.error)
+    }
+  }
+
   return courseId
 }
 

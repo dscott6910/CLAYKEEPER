@@ -19,6 +19,7 @@ coverage/
 
 # Supabase local files
 supabase/temp/
+supabase/.temp/
 
 # VS Code
 .vscode/
