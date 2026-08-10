@@ -57,7 +57,7 @@ export function GlobalSearch() {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="fixed bottom-5 right-5 z-30 flex items-center gap-2 rounded-full bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl hover:bg-slate-800" aria-label="Open global search">
+      <button type="button" onClick={() => setOpen(true)} className="fixed right-5 top-20 z-30 flex items-center gap-2 rounded-full bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl hover:bg-slate-800" aria-label="Open global search">
         <Search className="h-4 w-4" /> Search <span className="hidden rounded bg-slate-700 px-1.5 py-0.5 text-xs sm:inline">⌘K</span>
       </button>
       {open ? (
