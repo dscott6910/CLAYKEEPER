@@ -56,17 +56,12 @@ export async function loadCheckInCenter(eventId: string): Promise<CheckInData> {
 }
 
 export async function updateAttendance(input: { registrationId: string; organizationId: string; attendanceStatus: AttendanceStatus; attendanceNotes?: string }) {
-  const { data: { user }, error } = await supabase.auth.getUser()
-  check(error)
-  if (!user) throw new Error("Your login session has expired.")
-  const checkedIn = input.attendanceStatus === "checked_in" || input.attendanceStatus === "late_arrival"
-  const result = await supabase.from("registrations").update({
-    attendance_status: input.attendanceStatus,
-    attendance_notes: input.attendanceNotes?.trim() || null,
-    checked_in: checkedIn,
-    checked_in_at: checkedIn ? new Date().toISOString() : null,
-    checked_in_by: checkedIn ? user.id : null,
-  }).eq("id", input.registrationId).eq("organization_id", input.organizationId)
+  const result = await supabase.rpc("update_registration_attendance", {
+    p_organization_id: input.organizationId,
+    p_registration_ids: [input.registrationId],
+    p_attendance_status: input.attendanceStatus,
+    p_attendance_notes: input.attendanceNotes?.trim() || null,
+  })
   check(result.error)
 }
 
@@ -88,14 +83,11 @@ export async function updateRefund(input: { registrationId: string; organization
 
 export async function checkInSquad(input: { organizationId: string; registrationIds: string[] }) {
   if (input.registrationIds.length === 0) return
-  const { data: { user }, error } = await supabase.auth.getUser()
-  check(error)
-  if (!user) throw new Error("Your login session has expired.")
-  const result = await supabase.from("registrations").update({
-    attendance_status: "checked_in",
-    checked_in: true,
-    checked_in_at: new Date().toISOString(),
-    checked_in_by: user.id,
-  }).eq("organization_id", input.organizationId).in("id", input.registrationIds)
+  const result = await supabase.rpc("update_registration_attendance", {
+    p_organization_id: input.organizationId,
+    p_registration_ids: input.registrationIds,
+    p_attendance_status: "checked_in",
+    p_attendance_notes: null,
+  })
   check(result.error)
 }

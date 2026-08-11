@@ -382,7 +382,8 @@ function App() {
                   }
                 />
 
-                <Route
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
                   path="events/:eventId/check-in"
                   element={
                     <LazyRoute>
@@ -390,8 +391,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
                   path="events/:eventId/director"
                   element={
                     <LazyRoute>
@@ -399,8 +402,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
                   path="events/:eventId/operations"
                   element={
                     <LazyRoute>
@@ -408,8 +413,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<CapabilityRoute capability="managePublicPortal" />}>
+                  <Route
                   path="events/:eventId/public"
                   element={
                     <LazyRoute>
@@ -417,8 +424,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<CapabilityRoute capability="operateEvents" />}>
+                  <Route
                   path="events/:eventId/course"
                   element={
                     <LazyRoute>
@@ -426,8 +435,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<CapabilityRoute capability="score" />}>
+                  <Route
                   path="events/:eventId/live-scoring"
                   element={
                     <LazyRoute>
@@ -435,6 +446,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route
                   path="events/:eventId/leaderboard"
@@ -445,7 +457,8 @@ function App() {
                   }
                 />
 
-                <Route
+                <Route element={<CapabilityRoute capability="score" />}>
+                  <Route
                   path="events/:eventId/scoring"
                   element={
                     <LazyRoute>
@@ -453,6 +466,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route
                   path="events/:eventId/shoots"
