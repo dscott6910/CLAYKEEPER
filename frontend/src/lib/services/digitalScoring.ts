@@ -142,17 +142,27 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
     supabase.from("shoots").select("id,event_id,name,discipline,allow_score_entry").eq("organization_id", event.organization_id).eq("event_id", eventId).eq("active", true).order("shoot_date"),
     supabase.from("event_courses").select("id,name,course_side").eq("organization_id", event.organization_id).eq("event_id", eventId).eq("active", true).order("created_at"),
     supabase.from("squads").select("id,shoot_id,squad_number,name,course_name,status").eq("organization_id", event.organization_id),
-    supabase.from("registrations").select("id,athlete_id,team_id,class_id,registration_number").eq("organization_id", event.organization_id).eq("event_id", eventId).eq("status", "registered"),
-    supabase.from("athletes").select("id,first_name,last_name,preferred_name,cyssa_number").eq("organization_id", event.organization_id),
+    supabase.rpc("get_operational_registrations", {
+      p_organization_id: event.organization_id,
+      p_event_id: eventId,
+    }),
+    supabase.rpc("get_operational_athletes", {
+      p_organization_id: event.organization_id,
+    }),
     supabase.from("teams").select("id,name").eq("organization_id", event.organization_id),
     supabase.from("classes").select("id,code,display_name").eq("organization_id", event.organization_id),
-    supabase.from("registration_shoots").select("id,registration_id,shoot_id").eq("organization_id", event.organization_id).eq("event_id", eventId).eq("status", "registered"),
+    supabase.rpc("get_operational_registration_shoots", {
+      p_organization_id: event.organization_id,
+      p_event_id: eventId,
+    }),
     supabase.from("digital_scorecards").select("id,organization_id,event_id,shoot_id,squad_member_id,course_id,status,malfunction_count,verified_by_1,verified_by_2,entered_by_name,notes,total_score,total_targets,finalized_at,updated_at").eq("organization_id", event.organization_id).eq("event_id", eventId),
   ])
   for (const result of [shoots, courses, squads, registrations, athletes, teams, classes, enrollments, scorecards]) check(result.error)
 
   const courseRows = (courses.data ?? []) as DigitalScoringCourse[]
-  const enrollmentRows = (enrollments.data ?? []) as DigitalScoringEnrollment[]
+  const enrollmentRows = (enrollments.data ?? []).filter(
+    (row: { status: string }) => row.status === "registered",
+  ) as DigitalScoringEnrollment[]
   const courseIds = courseRows.map((row) => row.id)
   const enrollmentIds = enrollmentRows.map((row) => row.id)
   const scorecardRows = (scorecards.data ?? []) as DigitalScorecard[]
@@ -173,7 +183,9 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
     squads: (squads.data ?? []) as DigitalScoringSquad[],
     members: (members.data ?? []) as DigitalScoringMember[],
     enrollments: enrollmentRows,
-    registrations: (registrations.data ?? []) as DigitalScoringRegistration[],
+    registrations: (registrations.data ?? []).filter(
+      (row: { status: string }) => row.status === "registered",
+    ) as DigitalScoringRegistration[],
     athletes: (athletes.data ?? []) as DigitalScoringAthlete[],
     teams: (teams.data ?? []) as DigitalScoringNamed[],
     classes: (classes.data ?? []) as DigitalScoringClass[],
