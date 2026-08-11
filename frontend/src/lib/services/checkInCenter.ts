@@ -66,18 +66,14 @@ export async function updateAttendance(input: { registrationId: string; organiza
 }
 
 export async function updateRefund(input: { registrationId: string; organizationId: string; refundStatus: RefundStatus; refundAmount: number; refundReason?: string; refundNotes?: string }) {
-  const { data: { user }, error } = await supabase.auth.getUser()
-  check(error)
-  if (!user) throw new Error("Your login session has expired.")
-  const processed = input.refundStatus === "refunded" ? new Date().toISOString() : null
-  const result = await supabase.from("registrations").update({
-    refund_status: input.refundStatus,
-    refund_amount: Math.max(0, input.refundAmount),
-    refund_reason: input.refundReason?.trim() || null,
-    refund_notes: input.refundNotes?.trim() || null,
-    refund_processed_at: processed,
-    refund_processed_by: processed ? user.id : null,
-  }).eq("id", input.registrationId).eq("organization_id", input.organizationId)
+  const result = await supabase.rpc("update_registration_refund", {
+    p_organization_id: input.organizationId,
+    p_registration_id: input.registrationId,
+    p_refund_status: input.refundStatus,
+    p_refund_amount: Math.max(0, input.refundAmount),
+    p_refund_reason: input.refundReason?.trim() || null,
+    p_refund_notes: input.refundNotes?.trim() || null,
+  })
   check(result.error)
 }
 
