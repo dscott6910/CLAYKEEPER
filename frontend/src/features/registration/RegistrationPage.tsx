@@ -953,34 +953,19 @@ export function RegistrationPage() {
     setSuccessMessage("")
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-
-      if (userError) {
-        throw userError
-      }
-
-      if (!user) {
-        throw new Error(
-          "Your login session has expired. Please sign in again.",
-        )
-      }
-
       const newCheckedInStatus = !registration.checked_in
 
-      const updateResponse = await supabase
-        .from("registrations")
-        .update({
-          checked_in: newCheckedInStatus,
-          checked_in_at: newCheckedInStatus
-            ? new Date().toISOString()
-            : null,
-          checked_in_by: newCheckedInStatus ? user.id : null,
-        })
-        .eq("id", registration.id)
-        .eq("organization_id", registration.organization_id)
+      const updateResponse = await supabase.rpc(
+        "update_registration_attendance",
+        {
+          p_organization_id: registration.organization_id,
+          p_registration_ids: [registration.id],
+          p_attendance_status: newCheckedInStatus
+            ? "checked_in"
+            : "expected",
+          p_attendance_notes: null,
+        },
+      )
 
       if (updateResponse.error) {
         throw new Error(

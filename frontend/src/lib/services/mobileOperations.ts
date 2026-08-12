@@ -44,13 +44,23 @@ export function queueCheckIn(registrationId: string, checkedIn: boolean) {
 export async function syncQueuedCheckIns() {
   const queue = getQueue()
   if (!queue.length) return 0
+
+  const organizationId = await getCurrentOrganizationId()
   let synced = 0
   const remaining: QueuedCheckIn[] = []
+
   for (const item of queue) {
-    const result = await supabase.from("registrations").update({ checked_in: item.checkedIn }).eq("id", item.registrationId)
+    const result = await supabase.rpc("update_registration_attendance", {
+      p_organization_id: organizationId,
+      p_registration_ids: [item.registrationId],
+      p_attendance_status: item.checkedIn ? "checked_in" : "expected",
+      p_attendance_notes: null,
+    })
+
     if (result.error) remaining.push(item)
     else synced += 1
   }
+
   saveQueue(remaining)
   return synced
 }
@@ -69,11 +79,20 @@ export async function updateCheckIn(registrationId: string, checkedIn: boolean) 
     queueCheckIn(registrationId, checkedIn)
     return { queued: true }
   }
-  const result = await supabase.from("registrations").update({ checked_in: checkedIn }).eq("id", registrationId)
+
+  const organizationId = await getCurrentOrganizationId()
+  const result = await supabase.rpc("update_registration_attendance", {
+    p_organization_id: organizationId,
+    p_registration_ids: [registrationId],
+    p_attendance_status: checkedIn ? "checked_in" : "expected",
+    p_attendance_notes: null,
+  })
+
   if (result.error) {
     queueCheckIn(registrationId, checkedIn)
     return { queued: true }
   }
+
   return { queued: false }
 }
 
