@@ -106,23 +106,14 @@ export async function recordManualTransaction(organizationId: string, input: {
   receipt_email?: string
   notes?: string
 }) {
-  const signedAmount = input.transaction_type === "refund" ? -Math.abs(input.amount) : Math.abs(input.amount)
-  const { error } = await supabase.from("payment_transactions").insert({
-    organization_id: organizationId,
-    ...input,
-    amount: signedAmount,
-    provider: "manual",
-    status: "succeeded",
+  const { error } = await supabase.rpc("record_manual_registration_transaction", {
+    p_organization_id: organizationId,
+    p_registration_id: input.registration_id,
+    p_transaction_type: input.transaction_type,
+    p_amount: Math.abs(input.amount),
+    p_payment_method: input.payment_method,
+    p_receipt_email: input.receipt_email?.trim() || null,
+    p_notes: input.notes?.trim() || null,
   })
   check(error)
-
-  const { data: transactions, error: transactionError } = await supabase.from("payment_transactions").select("amount").eq("registration_id", input.registration_id).eq("status", "succeeded")
-  check(transactionError)
-  const total = (transactions ?? []).reduce((sum, row) => sum + Number(row.amount || 0), 0)
-  const { data: registration, error: registrationError } = await supabase.from("registrations").select("registration_fee, discount_amount").eq("id", input.registration_id).single()
-  check(registrationError)
-  const expected = Math.max(0, Number(registration?.registration_fee || 0) - Number(registration?.discount_amount || 0))
-  const status = total <= 0 ? "unpaid" : total >= expected ? "paid" : "partial"
-  const { error: updateError } = await supabase.from("registrations").update({ amount_paid: Math.max(0, total), payment_status: status, payment_method: input.payment_method, paid_at: status === "paid" ? new Date().toISOString() : null }).eq("id", input.registration_id)
-  check(updateError)
 }
