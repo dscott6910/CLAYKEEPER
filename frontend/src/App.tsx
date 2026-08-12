@@ -96,6 +96,14 @@ const LiveScoringPage = lazy(() =>
   })),
 )
 
+
+
+const DigitalScoringPage = lazy(() =>
+  import("@/features/scoring/DigitalScoringPage").then((module) => ({
+    default: module.DigitalScoringPage,
+  })),
+)
+
 const SeasonImportPage = lazy(() =>
   import("@/features/operations/SeasonImportPage").then((module) => ({
     default: module.SeasonImportPage,
@@ -446,6 +454,17 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
+
+                <Route element={<CapabilityRoute capability="score" />}>
+                  <Route
+                    path="events/:eventId/digital-scoring"
+                    element={
+                      <LazyRoute>
+                        <DigitalScoringPage />
+                      </LazyRoute>
+                    }
+                  />
                 </Route>
 
                 <Route
