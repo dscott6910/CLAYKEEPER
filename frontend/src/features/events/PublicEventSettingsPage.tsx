@@ -53,10 +53,43 @@ export function PublicEventSettingsPage() {
       }
 
       await savePublicEventSettings({ organizationId: selectedEvent.organization_id, eventId, isPublic, showLiveScores, showSquads, showTeams, showAwards, displayModeEnabled, publicMessage })
-      toast.success(isPublic ? "Public event page is open." : "Public event page is closed.")
+      toast.success("Public settings saved.")
       await load()
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Public settings could not be saved.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function setPublicAccess(nextIsPublic: boolean) {
+    if (!data || !eventId) return
+
+    const selectedEvent = data.event
+    if (!selectedEvent) {
+      toast.error("Public event settings are unavailable.")
+      return
+    }
+
+    setSaving(true)
+    try {
+      await savePublicEventSettings({
+        organizationId: selectedEvent.organization_id,
+        eventId,
+        isPublic: nextIsPublic,
+        showLiveScores,
+        showSquads,
+        showTeams,
+        showAwards,
+        displayModeEnabled,
+        publicMessage,
+      })
+
+      setIsPublic(nextIsPublic)
+      toast.success(nextIsPublic ? "Public event page is open." : "Public event page is closed.")
+      await load()
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "Public access could not be changed.")
     } finally {
       setSaving(false)
     }
@@ -76,9 +109,11 @@ export function PublicEventSettingsPage() {
         </span>
         <Button
           type="button"
-          onClick={() => setIsPublic((value) => !value)}
+          onClick={() => void setPublicAccess(!isPublic)}
+          disabled={saving}
           className={isPublic ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-600 text-white hover:bg-emerald-700"}
         >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {isPublic ? "Close Public Page" : "Open Public Page"}
         </Button>
       </div></div>
