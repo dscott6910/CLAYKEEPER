@@ -783,6 +783,14 @@ export function EventsPage() {
                       >
                         Open Workspace
                       </Link>
+
+                      <Link
+                        to={`/events/${event.id}/public`}
+                        className="inline-flex min-h-10 items-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        Public Portal
+                      </Link>
+
                       <button
                         type="button"
                         onClick={() => openEditEditor(event)}
