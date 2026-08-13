@@ -70,7 +70,18 @@ export function PublicEventSettingsPage() {
   return <PageContainer><div className="space-y-6">
     <header className="rounded-2xl border bg-white p-6 shadow-sm"><Link to={`/events/${eventId}/operations`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500"><ArrowLeft className="h-4 w-4" />Operations Center</Link><div className="mt-4"><p className="text-sm font-bold text-emerald-700">Spectator Experience</p><h1 className="mt-1 text-3xl font-bold">Public Event Portal</h1><p className="mt-2 text-slate-600">{data.event?.name ?? "Event"}</p></div></header>
 
-    <section className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-xl font-bold">Public access</h2><p className="mt-1 text-sm text-slate-500">Open or close the event page without redeploying ClayKeeper.</p></div><button type="button" onClick={() => setIsPublic((value) => !value)} className={`rounded-full px-5 py-2 font-bold ${isPublic ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>{isPublic ? "Public page open" : "Public page closed"}</button></div>
+    <section className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-xl font-bold">Public access</h2><p className="mt-1 text-sm text-slate-500">Open or close the event page without redeploying ClayKeeper.</p></div><div className="flex items-center gap-3">
+        <span className={`rounded-full px-4 py-2 text-sm font-bold ${isPublic ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+          {isPublic ? "Public page open" : "Public page closed"}
+        </span>
+        <Button
+          type="button"
+          onClick={() => setIsPublic((value) => !value)}
+          className={isPublic ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-600 text-white hover:bg-emerald-700"}
+        >
+          {isPublic ? "Close Public Page" : "Open Public Page"}
+        </Button>
+      </div></div>
       <div className="mt-5 flex flex-wrap gap-2"><Button variant="outline" onClick={() => { void navigator.clipboard.writeText(publicUrl); toast.success("Public link copied.") }}><Copy className="h-4 w-4" />Copy Link</Button><a href={publicUrl} target="_blank" rel="noreferrer"><Button variant="outline"><ExternalLink className="h-4 w-4" />Preview Page</Button></a>{displayModeEnabled ? <a href={`${publicUrl}?display=1`} target="_blank" rel="noreferrer"><Button variant="outline"><ExternalLink className="h-4 w-4" />Preview Display</Button></a> : null}</div>
     </section>
 
