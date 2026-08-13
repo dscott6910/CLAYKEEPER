@@ -65,29 +65,90 @@ function throwIfError(error: { message?: string } | null) {
   if (error) throw new Error(error.message || "A database error occurred.")
 }
 
+async function loadAllRows<T>(
+  table: string,
+  columns: string,
+  organizationId: string,
+) {
+  const pageSize = 1000
+  const rows: T[] = []
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .eq("organization_id", organizationId)
+      .range(from, from + pageSize - 1)
+
+    throwIfError(error)
+
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+
+    if (page.length < pageSize) break
+  }
+
+  return rows
+}
+
 export async function loadTreasurerData() {
   const organizationId = await getCurrentOrganizationId()
+
   const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes] = await Promise.all([
-    supabase.from("seasons").select("id, name, start_date, end_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
-    supabase.from("events").select("id, season_id, name, start_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
-    supabase.from("shoots").select("id, event_id, name, discipline").eq("organization_id", organizationId),
-    supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, status, payment_status, payment_method, registration_fee, discount_amount, amount_paid, registration_source").eq("organization_id", organizationId),
-    supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, entry_fee, organization_fee, fee_adjustment, total_fee").eq("organization_id", organizationId),
-    supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),
-    supabase.from("teams").select("id, name").eq("organization_id", organizationId),
-    supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId).order("display_order"),
+    loadAllRows<TreasurerSeason>(
+      "seasons",
+      "id, name, start_date, end_date, status",
+      organizationId,
+    ),
+    loadAllRows<TreasurerEvent>(
+      "events",
+      "id, season_id, name, start_date, status",
+      organizationId,
+    ),
+    loadAllRows<TreasurerShoot>(
+      "shoots",
+      "id, event_id, name, discipline",
+      organizationId,
+    ),
+    loadAllRows<TreasurerRegistration>(
+      "registrations",
+      "id, event_id, athlete_id, team_id, class_id, status, payment_status, payment_method, registration_fee, discount_amount, amount_paid, registration_source",
+      organizationId,
+    ),
+    loadAllRows<TreasurerEnrollment>(
+      "registration_shoots",
+      "id, registration_id, shoot_id, status, entry_fee, organization_fee, fee_adjustment, total_fee",
+      organizationId,
+    ),
+    loadAllRows<TreasurerAthlete>(
+      "athletes",
+      "id, first_name, last_name, preferred_name, cyssa_number",
+      organizationId,
+    ),
+    loadAllRows<TreasurerNamedRecord>(
+      "teams",
+      "id, name",
+      organizationId,
+    ),
+    loadAllRows<TreasurerClass>(
+      "classes",
+      "id, code, display_name",
+      organizationId,
+    ),
   ])
 
-  for (const result of [seasons, events, shoots, registrations, enrollments, athletes, teams, classes]) throwIfError(result.error)
+  seasons.sort((a, b) => b.start_date.localeCompare(a.start_date))
+  events.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || ""))
+  classes.sort((a, b) => a.code.localeCompare(b.code))
 
   return {
-    seasons: (seasons.data ?? []) as TreasurerSeason[],
-    events: (events.data ?? []) as TreasurerEvent[],
-    shoots: (shoots.data ?? []) as TreasurerShoot[],
-    registrations: (registrations.data ?? []) as TreasurerRegistration[],
-    enrollments: (enrollments.data ?? []) as TreasurerEnrollment[],
-    athletes: (athletes.data ?? []) as TreasurerAthlete[],
-    teams: (teams.data ?? []) as TreasurerNamedRecord[],
-    classes: (classes.data ?? []) as TreasurerClass[],
+    seasons,
+    events,
+    shoots,
+    registrations,
+    enrollments,
+    athletes,
+    teams,
+    classes,
   }
 }
