@@ -845,7 +845,7 @@ export function RegistrationPage() {
               athlete_id: athleteId,
               team_id: form.teamId,
               class_id: athlete?.class_id ?? form.classId ?? null,
-              status: "pending_registration",
+              status: "pending",
               registration_source: "manual",
               payment_status: "unpaid",
               amount_paid: 0,
@@ -869,7 +869,7 @@ export function RegistrationPage() {
           }
 
           registrationId = registrationResponse.data.id as string
-          registrationStatus = "pending_registration"
+          registrationStatus = "pending"
           pendingCount += 1
         }
 
@@ -902,7 +902,7 @@ export function RegistrationPage() {
               status:
                 registrationStatus === "registered"
                   ? "registered"
-                  : "pending_registration",
+                  : "pending",
               entry_fee: Number(shoot.entry_fee ?? 0),
               organization_fee: Number(
                 shoot.organization_fee ?? 0,
