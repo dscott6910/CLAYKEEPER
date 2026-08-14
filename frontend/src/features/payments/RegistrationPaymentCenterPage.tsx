@@ -59,15 +59,24 @@ export function RegistrationPaymentCenterPage() {
   const [transactionType, setTransactionType] = useState<"payment" | "refund" | "adjustment">("payment")
   const [paymentMethod, setPaymentMethod] = useState("cash")
 
-  async function load() {
+  async function load(requestedEventId?: string) {
     setLoading(true)
     setError("")
     try {
-      const result = await loadRegistrationPaymentCenter()
+      const result = await loadRegistrationPaymentCenter(requestedEventId)
       setData(result)
-      setEventId((current) => current || result.events[0]?.id || "")
+
+      const resolvedEventId =
+        requestedEventId || result.events[0]?.id || ""
+
+      setEventId(resolvedEventId)
+      setRegistrationId("")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load registration and payment data.")
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load registration and payment data.",
+      )
     } finally {
       setLoading(false)
     }
@@ -107,7 +116,17 @@ export function RegistrationPaymentCenterPage() {
   const eventRegistrationIds = useMemo(() => new Set(eventRegistrations.map((item) => item.id)), [eventRegistrations])
   const eventTransactions = useMemo(() => data.transactions.filter((item) => eventRegistrationIds.has(item.registration_id)), [data.transactions, eventRegistrationIds])
   const summary = useMemo(() => {
-    const expected = eventRegistrations.reduce((sum, row) => sum + Math.max(0, Number(row.registration_fee || 0) - Number(row.discount_amount || 0)), 0)
+    const expected = eventRegistrations.reduce(
+      (sum, row) =>
+        sum +
+        Math.max(
+          0,
+          Number(row.shoot_fees || 0) +
+            Number(row.registration_fee || 0) -
+            Number(row.discount_amount || 0)
+        ),
+      0
+    )
     const paid = eventRegistrations.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0)
     return { registrations: eventRegistrations.length, expected, paid, balance: Math.max(0, expected - paid) }
   }, [eventRegistrations])
@@ -118,7 +137,7 @@ export function RegistrationPaymentCenterPage() {
     try {
       await saveRegistrationSetting(data.organizationId, eventId, settings)
       setNotice("Registration settings saved.")
-      await load()
+      await load(eventId)
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to save settings.") }
     finally { setSaving(false) }
   }
@@ -139,7 +158,7 @@ export function RegistrationPaymentCenterPage() {
         active: true,
       })
       setCode(""); setCodeValue(0); setNotice("Discount code created.")
-      await load()
+      await load(eventId)
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to create discount code.") }
     finally { setSaving(false) }
   }
@@ -150,7 +169,7 @@ export function RegistrationPaymentCenterPage() {
     try {
       await recordManualTransaction(data.organizationId, { registration_id: registrationId, transaction_type: transactionType, amount: transactionAmount, payment_method: paymentMethod })
       setTransactionAmount(0); setNotice("Transaction recorded and registration balance updated.")
-      await load()
+      await load(eventId)
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to record transaction.") }
     finally { setSaving(false) }
   }
@@ -162,11 +181,15 @@ export function RegistrationPaymentCenterPage() {
         <div className="space-y-5">
           <section className="flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-sm md:flex-row md:items-end">
             <label className="flex-1 space-y-1 text-sm font-medium">Event
-              <select className="w-full rounded-lg border bg-white px-3 py-2" value={eventId} onChange={(event) => setEventId(event.target.value)}>
+              <select className="w-full rounded-lg border bg-white px-3 py-2" value={eventId} onChange={(event) => {
+                const nextEventId = event.target.value
+                setEventId(nextEventId)
+                void load(nextEventId)
+              }}>
                 {data.events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
               </select>
             </label>
-            <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button>
+            <Button variant="outline" onClick={() => void load(eventId)} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button>
           </section>
 
           {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
@@ -206,7 +229,7 @@ export function RegistrationPaymentCenterPage() {
                 <Button onClick={() => void addCode()} disabled={saving || !code || codeValue <= 0}><Plus />Add</Button>
               </div>
               <div className="mt-4 divide-y rounded-xl border">
-                {eventCodes.length ? eventCodes.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 p-3"><div><p className="font-semibold">{item.code}</p><p className="text-xs text-slate-500">{item.discount_type === "percent" ? `${item.discount_value}%` : money(item.discount_value)} · used {item.times_used}{item.usage_limit ? ` of ${item.usage_limit}` : ""}</p></div><Button variant="outline" onClick={() => void toggleDiscountCode(item.id, !item.active).then(load)}>{item.active ? "Disable" : "Enable"}</Button></div>) : <p className="p-5 text-center text-sm text-slate-500">No discount codes for this event.</p>}
+                {eventCodes.length ? eventCodes.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 p-3"><div><p className="font-semibold">{item.code}</p><p className="text-xs text-slate-500">{item.discount_type === "percent" ? `${item.discount_value}%` : money(item.discount_value)} · used {item.times_used}{item.usage_limit ? ` of ${item.usage_limit}` : ""}</p></div><Button variant="outline" onClick={() => void toggleDiscountCode(item.id, !item.active).then(() => load(eventId))}>{item.active ? "Disable" : "Enable"}</Button></div>) : <p className="p-5 text-center text-sm text-slate-500">No discount codes for this event.</p>}
               </div>
             </div>
           </section>

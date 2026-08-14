@@ -57,29 +57,133 @@ export type RegistrationSummary = {
   amount_paid: number
   registration_fee: number
   discount_amount: number
+  shoot_fees: number
 }
 
 function check(error: { message?: string } | null) {
   if (error) throw new Error(error.message || "Database request failed.")
 }
 
-export async function loadRegistrationPaymentCenter() {
+export async function loadRegistrationPaymentCenter(eventId?: string) {
   const organizationId = await getCurrentOrganizationId()
-  const [events, settings, codes, transactions, registrations] = await Promise.all([
-    supabase.from("events").select("id, name, start_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
-    supabase.from("event_registration_settings").select("id, event_id, public_registration_enabled, registration_opens_at, registration_closes_at, capacity, waitlist_enabled, base_fee, payment_provider, stripe_price_id, confirmation_message, terms_url").eq("organization_id", organizationId),
-    supabase.from("discount_codes").select("id, event_id, code, description, discount_type, discount_value, usage_limit, times_used, starts_at, expires_at, active").eq("organization_id", organizationId).order("created_at", { ascending: false }),
-    supabase.from("payment_transactions").select("id, registration_id, transaction_type, provider, amount, status, payment_method, receipt_email, notes, processed_at").eq("organization_id", organizationId).order("processed_at", { ascending: false }).limit(250),
-    supabase.from("registrations").select("id, event_id, payment_status, amount_paid, registration_fee, discount_amount").eq("organization_id", organizationId),
+
+  const eventsResult = await supabase
+    .from("events")
+    .select("id, name, start_date, status")
+    .eq("organization_id", organizationId)
+    .order("start_date", { ascending: false })
+
+  check(eventsResult.error)
+
+  const events = (eventsResult.data ?? []) as RegistrationEvent[]
+  const selectedEventId = eventId || events[0]?.id || ""
+
+  if (!selectedEventId) {
+    return {
+      organizationId,
+      events,
+      settings: [] as RegistrationSetting[],
+      codes: [] as DiscountCode[],
+      transactions: [] as PaymentTransaction[],
+      registrations: [] as RegistrationSummary[],
+    }
+  }
+
+  const [settings, codes, registrations, shootFees] = await Promise.all([
+    supabase
+      .from("event_registration_settings")
+      .select(
+        "id, event_id, public_registration_enabled, registration_opens_at, registration_closes_at, capacity, waitlist_enabled, base_fee, payment_provider, stripe_price_id, confirmation_message, terms_url",
+      )
+      .eq("organization_id", organizationId)
+      .eq("event_id", selectedEventId),
+
+    supabase
+      .from("discount_codes")
+      .select(
+        "id, event_id, code, description, discount_type, discount_value, usage_limit, times_used, starts_at, expires_at, active",
+      )
+      .eq("organization_id", organizationId)
+      .eq("event_id", selectedEventId)
+      .order("created_at", { ascending: false }),
+
+    supabase
+      .from("registrations")
+      .select(
+        "id, event_id, payment_status, amount_paid, registration_fee, discount_amount",
+      )
+      .eq("organization_id", organizationId)
+      .eq("event_id", selectedEventId),
+
+    supabase
+      .from("registration_shoots")
+      .select(
+        "registration_id, entry_fee, organization_fee, fee_adjustment, total_fee",
+      )
+      .eq("organization_id", organizationId)
+      .eq("event_id", selectedEventId)
+      .not("status", "in", "(withdrawn,cancelled,disqualified)"),
   ])
-  for (const result of [events, settings, codes, transactions, registrations]) check(result.error)
+
+  for (const result of [
+    settings,
+    codes,
+    registrations,
+    shootFees,
+  ]) {
+    check(result.error)
+  }
+
+  const registrationRows = registrations.data ?? []
+  const registrationIds = registrationRows.map((row) => row.id)
+
+  const transactions = registrationIds.length
+    ? await supabase
+        .from("payment_transactions")
+        .select(
+          "id, registration_id, transaction_type, provider, amount, status, payment_method, receipt_email, notes, processed_at",
+        )
+        .eq("organization_id", organizationId)
+        .in("registration_id", registrationIds)
+        .order("processed_at", { ascending: false })
+        .limit(250)
+    : { data: [], error: null }
+
+  check(transactions.error)
+
+  const feesByRegistration = new Map<string, number>()
+
+  for (const row of shootFees.data ?? []) {
+    const registrationId = row.registration_id as string
+
+    const calculatedFee =
+      Number(row.entry_fee || 0) +
+      Number(row.organization_fee || 0) +
+      Number(row.fee_adjustment || 0)
+
+    const fee =
+      row.total_fee === null || row.total_fee === undefined
+        ? calculatedFee
+        : Number(row.total_fee)
+
+    feesByRegistration.set(
+      registrationId,
+      (feesByRegistration.get(registrationId) || 0) + fee,
+    )
+  }
+
+  const registrationSummaries = registrationRows.map((row) => ({
+    ...row,
+    shoot_fees: feesByRegistration.get(row.id) || 0,
+  })) as RegistrationSummary[]
+
   return {
     organizationId,
-    events: (events.data ?? []) as RegistrationEvent[],
+    events,
     settings: (settings.data ?? []) as RegistrationSetting[],
     codes: (codes.data ?? []) as DiscountCode[],
     transactions: (transactions.data ?? []) as PaymentTransaction[],
-    registrations: (registrations.data ?? []) as RegistrationSummary[],
+    registrations: registrationSummaries,
   }
 }
 
