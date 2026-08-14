@@ -94,19 +94,42 @@ function compareGroup(a: Omit<GroupResult, "place" | "unresolvedTie">, b: Omit<G
 }
 
 function finalizeGroups(rows: Array<Omit<GroupResult, "place" | "unresolvedTie">>, placements = 3): GroupResult[] {
-  const sorted = rows.slice().sort(compareGroup)
-  let eligiblePlace = 0
-  return sorted.map((row, index) => {
-    if (row.eligible) eligiblePlace += 1
-    const previous = sorted[index - 1]
-    const next = sorted[index + 1]
-    const tiedWith = (other?: typeof row) => Boolean(other && row.eligible && other.eligible && row.total === other.total && row.tieBreakerScore === other.tieBreakerScore)
-    return {
-      ...row,
-      place: row.eligible && eligiblePlace <= placements ? eligiblePlace : null,
-      unresolvedTie: tiedWith(previous) || tiedWith(next),
-    }
+  const categories = Array.from(new Set(rows.map((row) => row.category)))
+  const results: GroupResult[] = []
+
+  categories.forEach((category) => {
+    const sorted = rows
+      .filter((row) => row.category === category)
+      .slice()
+      .sort(compareGroup)
+
+    let eligiblePlace = 0
+
+    sorted.forEach((row, index) => {
+      if (row.eligible) eligiblePlace += 1
+
+      const previous = sorted[index - 1]
+      const next = sorted[index + 1]
+
+      const tiedWith = (other?: typeof row) =>
+        Boolean(
+          other &&
+          row.eligible &&
+          other.eligible &&
+          row.category === other.category &&
+          row.total === other.total &&
+          row.tieBreakerScore === other.tieBreakerScore
+        )
+
+      results.push({
+        ...row,
+        place: row.eligible && eligiblePlace <= placements ? eligiblePlace : null,
+        unresolvedTie: tiedWith(previous) || tiedWith(next),
+      })
+    })
   })
+
+  return results
 }
 
 export function calculateStateTeams(rows: AwardParticipant[], discipline: DisciplineKey): GroupResult[] {
