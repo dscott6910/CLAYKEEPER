@@ -91,14 +91,20 @@ export function AppShell() {
             <span className="ml-2 text-sm font-semibold text-slate-700">
               ClayKeeper
             </span>
+
+            <div className="ml-auto">
+              <GlobalSearch />
+            </div>
+          </div>
+
+          <div className="hidden min-h-14 items-center justify-end border-b border-slate-200 bg-slate-50 px-6 md:flex">
+            <GlobalSearch />
           </div>
 
           <main className="min-w-0">
             <Outlet />
           </main>
         </div>
-
-        <GlobalSearch />
       </div>
     </MobileNavigationContext.Provider>
   )
