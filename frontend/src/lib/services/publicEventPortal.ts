@@ -37,6 +37,26 @@ export type PublicEventPortalEntry = {
   awardPublished: boolean
 }
 
+export type PublicEventPortalAward = {
+  registrationShootId: string
+  shootId: string
+  shootName: string
+  participantName: string
+  teamName: string
+  classCode: string
+  awardGroup: "overall" | "class"
+  awardKey: string
+  placement: number
+  title: string
+  note: string | null
+  totalScore: number
+  shootOffScores: Array<{
+    roundNumber: number
+    score: number
+  }>
+  overridden: boolean
+}
+
 export type PublicEventPortalPayload = {
   available: boolean
   reason?: "not_found" | "not_public"
@@ -45,6 +65,7 @@ export type PublicEventPortalPayload = {
   settings?: { showLiveScores: boolean; showSquads: boolean; showTeams: boolean; showAwards: boolean; displayModeEnabled: boolean; publicMessage: string | null }
   shoots?: Array<{ id: string; name: string; discipline: string; shootDate: string; startTime: string | null; status: string }>
   entries?: PublicEventPortalEntry[]
+  awards?: PublicEventPortalAward[]
   stats?: { registered: number; checkedIn: number; assigned: number; started: number; finalized: number; publishedShoots: number; lastUpdatedAt: string | null }
 }
 

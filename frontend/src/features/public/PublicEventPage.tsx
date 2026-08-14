@@ -69,7 +69,21 @@ export function PublicEventPage() {
     for (const row of visibleScores.filter((item) => item.teamName !== "Independent")) groups.set(row.teamName, [...(groups.get(row.teamName) ?? []), row])
     return [...groups.entries()].map(([teamName, members]) => ({ teamName, members: members.length, score: rank(members).slice(0, 5).reduce((sum, row) => sum + row.totalScore, 0) })).sort((a, b) => b.score - a.score || a.teamName.localeCompare(b.teamName))
   }, [visibleScores])
-  const awards = useMemo(() => rank(entries.filter((row) => row.awardPublished)), [entries])
+  const awards = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return (payload?.awards ?? []).filter((award) => {
+      if (shootId !== "all" && award.shootId !== shootId) return false
+      if (!needle) return true
+      return [
+        award.participantName,
+        award.teamName,
+        award.classCode,
+        award.shootName,
+        award.title,
+        award.note,
+      ].some((value) => value?.toLowerCase().includes(needle))
+    })
+  }, [payload?.awards, query, shootId])
   const completion = payload?.stats?.assigned ? Math.round(((payload.stats.finalized ?? 0) / payload.stats.assigned) * 100) : 0
 
   if (loading && !payload) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><RefreshCw className="mr-3 h-6 w-6 animate-spin" />Loading ClayKeeper Live…</div>
@@ -113,7 +127,86 @@ export function PublicEventPage() {
       {tab === "class" ? <section className="overflow-hidden rounded-2xl bg-white shadow-sm"><table className="w-full text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-4">Class Place</th><th className="p-4">Athlete</th><th className="p-4">Class</th><th className="p-4 text-right">Score</th></tr></thead><tbody>{classRows.map((row) => <tr key={`${row.registrationShootId}-${row.classCode}`} className="border-t"><td className="p-4 font-black">{row.classPlace}</td><td className="p-4"><p className="font-bold">{row.participantName}</p><p className="text-xs text-slate-500">{row.teamName}</p></td><td className="p-4">{row.classCode}</td><td className="p-4 text-right text-xl font-black">{row.totalScore}</td></tr>)}</tbody></table></section> : null}
       {tab === "team" ? <section className="overflow-hidden rounded-2xl bg-white shadow-sm">{teams.map((team,index) => <div key={team.teamName} className="flex items-center gap-4 border-t p-5 first:border-t-0"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 font-black text-emerald-800">{index + 1}</div><div className="min-w-0 flex-1"><p className="truncate font-bold">{team.teamName}</p><p className="text-xs text-slate-500">Top five of {team.members}</p></div><p className="text-2xl font-black">{team.score}</p></div>)}</section> : null}
       {tab === "squads" ? <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{entries.map((row) => <article key={row.registrationShootId} className="rounded-2xl bg-white p-5 shadow-sm"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-emerald-700">Squad {row.squadNumber || "Unassigned"}</p><h3 className="mt-1 font-bold">{row.participantName}</h3><p className="text-sm text-slate-500">{row.teamName} · {row.classCode}</p></div><div className="rounded-xl bg-slate-100 px-3 py-2 text-center"><p className="text-xs text-slate-500">Post</p><p className="font-black">{row.positionLabel || row.post || "—"}</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-sm"><span>{row.shootName}</span><span className="flex items-center gap-2"><Clock3 className="h-4 w-4" />{formatTime(row.startTime)}</span><span>{row.courseName || "Course TBA"}</span><span>{row.checkedIn ? "Checked in" : "Expected"}</span></div></article>)}</section> : null}
-      {tab === "awards" ? <section className="overflow-hidden rounded-2xl bg-white shadow-sm"><div className="border-b p-5"><h2 className="text-xl font-bold">Published Results</h2></div>{awards.map((row,index) => <div key={row.registrationShootId} className="flex items-center gap-4 border-t p-5"><Medal className={index < 3 ? "text-amber-500" : "text-slate-300"} /><div className="flex-1"><p className="font-bold">{row.participantName}</p><p className="text-xs text-slate-500">{row.shootName} · {row.teamName} · {row.classCode}</p></div><p className="text-2xl font-black">{row.totalScore}</p></div>)}{awards.length === 0 ? <p className="p-10 text-center text-slate-500">Official awards have not been published yet.</p> : null}</section> : null}
+      {tab === "awards" ? (
+        <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
+          <div className="border-b p-5">
+            <h2 className="text-xl font-bold">Official Awards</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Official overall and class awards published by tournament administration.
+            </p>
+          </div>
+
+          {awards.length > 0 ? (
+            <div className="divide-y">
+              {awards.map((award) => {
+                const shootOffText = award.shootOffScores
+                  ?.map((round) => `SO${round.roundNumber}: ${round.score}`)
+                  .join(" · ")
+
+                return (
+                  <article
+                    key={`${award.shootId}-${award.awardGroup}-${award.awardKey}-${award.placement}`}
+                    className="p-5"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50">
+                        <Medal className="h-7 w-7 text-amber-500" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-black text-slate-950">
+                            {award.title}
+                          </h3>
+
+                          {award.overridden ? (
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                              Official override
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <p className="mt-1 text-lg font-bold">
+                          {award.participantName}
+                        </p>
+
+                        <p className="text-sm text-slate-500">
+                          {award.teamName} · {award.classCode} · {award.shootName}
+                        </p>
+
+                        {award.note ? (
+                          <p className="mt-2 text-sm font-medium text-emerald-700">
+                            {award.note}
+                          </p>
+                        ) : null}
+
+                        {shootOffText ? (
+                          <p className="mt-2 text-sm font-semibold text-slate-600">
+                            Shoot-off: {shootOffText}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                          Score
+                        </p>
+                        <p className="text-3xl font-black">
+                          {award.totalScore}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="p-10 text-center text-slate-500">
+              Official awards have not been published yet.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       <footer className="mt-8 flex flex-wrap justify-between gap-3 border-t py-6 text-xs text-slate-500"><span>Updated {payload.stats?.lastUpdatedAt ? new Date(payload.stats.lastUpdatedAt).toLocaleTimeString() : "when scores arrive"}</span><Link to="/login" className="font-semibold text-emerald-700">Staff login</Link></footer>
     </main>
