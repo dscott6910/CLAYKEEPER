@@ -49,7 +49,7 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult[]>
       type: "participant" as const,
       title: `${row.preferred_name || row.first_name} ${row.last_name}`,
       subtitle: row.cyssa_number ? `Participant · CYSSA ${row.cyssa_number}` : "Participant",
-      path: "/participants",
+      path: `/participants/${row.id}`,
     }))),
     ...((teams.data ?? []).map((row) => ({
       id: row.id,
