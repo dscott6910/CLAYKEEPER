@@ -1261,8 +1261,8 @@ export function RegistrationPage() {
                           Add Athlete Manually
                         </h3>
                         <p className="mt-1 text-xs text-amber-800">
-                          Manual athletes remain pending and will not appear in
-                          official squadding until they register and pay.
+                          Add an athlete who is not yet registered for this event.
+                          Once checked in, they will be available for squadding.
                         </p>
                         <select
                           value={form.manualAthleteId}

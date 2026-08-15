@@ -73,6 +73,7 @@ export type RegistrationSnapshot = {
   class_id: string | null
   registration_number: string | null
   status: string
+  checked_in: boolean
 }
 
 export type AthleteSnapshot = {
@@ -119,8 +120,8 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
   const [squadsResult, membersResult, enrollmentsResult, registrationsResult, teamsResult, classesResult] = await Promise.all([
     supabase.from("squads").select("id, organization_id, shoot_id, squad_number, name, house_number, course_name, station_name, flight_name, start_time, capacity, sort_order, assignment_method, status, is_locked, notes").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
     supabase.from("squad_members").select("id, organization_id, shoot_id, squad_id, registration_shoot_id, position, position_label, assignment_method, status, is_squad_leader, checked_in").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
-    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).eq("status", "registered"),
-    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status, payment_status").eq("organization_id", organizationId).eq("event_id", eventId).eq("status", "registered").in("payment_status", ["paid", "waived", "not_required"]),
+    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).in("status", ["pending", "registered"]),
+    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status, payment_status, checked_in").eq("organization_id", organizationId).eq("event_id", eventId).in("status", ["pending", "registered"]),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId).eq("active", true).order("name"),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId).eq("active", true).order("display_order"),
   ])
@@ -133,20 +134,36 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
     (member) => !["withdrawn", "no_show"].includes(member.status),
   )
 
-  const paidRegistrations =
+  const registrationRows =
     (registrationsResult.data ?? []) as RegistrationSnapshot[]
-  const paidRegistrationIds = new Set(
-    paidRegistrations.map((registration) => registration.id),
+
+  const eligibleRegistrations = registrationRows.filter(
+    (registration) =>
+      registration.status === "registered" || registration.checked_in,
   )
+
+  const registrationById = new Map(
+    eligibleRegistrations.map((registration) => [
+      registration.id,
+      registration,
+    ]),
+  )
+
   const eligibleEnrollments = (
     (enrollmentsResult.data ?? []) as EnrollmentRecord[]
-  ).filter((enrollment) =>
-    paidRegistrationIds.has(enrollment.registration_id),
-  )
+  ).filter((enrollment) => {
+    const registration = registrationById.get(enrollment.registration_id)
+    if (!registration) return false
+
+    return (
+      enrollment.status === "registered" ||
+      registration.checked_in
+    )
+  })
 
   const athleteIds = [
     ...new Set(
-      paidRegistrations
+      eligibleRegistrations
         .map((registration) => registration.athlete_id)
         .filter(Boolean),
     ),
@@ -169,7 +186,7 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
     squads: (squadsResult.data ?? []) as SquadRecord[],
     members: activeMembers,
     enrollments: eligibleEnrollments,
-    registrations: paidRegistrations,
+    registrations: eligibleRegistrations,
     athletes,
     teams: (teamsResult.data ?? []) as NamedRecord[],
     classes: (classesResult.data ?? []) as ClassSnapshot[],
