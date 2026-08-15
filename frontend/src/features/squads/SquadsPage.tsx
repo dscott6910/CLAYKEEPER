@@ -95,7 +95,15 @@ export function SquadsPage() {
   const teamById = useMemo(() => new Map(teams.map((row) => [row.id, row])), [teams])
   const classById = useMemo(() => new Map(classes.map((row) => [row.id, row])), [classes])
   const enrollmentById = useMemo(() => new Map(enrollments.map((row) => [row.id, row])), [enrollments])
-  const memberByEnrollmentId = useMemo(() => new Map(members.map((row) => [row.registration_shoot_id, row])), [members])
+  const memberByEnrollmentId = useMemo(
+    () =>
+      new Map(
+        members
+          .filter((row) => !["withdrawn", "no_show"].includes(row.status))
+          .map((row) => [row.registration_shoot_id, row]),
+      ),
+    [members],
+  )
 
   const participantForEnrollment = useCallback((enrollment: EnrollmentRecord) => {
     const registration = registrationById.get(enrollment.registration_id)
@@ -122,6 +130,7 @@ export function SquadsPage() {
   const membersBySquad = useMemo(() => {
     const map = new Map<string, SquadMemberRecord[]>()
     for (const member of members) {
+      if (["withdrawn", "no_show"].includes(member.status)) continue
       const rows = map.get(member.squad_id) ?? []
       rows.push(member)
       map.set(member.squad_id, rows)

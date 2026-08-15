@@ -128,6 +128,12 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
 
   for (const result of [squadsResult, membersResult, enrollmentsResult, registrationsResult, athletesResult, teamsResult, classesResult]) throwIfError(result.error)
 
+  const allMembers =
+    (membersResult.data ?? []) as SquadMemberRecord[]
+  const activeMembers = allMembers.filter(
+    (member) => !["withdrawn", "no_show"].includes(member.status),
+  )
+
   const paidRegistrations =
     (registrationsResult.data ?? []) as RegistrationSnapshot[]
   const paidRegistrationIds = new Set(
@@ -141,7 +147,7 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
 
   return {
     squads: (squadsResult.data ?? []) as SquadRecord[],
-    members: (membersResult.data ?? []) as SquadMemberRecord[],
+    members: activeMembers,
     enrollments: eligibleEnrollments,
     registrations: paidRegistrations,
     athletes: (athletesResult.data ?? []) as AthleteSnapshot[],
@@ -166,6 +172,32 @@ export async function deleteSquad(squadId: string) {
 }
 
 export async function assignEnrollment(params: { organizationId: string; shootId: string; squadId: string; registrationShootId: string; position: number; label: string; method?: "manual" | "automatic" }) {
+  const existing = await supabase
+    .from("squad_members")
+    .select("id, status")
+    .eq("organization_id", params.organizationId)
+    .eq("shoot_id", params.shootId)
+    .eq("registration_shoot_id", params.registrationShootId)
+    .maybeSingle()
+
+  throwIfError(existing.error)
+
+  if (existing.data) {
+    const { error } = await supabase
+      .from("squad_members")
+      .update({
+        squad_id: params.squadId,
+        position: params.position,
+        position_label: params.label,
+        assignment_method: params.method ?? "manual",
+        status: "assigned",
+      })
+      .eq("id", existing.data.id)
+
+    throwIfError(error)
+    return
+  }
+
   const { error } = await supabase.from("squad_members").insert({
     organization_id: params.organizationId,
     shoot_id: params.shootId,
@@ -185,7 +217,14 @@ export async function moveMember(memberId: string, squadId: string, position: nu
 }
 
 export async function removeMember(memberId: string) {
-  const { error } = await supabase.from("squad_members").delete().eq("id", memberId)
+  const { error } = await supabase
+    .from("squad_members")
+    .update({
+      status: "withdrawn",
+      assignment_method: "manual",
+    })
+    .eq("id", memberId)
+
   throwIfError(error)
 }
 
