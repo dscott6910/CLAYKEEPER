@@ -41,9 +41,7 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
       p_organization_id: organizationId,
       p_event_id: eventId,
     }),
-    supabase.rpc("get_operational_athletes", {
-      p_organization_id: organizationId,
-    }),
+    Promise.resolve({ data: [], error: null }),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId),
     supabase.from("score_entries").select("id, squad_member_id, round_number, score, status").eq("organization_id", organizationId).eq("shoot_id", shootId),
@@ -51,11 +49,34 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
     supabase.from("shoot_off_scores").select("id, shoot_off_round_id, squad_member_id, score").eq("organization_id", organizationId).eq("shoot_id", shootId),
   ])
   for (const result of [squads, members, enrollments, registrations, athletes, teams, classes, scores, shootOffRounds, shootOffScores]) throwIfError(result.error)
+
+  const registrationRows = (registrations.data ?? []) as ScoringRegistration[]
+  const athleteIds = [
+    ...new Set(
+      registrationRows
+        .map((registration) => registration.athlete_id)
+        .filter(Boolean),
+    ),
+  ]
+
+  let athleteRows: ScoringAthlete[] = []
+
+  if (athleteIds.length > 0) {
+    const athletesResult = await supabase
+      .from("athletes")
+      .select("id, first_name, last_name, preferred_name, cyssa_number")
+      .eq("organization_id", organizationId)
+      .in("id", athleteIds)
+
+    throwIfError(athletesResult.error)
+    athleteRows = (athletesResult.data ?? []) as ScoringAthlete[]
+  }
+
   return {
     squads: (squads.data ?? []) as ScoringSquad[], members: (members.data ?? []) as ScoringMember[], enrollments: (enrollments.data ?? []).filter(
       (row: { shoot_id: string }) => row.shoot_id === shootId,
     ) as ScoringEnrollment[],
-    registrations: (registrations.data ?? []) as ScoringRegistration[], athletes: (athletes.data ?? []) as ScoringAthlete[], teams: (teams.data ?? []) as ScoringNamedRecord[], classes: (classes.data ?? []) as ScoringClass[],
+    registrations: registrationRows, athletes: athleteRows, teams: (teams.data ?? []) as ScoringNamedRecord[], classes: (classes.data ?? []) as ScoringClass[],
     scores: (scores.data ?? []) as ScoreEntry[], shootOffRounds: (shootOffRounds.data ?? []) as ShootOffRound[], shootOffScores: (shootOffScores.data ?? []) as ShootOffScore[],
   }
 }
