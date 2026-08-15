@@ -51,6 +51,8 @@ export type DigitalScoringEnrollment = {
   id: string
   registration_id: string
   shoot_id: string
+  status: string
+  checked_in: boolean
 }
 
 export type DigitalScoringRegistration = {
@@ -59,6 +61,8 @@ export type DigitalScoringRegistration = {
   team_id: string | null
   class_id: string | null
   registration_number: string | null
+  status: string
+  checked_in: boolean
 }
 
 export type DigitalScoringAthlete = {
@@ -146,9 +150,7 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
       p_organization_id: event.organization_id,
       p_event_id: eventId,
     }),
-    supabase.rpc("get_operational_athletes", {
-      p_organization_id: event.organization_id,
-    }),
+    Promise.resolve({ data: [], error: null }),
     supabase.from("teams").select("id,name").eq("organization_id", event.organization_id),
     supabase.from("classes").select("id,code,display_name").eq("organization_id", event.organization_id),
     supabase.rpc("get_operational_registration_shoots", {
@@ -160,9 +162,57 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
   for (const result of [shoots, courses, squads, registrations, athletes, teams, classes, enrollments, scorecards]) check(result.error)
 
   const courseRows = (courses.data ?? []) as DigitalScoringCourse[]
-  const enrollmentRows = (enrollments.data ?? []).filter(
-    (row: { status: string }) => row.status === "registered",
-  ) as DigitalScoringEnrollment[]
+
+  const registrationRows =
+    (registrations.data ?? []) as DigitalScoringRegistration[]
+
+  const eligibleRegistrations = registrationRows.filter(
+    (registration) =>
+      registration.status === "registered" || registration.checked_in,
+  )
+
+  const registrationById = new Map(
+    eligibleRegistrations.map((registration) => [
+      registration.id,
+      registration,
+    ]),
+  )
+
+  const athleteIds = [
+    ...new Set(
+      eligibleRegistrations
+        .map((registration) => registration.athlete_id)
+        .filter(Boolean),
+    ),
+  ]
+
+  let athleteRows: DigitalScoringAthlete[] = []
+
+  if (athleteIds.length > 0) {
+    const athletesResult = await supabase
+      .from("athletes")
+      .select("id,first_name,last_name,preferred_name,cyssa_number")
+      .eq("organization_id", event.organization_id)
+      .in("id", athleteIds)
+
+    check(athletesResult.error)
+    athleteRows =
+      (athletesResult.data ?? []) as DigitalScoringAthlete[]
+  }
+
+  const enrollmentRows = (
+    (enrollments.data ?? []) as DigitalScoringEnrollment[]
+  ).filter((enrollment) => {
+    const registration = registrationById.get(enrollment.registration_id)
+    if (!registration) return false
+
+    return (
+      enrollment.status === "registered" ||
+      enrollment.checked_in ||
+      registration.checked_in
+    )
+  })
+
   const courseIds = courseRows.map((row) => row.id)
   const enrollmentIds = enrollmentRows.map((row) => row.id)
   const scorecardRows = (scorecards.data ?? []) as DigitalScorecard[]
@@ -183,10 +233,8 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
     squads: (squads.data ?? []) as DigitalScoringSquad[],
     members: (members.data ?? []) as DigitalScoringMember[],
     enrollments: enrollmentRows,
-    registrations: (registrations.data ?? []).filter(
-      (row: { status: string }) => row.status === "registered",
-    ) as DigitalScoringRegistration[],
-    athletes: (athletes.data ?? []) as DigitalScoringAthlete[],
+    registrations: eligibleRegistrations,
+    athletes: athleteRows,
     teams: (teams.data ?? []) as DigitalScoringNamed[],
     classes: (classes.data ?? []) as DigitalScoringClass[],
     scorecards: scorecardRows,
