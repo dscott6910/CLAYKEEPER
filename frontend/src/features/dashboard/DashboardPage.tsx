@@ -279,7 +279,7 @@ export function DashboardPage() {
                 { label: "Import Shooters", href: "/operations", icon: Upload },
                 { label: "Create Shoot", href: "/events", icon: Target },
                 { label: "View Reports", href: "/reports", icon: BarChart3 },
-                { label: "Live Scoring", href: "/scoring", icon: Trophy },
+                { label: "Digital Scoring", href: "/scoring", icon: Trophy },
                 { label: "Awards & Results", href: "/awards", icon: Medal },
               ].map(({ label, href, icon: Icon }) => (
                 <Link

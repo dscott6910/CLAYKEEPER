@@ -175,7 +175,7 @@ export function DirectorDashboardPage() {
         action: "Open Check-In",
       },
       {
-        title: "Live Scoring",
+        title: "Digital Scoring",
         value: `${data.scoringCompletionPercent}%`,
         detail: `${data.athletesCurrentlyShooting} in progress · ${data.athletesFinished} finished`,
         health:
@@ -185,7 +185,7 @@ export function DirectorDashboardPage() {
               ? "warning"
               : "healthy",
         icon: Target,
-        href: `/events/${eventId}/live-scoring`,
+        href: `/events/${eventId}/digital-scoring`,
         action: "Open Scoring",
       },
       {
@@ -246,7 +246,7 @@ export function DirectorDashboardPage() {
         severity: "critical",
         title: `${data.scorecardsMissing} scorecards have not been started`,
         detail: "Assigned athletes are missing scorecard activity while scoring is underway.",
-        href: `/events/${eventId}/live-scoring`,
+        href: `/events/${eventId}/digital-scoring`,
         action: "Review scoring",
       })
     }
@@ -257,8 +257,8 @@ export function DirectorDashboardPage() {
         severity: "warning",
         title: `${data.scorecardsDraft} scorecards remain in draft`,
         detail: "Draft scorecards must be finalized before event scoring can be considered complete.",
-        href: `/events/${eventId}/live-scoring`,
-        action: "Open live scoring",
+        href: `/events/${eventId}/digital-scoring`,
+        action: "Open Digital Scoring",
       })
     }
 
@@ -342,7 +342,7 @@ export function DirectorDashboardPage() {
         id: "public-live-scores-hidden",
         severity: "info",
         title: "Public live scores are hidden",
-        detail: "The public portal is open, but live scoring results are not currently visible.",
+        detail: "The public portal is open, but scoring results are not currently visible.",
         href: `/events/${eventId}/public`,
         action: "Manage portal",
       })
@@ -383,8 +383,8 @@ export function DirectorDashboardPage() {
       return {
         title: "Continue tournament scoring",
         detail: `${data.assignedMembers - data.scorecardsFinalized} assigned scorecards are not finalized yet.`,
-        href: `/events/${eventId}/live-scoring`,
-        action: "Open Live Scoring",
+        href: `/events/${eventId}/digital-scoring`,
+        action: "Open Digital Scoring",
         severity: "info" as AlertSeverity,
       }
     }
@@ -402,7 +402,7 @@ export function DirectorDashboardPage() {
     return [
       { id: "operations", label: "Operations Center", detail: "Full event workflow and readiness", href: `/events/${eventId}/operations`, icon: MonitorUp, emphasis: "primary" },
       { id: "check-in", label: "Check-In / QR", detail: `${data.checkedIn} checked in · ${data.eligibleRegistrations - data.checkedIn} remaining`, href: `/events/${eventId}/check-in`, icon: ScanLine, badge: `${data.checkInPercent}%`, emphasis: data.checkedIn < data.eligibleRegistrations ? "attention" : "standard" },
-      { id: "scoring", label: "Live Scoring", detail: `${data.athletesCurrentlyShooting} active · ${data.scorecardsDraft} drafts`, href: `/events/${eventId}/live-scoring`, icon: Target, badge: `${data.scoringCompletionPercent}%`, emphasis: data.scorecardsDraft > 0 || data.scorecardsMissing > 0 ? "attention" : "standard" },
+      { id: "scoring", label: "Digital Scoring", detail: `${data.athletesCurrentlyShooting} active · ${data.scorecardsDraft} drafts`, href: `/events/${eventId}/digital-scoring`, icon: Target, badge: `${data.scoringCompletionPercent}%`, emphasis: data.scorecardsDraft > 0 || data.scorecardsMissing > 0 ? "attention" : "standard" },
       { id: "scorecards", label: "Scorecards", detail: "Print and manage event scorecards", href: `/events/${eventId}/scoring`, icon: Printer },
       { id: "leaderboard", label: "Leaderboards", detail: `${data.scorecardsFinalized} finalized scores`, href: `/events/${eventId}/leaderboard`, icon: Trophy },
       { id: "awards", label: "Awards", detail: data.awardsStatus === "published" ? "Official results published" : data.awardsReady ? "Ready for awards review" : "Waiting on scoring", href: `/events/${eventId}/awards`, icon: Award, badge: awardsLabel(data), emphasis: data.awardsReady && data.awardsStatus !== "published" ? "attention" : "standard" },

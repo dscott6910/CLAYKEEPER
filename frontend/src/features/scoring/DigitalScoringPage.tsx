@@ -32,7 +32,7 @@ import {
 } from "@/lib/services/digitalScoring"
 
 function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
-  if (!athlete) return "Unknown Athlete"
+  if (!athlete) return "Unknown participant"
   const first =
     athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
   return `${first} ${athlete.last_name?.trim() || ""}`.trim()
@@ -112,7 +112,7 @@ export function DigitalScoringPage() {
 
   const load = useCallback(async () => {
     if (!eventId) {
-      setError("Choose an event before opening live scoring.")
+      setError("Choose an event before opening digital scoring.")
       setLoading(false)
       return
     }

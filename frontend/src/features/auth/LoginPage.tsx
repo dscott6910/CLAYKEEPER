@@ -66,7 +66,7 @@ export function LoginPage() {
           </h1>
 
           <p className="mt-6 text-lg leading-8 text-slate-300">
-            Participants, squads, payments, live scoring, shoot-offs,
+            Participants, squads, payments, digital scoring, shoot-offs,
             and reporting—all in one organized system.
           </p>
         </div>

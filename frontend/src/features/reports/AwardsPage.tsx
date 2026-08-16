@@ -191,8 +191,8 @@ export function AwardsPage() {
     rows.filter((row) => !row.complete).forEach((row) => issues.push({
       id: `incomplete-${row.enrollmentId}`,
       title: `Incomplete score: ${row.name}`,
-      detail: `${row.classCode} · ${row.team} · ${row.squad}. Complete the remaining rounds in Live Scoring before publishing awards.`,
-      action: "Open this participant in Live Scoring",
+      detail: `${row.classCode} · ${row.team} · ${row.squad}. Complete the remaining scoring before publishing awards.`,
+      action: "Open this participant in Digital Scoring",
       correctionUrl: `/scoring?eventId=${encodeURIComponent(eventId)}&shootId=${encodeURIComponent(shootId)}&squadId=${encodeURIComponent(row.squadId || "")}&memberId=${encodeURIComponent(row.memberId || "")}&focus=round`,
     }))
 

@@ -165,10 +165,10 @@ export function LiveScoringEventSelectorPage() {
                 </div>
 
                 <Link
-                  to={`/events/${event.id}/live-scoring`}
+                  to={`/events/${event.id}/digital-scoring`}
                   className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  Open Live Scoring
+                  Open Digital Scoring
                 </Link>
               </article>
             ))}

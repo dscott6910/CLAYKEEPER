@@ -175,7 +175,7 @@ export function SeasonStandingsPage() {
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {data.eventSummaries.map((event) => (
-                <Link key={event.eventId} to={`/events/${event.eventId}/live-scoring`} className="min-w-48 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+                <Link key={event.eventId} to={`/events/${event.eventId}/digital-scoring`} className="min-w-48 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
                   <p className="truncate text-sm font-semibold text-slate-900">{event.eventName}</p>
                   <p className="mt-1 text-xs text-slate-500">{formatDate(event.startDate)}</p>
                   <div className="mt-2 flex items-center justify-between text-xs"><span>{event.completedAthletes}/{event.athletes} complete</span><span className="font-bold">{event.completionPercent}%</span></div>

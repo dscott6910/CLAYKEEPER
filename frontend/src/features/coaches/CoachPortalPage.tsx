@@ -703,7 +703,7 @@ export function CoachPortalPage() {
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <QuickAction href="/registration" label="Check In" />
                         <QuickAction href="/squads" label="Assign Squads" />
-                        <QuickAction href="/scoring" label="Live Scoring" />
+                        <QuickAction href="/scoring" label="Digital Scoring" />
                         <QuickAction href="/registration-payments" label="Payments" />
                         <QuickAction href="/reports" label="Reports" />
                         <QuickAction href="/awards" label="Awards" />
@@ -818,7 +818,7 @@ export function CoachPortalPage() {
                   <div className="border-b p-5">
                     <h2 className="text-lg font-bold">Live team scores</h2>
                     <p className="text-sm text-slate-500">
-                      Round totals update from Live Scoring.
+                      Round totals update from scoring.
                     </p>
                   </div>
 

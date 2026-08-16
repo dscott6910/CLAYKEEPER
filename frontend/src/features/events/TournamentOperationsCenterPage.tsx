@@ -237,7 +237,7 @@ export function TournamentOperationsCenterPage() {
       },
       {
         key: "scoring",
-        title: "Live Scoring",
+        title: "Digital Scoring",
         description: "Enable score entry and monitor progress.",
         detail: `${data.scorecardsFinalized} finalized · ${data.scorecardsStarted - data.scorecardsFinalized} drafts · ${data.scorecardsMissing} missing`,
         status:
@@ -246,7 +246,7 @@ export function TournamentOperationsCenterPage() {
             : data.scorecardsStarted > 0
               ? "needs_attention"
               : "not_started",
-        href: `/events/${eventId}/live-scoring`,
+        href: `/events/${eventId}/digital-scoring`,
         action: "Open Digital Scoring",
         icon: Flag,
       },

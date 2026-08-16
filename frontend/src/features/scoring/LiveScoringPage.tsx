@@ -79,7 +79,7 @@ export function LiveScoringPage() {
       setEventId(nextEvent)
       const nextShoot = shootId || base.shoots.find((shoot) => shoot.event_id === nextEvent)?.id || ""
       setShootId(nextShoot)
-    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load live scoring.") }
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load round score entry.") }
     finally { setLoading(false) }
   }
 
@@ -161,7 +161,7 @@ export function LiveScoringPage() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader title="Live Scoring" description="Enter and save participant scores by squad, round, and shoot-off" />
+      <AppHeader title="Round Score Entry" description="Enter and save participant round totals and shoot-off scores" />
       <PageContainer>
         <div className="space-y-5">
           <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-3">
@@ -170,7 +170,7 @@ export function LiveScoringPage() {
             <label className="space-y-1 text-sm font-medium">Squad<select className="w-full rounded-lg border bg-white px-3 py-2" value={squadId} onChange={(e) => setSquadId(e.target.value)}>{data.squads.map((squad) => <option key={squad.id} value={squad.id}>Squad {squad.squad_number}{squad.house_number ? ` · House ${squad.house_number}` : ""}{squad.course_name ? ` · ${squad.course_name}` : ""}</option>)}</select></label>
           </section>
 
-          {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Live scoring could not load.</strong><p>{error}</p></div></div> : null}
+          {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Round score entry could not load.</strong><p>{error}</p></div></div> : null}
 
           <section className="grid gap-3 sm:grid-cols-3">
             <Stat icon={Users} label="Participants" value={data.members.length} />

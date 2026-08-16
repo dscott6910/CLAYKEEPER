@@ -35,7 +35,7 @@ export function EventOperationsPage() {
   const actions = [
     ["Check-in", selectedEventId ? `/events/${selectedEventId}/check-in` : "/registration", ClipboardCheck],
     ["Squadding", "/squads", Users],
-    ["Live Scoring", selectedEventId ? `/events/${selectedEventId}/live-scoring` : "/scoring", Target],
+    ["Digital Scoring", selectedEventId ? `/events/${selectedEventId}/digital-scoring` : "/scoring", Target],
     ["Awards", selectedEventId ? `/events/${selectedEventId}/awards` : "/awards", Trophy],
     ["Treasurer", "/treasurer", BadgeDollarSign],
     ["Reports", selectedEventId ? `/events/${selectedEventId}/reports` : "/reports", CalendarDays],
