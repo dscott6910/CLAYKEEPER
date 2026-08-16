@@ -60,13 +60,13 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+        className="inline-flex min-h-10 items-center gap-2 rounded-lg border-2 border-slate-500 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-700 hover:bg-slate-50"
         aria-label="Open global search"
       >
         <Search className="h-4 w-4" />
         <span className="hidden sm:inline">Search</span>
         <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500 lg:inline">
-          ⌘K
+          Ctrl/⌘ K
         </span>
       </button>
       {open ? (
