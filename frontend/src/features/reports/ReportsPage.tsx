@@ -22,6 +22,7 @@ import {
   type ReportShoot,
   type ReportShootOffRound,
   type ReportShootOffScore,
+  type ReportDigitalScorecard,
   type ReportSquad,
 } from "@/lib/services/reports"
 
@@ -36,6 +37,7 @@ type ReportData = {
   scores: ReportScore[]
   shootOffRounds: ReportShootOffRound[]
   shootOffScores: ReportShootOffScore[]
+  digitalScorecards: ReportDigitalScorecard[]
 }
 
 
@@ -64,7 +66,7 @@ type StandingRow = {
 }
 
 const emptyData: ReportData = {
-  registrations: [], enrollments: [], athletes: [], teams: [], classes: [], squads: [], members: [], scores: [], shootOffRounds: [], shootOffScores: [],
+  registrations: [], enrollments: [], athletes: [], teams: [], classes: [], squads: [], members: [], scores: [], shootOffRounds: [], shootOffScores: [], digitalScorecards: [],
 }
 
 function athleteName(athlete: ReportAthlete | undefined) {
@@ -149,6 +151,11 @@ export function ReportsPage() {
     const memberByEnrollmentId = new Map(data.members.map((row) => [row.registration_shoot_id, row]))
     const squadById = new Map(data.squads.map((row) => [row.id, row]))
     const scoreByKey = new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row]))
+    const finalizedDigitalByMember = new Map(
+      data.digitalScorecards
+        .filter((scorecard) => scorecard.status === "finalized")
+        .map((scorecard) => [scorecard.squad_member_id, scorecard]),
+    )
     const shootOffByKey = new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score]))
     const rounds = selectedShoot?.number_of_rounds ?? 0
 
@@ -166,6 +173,14 @@ export function ReportsPage() {
           return scoreByKey.get(`${member.id}:${index + 1}`)?.score ?? null
         })
         const enteredRounds = roundScores.filter((score) => score !== null).length
+        const digitalScorecard = member
+          ? finalizedDigitalByMember.get(member.id)
+          : undefined
+        const historical = enrollment.historical_total_score !== null
+        const digitalComplete = Boolean(
+          digitalScorecard &&
+          digitalScorecard.total_targets > 0,
+        )
         const shootOffs = data.shootOffRounds.map((round) => member ? shootOffByKey.get(`${member.id}:${round.id}`) ?? null : null)
         return {
           memberId: member?.id || null,
@@ -178,9 +193,16 @@ export function ReportsPage() {
           squadLabel: squad ? `Squad ${squad.squad_number}${squad.house_number ? ` · House ${squad.house_number}` : ""}${squad.course_name ? ` · ${squad.course_name}` : ""}` : "Unassigned",
           positionLabel: member?.position_label || (member ? `Post ${member.position}` : "—"),
           rounds: roundScores,
-          total: enrollment.historical_total_score ?? roundScores.reduce<number>((sum, score) => sum + (score ?? 0), 0),
+          total: historical
+            ? enrollment.historical_total_score!
+            : digitalComplete
+              ? digitalScorecard!.total_score
+              : roundScores.reduce<number>((sum, score) => sum + (score ?? 0), 0),
           enteredRounds,
-          complete: enrollment.historical_total_score !== null || (rounds > 0 && enteredRounds === rounds),
+          complete:
+            historical ||
+            digitalComplete ||
+            (rounds > 0 && enteredRounds === rounds),
           shootOffs,
         }
       })
