@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { AlertCircle, ArrowLeft, BarChart3, CheckCircle2, DollarSign, Download, Medal, Printer, RefreshCw, Trophy, Users } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BarChart3, CheckCircle2, DollarSign, Download, Medal, Printer, RefreshCw, Trophy, Users } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -47,6 +47,39 @@ type HistoricalData = {
 }
 
 const emptyHistoricalData: HistoricalData = { registrations: [], enrollments: [] }
+
+type StandingSortKey =
+  | "place"
+  | "participant"
+  | "team"
+  | "class"
+  | "squad"
+  | "total"
+  | "status"
+  | `round:${number}`
+  | `shootOff:${number}`
+
+type StandingColumnFilters = {
+  participant: string
+  team: string
+  class: string
+  squad: string
+  total: string
+  status: string
+  rounds: Record<number, string>
+  shootOffs: Record<number, string>
+}
+
+const EMPTY_STANDING_FILTERS: StandingColumnFilters = {
+  participant: "",
+  team: "",
+  class: "",
+  squad: "",
+  total: "",
+  status: "",
+  rounds: {},
+  shootOffs: {},
+}
 
 type StandingRow = {
   memberId: string | null
@@ -95,6 +128,10 @@ export function ReportsPage() {
   const [teamFilter, setTeamFilter] = useState("all")
   const [completionFilter, setCompletionFilter] = useState("all")
   const [search, setSearch] = useState("")
+  const [standingSortKey, setStandingSortKey] = useState<StandingSortKey>("place")
+  const [standingSortDirection, setStandingSortDirection] = useState<"asc" | "desc">("asc")
+  const [standingColumnFilters, setStandingColumnFilters] =
+    useState<StandingColumnFilters>(EMPTY_STANDING_FILTERS)
   const [data, setData] = useState<ReportData>(emptyData)
   const [historicalData, setHistoricalData] = useState<HistoricalData>(emptyHistoricalData)
   const [loading, setLoading] = useState(true)
@@ -220,6 +257,155 @@ export function ReportsPage() {
       return [row.athleteName, row.cyssaNumber || "", row.teamName, row.classCode, row.className, row.squadLabel].some((value) => value.toLowerCase().includes(needle))
     })
   }, [standings, classFilter, teamFilter, completionFilter, search])
+
+  const standingPlaceByEnrollment = useMemo(
+    () =>
+      new Map(
+        standings.map((row, index) => [
+          row.enrollmentId,
+          index + 1,
+        ]),
+      ),
+    [standings],
+  )
+
+  const visibleStandings = useMemo(() => {
+    const matches = (value: unknown, filter: string) =>
+      !filter.trim() ||
+      String(value ?? "")
+        .toLowerCase()
+        .includes(filter.trim().toLowerCase())
+
+    const rows = filteredStandings.filter((row) => {
+      const squadPost = `${row.squadLabel} ${row.positionLabel}`
+      const status = row.complete
+        ? "Complete"
+        : `${row.enteredRounds}/${selectedShoot?.number_of_rounds ?? 0}`
+
+      if (!matches(row.athleteName, standingColumnFilters.participant)) return false
+      if (!matches(row.teamName, standingColumnFilters.team)) return false
+      if (!matches(`${row.classCode} ${row.className}`, standingColumnFilters.class)) return false
+      if (!matches(squadPost, standingColumnFilters.squad)) return false
+      if (!matches(row.total, standingColumnFilters.total)) return false
+      if (!matches(status, standingColumnFilters.status)) return false
+
+      for (const [indexText, filter] of Object.entries(standingColumnFilters.rounds)) {
+        const index = Number(indexText)
+        if (!matches(row.rounds[index] ?? "", filter)) return false
+      }
+
+      for (const [indexText, filter] of Object.entries(standingColumnFilters.shootOffs)) {
+        const index = Number(indexText)
+        if (!matches(row.shootOffs[index] ?? "", filter)) return false
+      }
+
+      return true
+    })
+
+    const valueFor = (row: StandingRow): string | number => {
+      if (standingSortKey === "place") {
+        return standingPlaceByEnrollment.get(row.enrollmentId) ?? Number.MAX_SAFE_INTEGER
+      }
+      if (standingSortKey === "participant") return row.athleteName
+      if (standingSortKey === "team") return row.teamName
+      if (standingSortKey === "class") return row.classCode
+      if (standingSortKey === "squad") return `${row.squadLabel} ${row.positionLabel}`
+      if (standingSortKey === "total") return row.total
+      if (standingSortKey === "status") return row.complete ? 1 : 0
+
+      if (standingSortKey.startsWith("round:")) {
+        const index = Number(standingSortKey.split(":")[1])
+        return row.rounds[index] ?? -1
+      }
+
+      const index = Number(standingSortKey.split(":")[1])
+      return row.shootOffs[index] ?? -1
+    }
+
+    return [...rows].sort((left, right) => {
+      const leftValue = valueFor(left)
+      const rightValue = valueFor(right)
+
+      let result: number
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        result = leftValue - rightValue
+      } else {
+        result = String(leftValue).localeCompare(String(rightValue), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      }
+
+      if (result === 0) {
+        result = (
+          standingPlaceByEnrollment.get(left.enrollmentId) ?? 0
+        ) - (
+          standingPlaceByEnrollment.get(right.enrollmentId) ?? 0
+        )
+      }
+
+      return standingSortDirection === "asc" ? result : -result
+    })
+  }, [
+    filteredStandings,
+    selectedShoot,
+    standingColumnFilters,
+    standingPlaceByEnrollment,
+    standingSortDirection,
+    standingSortKey,
+  ])
+
+  function toggleStandingSort(key: StandingSortKey) {
+    if (standingSortKey === key) {
+      setStandingSortDirection((current) =>
+        current === "asc" ? "desc" : "asc",
+      )
+      return
+    }
+
+    setStandingSortKey(key)
+    setStandingSortDirection("asc")
+  }
+
+  function updateStandingFilter(
+    key: "participant" | "team" | "class" | "squad" | "total" | "status",
+    value: string,
+  ) {
+    setStandingColumnFilters((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }
+
+  function updateStandingRoundFilter(index: number, value: string) {
+    setStandingColumnFilters((current) => ({
+      ...current,
+      rounds: {
+        ...current.rounds,
+        [index]: value,
+      },
+    }))
+  }
+
+  function updateStandingShootOffFilter(index: number, value: string) {
+    setStandingColumnFilters((current) => ({
+      ...current,
+      shootOffs: {
+        ...current.shootOffs,
+        [index]: value,
+      },
+    }))
+  }
+
+  const standingFiltersActive =
+    standingColumnFilters.participant ||
+    standingColumnFilters.team ||
+    standingColumnFilters.class ||
+    standingColumnFilters.squad ||
+    standingColumnFilters.total ||
+    standingColumnFilters.status ||
+    Object.values(standingColumnFilters.rounds).some(Boolean) ||
+    Object.values(standingColumnFilters.shootOffs).some(Boolean)
 
   const completeCount = standings.filter((row) => row.complete).length
   const enteredScoreCount = standings.reduce((sum, row) => sum + row.enteredRounds, 0)
@@ -559,8 +745,168 @@ export function ReportsPage() {
                 <select className="rounded-lg border bg-white px-3 py-2 text-sm" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}><option value="all">All teams</option>{Array.from(new Set(standings.map((row) => row.teamName).filter((name) => name !== "No team"))).sort().map((name) => <option key={name} value={name}>{name}</option>)}</select><select className="rounded-lg border bg-white px-3 py-2 text-sm" value={completionFilter} onChange={(event) => setCompletionFilter(event.target.value)}><option value="all">All scorecards</option><option value="complete">Complete only</option><option value="incomplete">Incomplete only</option></select>
               </div>
             </header>
-            {loading ? <div className="p-12 text-center text-slate-500">Loading report data…</div> : filteredStandings.length === 0 ? <div className="p-12 text-center"><Trophy className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-semibold">No standings are available yet</h3><p className="mt-1 text-sm text-slate-500">Register participants, assign squads, and enter scores to populate this report.</p></div> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[1050px] border-collapse text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3 text-center">Place</th><th className="px-4 py-3">Participant</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Class</th><th className="px-3 py-3">Squad / Post</th>{Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, index) => <th key={index} className="px-2 py-3 text-center">R{index + 1}</th>)}<th className="px-3 py-3 text-center">Total</th>{data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-3 text-center">{round.label || `SO${round.round_number}`}</th>)}<th className="px-3 py-3 text-center">Status</th></tr></thead><tbody>{filteredStandings.map((row, index) => <tr key={row.enrollmentId} className="border-t"><td className="px-4 py-3 text-center font-semibold">{index + 1}</td><td className="px-4 py-3"><div className="font-semibold">{row.athleteName}</div><div className="text-xs text-slate-500">{row.cyssaNumber ? `CYSSA ${row.cyssaNumber}` : "No CYSSA number"}</div></td><td className="px-3 py-3">{row.teamName}</td><td className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">{row.classCode}</span></td><td className="px-3 py-3"><div>{row.squadLabel}</div><div className="text-xs text-slate-500">{row.positionLabel}</div></td>{row.rounds.map((score, roundIndex) => <td key={roundIndex} className="px-2 py-3 text-center font-medium">{score ?? "—"}</td>)}<td className="px-3 py-3 text-center text-lg font-bold">{row.total}</td>{row.shootOffs.map((score, scoreIndex) => <td key={scoreIndex} className="px-2 py-3 text-center font-semibold text-amber-700">{score ?? "—"}</td>)}<td className="px-3 py-3 text-center"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.complete ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{row.complete ? "Complete" : `${row.enteredRounds}/${selectedShoot?.number_of_rounds ?? 0}`}</span></td></tr>)}</tbody></table></div>
+            {loading ? <div className="p-12 text-center text-slate-500">Loading report data…</div> : visibleStandings.length === 0 ? <div className="p-12 text-center"><Trophy className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-semibold">No standings are available yet</h3><p className="mt-1 text-sm text-slate-500">Register participants, assign squads, and enter scores to populate this report.</p></div> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] border-collapse text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <StandingSortableHeader label="Place" column="place" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-4 pt-3 text-center" />
+                      <StandingSortableHeader label="Participant" column="participant" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-4 pt-3" />
+                      <StandingSortableHeader label="Team" column="team" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-3 pt-3" />
+                      <StandingSortableHeader label="Class" column="class" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-3 pt-3" />
+                      <StandingSortableHeader label="Squad / Post" column="squad" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-3 pt-3" />
+
+                      {Array.from(
+                        { length: selectedShoot?.number_of_rounds ?? 0 },
+                        (_, index) => (
+                          <StandingSortableHeader
+                            key={index}
+                            label={`R${index + 1}`}
+                            column={`round:${index}`}
+                            sortKey={standingSortKey}
+                            direction={standingSortDirection}
+                            onSort={toggleStandingSort}
+                            className="px-2 pt-3 text-center"
+                          />
+                        ),
+                      )}
+
+                      <StandingSortableHeader label="Total" column="total" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-3 pt-3 text-center" />
+
+                      {data.shootOffRounds.map((round, index) => (
+                        <StandingSortableHeader
+                          key={round.id}
+                          label={round.label || `SO${round.round_number}`}
+                          column={`shootOff:${index}`}
+                          sortKey={standingSortKey}
+                          direction={standingSortDirection}
+                          onSort={toggleStandingSort}
+                          className="px-2 pt-3 text-center"
+                        />
+                      ))}
+
+                      <StandingSortableHeader label="Status" column="status" sortKey={standingSortKey} direction={standingSortDirection} onSort={toggleStandingSort} className="px-3 pt-3 text-center" />
+                    </tr>
+
+                    <tr className="border-t border-slate-200 bg-white normal-case tracking-normal print:hidden">
+                      <th className="px-4 py-2 text-center">
+                        {standingFiltersActive ? (
+                          <button
+                            type="button"
+                            onClick={() => setStandingColumnFilters(EMPTY_STANDING_FILTERS)}
+                            className="whitespace-nowrap text-xs font-semibold text-slate-500 hover:text-slate-900"
+                          >
+                            Clear
+                          </button>
+                        ) : null}
+                      </th>
+
+                      <StandingFilterCell
+                        value={standingColumnFilters.participant}
+                        onChange={(value) => updateStandingFilter("participant", value)}
+                        placeholder="Filter participant…"
+                        className="px-4 py-2"
+                      />
+                      <StandingFilterCell value={standingColumnFilters.team} onChange={(value) => updateStandingFilter("team", value)} placeholder="Filter team…" />
+                      <StandingFilterCell value={standingColumnFilters.class} onChange={(value) => updateStandingFilter("class", value)} placeholder="Filter class…" />
+                      <StandingFilterCell value={standingColumnFilters.squad} onChange={(value) => updateStandingFilter("squad", value)} placeholder="Filter squad/post…" />
+
+                      {Array.from(
+                        { length: selectedShoot?.number_of_rounds ?? 0 },
+                        (_, index) => (
+                          <StandingFilterCell
+                            key={index}
+                            value={standingColumnFilters.rounds[index] ?? ""}
+                            onChange={(value) => updateStandingRoundFilter(index, value)}
+                            placeholder={`R${index + 1}`}
+                            className="px-2 py-2"
+                          />
+                        ),
+                      )}
+
+                      <StandingFilterCell
+                        value={standingColumnFilters.total}
+                        onChange={(value) => updateStandingFilter("total", value)}
+                        placeholder="Total"
+                        className="px-2 py-2"
+                      />
+
+                      {data.shootOffRounds.map((round, index) => (
+                        <StandingFilterCell
+                          key={round.id}
+                          value={standingColumnFilters.shootOffs[index] ?? ""}
+                          onChange={(value) => updateStandingShootOffFilter(index, value)}
+                          placeholder="SO"
+                          className="px-2 py-2"
+                        />
+                      ))}
+
+                      <StandingFilterCell
+                        value={standingColumnFilters.status}
+                        onChange={(value) => updateStandingFilter("status", value)}
+                        placeholder="Status"
+                        className="px-2 py-2"
+                      />
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {visibleStandings.map((row) => (
+                      <tr key={row.enrollmentId} className="border-t">
+                        <td className="px-4 py-3 text-center font-semibold">
+                          {standingPlaceByEnrollment.get(row.enrollmentId) ?? "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold">{row.athleteName}</div>
+                          <div className="text-xs text-slate-500">
+                            {row.cyssaNumber ? `CYSSA ${row.cyssaNumber}` : "No CYSSA number"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">{row.teamName}</td>
+                        <td className="px-3 py-3">
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold">
+                            {row.classCode}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div>{row.squadLabel}</div>
+                          <div className="text-xs text-slate-500">{row.positionLabel}</div>
+                        </td>
+
+                        {row.rounds.map((score, roundIndex) => (
+                          <td key={roundIndex} className="px-2 py-3 text-center font-medium">
+                            {score ?? "—"}
+                          </td>
+                        ))}
+
+                        <td className="px-3 py-3 text-center text-lg font-bold">
+                          {row.total}
+                        </td>
+
+                        {row.shootOffs.map((score, scoreIndex) => (
+                          <td key={scoreIndex} className="px-2 py-3 text-center font-semibold text-amber-700">
+                            {score ?? "—"}
+                          </td>
+                        ))}
+
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              row.complete
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {row.complete
+                              ? "Complete"
+                              : `${row.enteredRounds}/${selectedShoot?.number_of_rounds ?? 0}`}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
 
@@ -571,6 +917,68 @@ export function ReportsPage() {
         </div>
       </PageContainer>
     </div>
+  )
+}
+
+function StandingSortableHeader({
+  label,
+  column,
+  sortKey,
+  direction,
+  onSort,
+  className,
+}: {
+  label: string
+  column: StandingSortKey
+  sortKey: StandingSortKey
+  direction: "asc" | "desc"
+  onSort: (column: StandingSortKey) => void
+  className: string
+}) {
+  const Icon =
+    sortKey !== column
+      ? ArrowUpDown
+      : direction === "asc"
+        ? ArrowUp
+        : ArrowDown
+
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="inline-flex items-center gap-1 whitespace-nowrap font-semibold hover:text-slate-900 print:pointer-events-none"
+        title={`Sort by ${label}`}
+      >
+        {label}
+        <Icon className="h-3.5 w-3.5 print:hidden" />
+      </button>
+    </th>
+  )
+}
+
+function StandingFilterCell({
+  value,
+  onChange,
+  placeholder,
+  className = "px-3 py-2",
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  className?: string
+}) {
+  return (
+    <th className={className}>
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="h-8 w-full min-w-16 rounded-md border border-slate-200 bg-white px-2 text-xs font-normal text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400"
+      />
+    </th>
   )
 }
 
