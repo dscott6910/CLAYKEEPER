@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Link } from "react-router-dom"
 import {
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BadgeCheck,
   Edit3,
   GraduationCap,
@@ -26,6 +29,35 @@ import {
   type ParticipantRecord,
   type ParticipantTeam,
 } from "@/lib/services/participants"
+
+type ParticipantSortKey =
+  | "participant"
+  | "cyssa"
+  | "class"
+  | "team"
+  | "contact"
+  | "events"
+  | "status"
+
+type ParticipantColumnFilters = {
+  participant: string
+  cyssa: string
+  class: string
+  team: string
+  contact: string
+  events: string
+  status: string
+}
+
+const EMPTY_COLUMN_FILTERS: ParticipantColumnFilters = {
+  participant: "",
+  cyssa: "",
+  class: "",
+  team: "",
+  contact: "",
+  events: "",
+  status: "",
+}
 
 type ParticipantForm = {
   first_name: string
@@ -94,6 +126,9 @@ export function ParticipantsPage() {
   const [classFilter, setClassFilter] = useState("all")
   const [teamFilter, setTeamFilter] = useState("all")
   const [showInactive, setShowInactive] = useState(false)
+  const [sortKey, setSortKey] = useState<ParticipantSortKey>("participant")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  const [columnFilters, setColumnFilters] = useState<ParticipantColumnFilters>(EMPTY_COLUMN_FILTERS)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<ParticipantRecord | null>(null)
   const [form, setForm] = useState<ParticipantForm>(EMPTY_FORM)
@@ -146,6 +181,93 @@ export function ParticipantsPage() {
         .some((value) => String(value).toLowerCase().includes(query))
     })
   }, [participants, showInactive, classFilter, teamFilter, search, classMap, teamMap])
+
+  const visibleParticipants = useMemo(() => {
+    const matches = (value: unknown, filter: string) =>
+      !filter.trim() ||
+      String(value ?? "")
+        .toLowerCase()
+        .includes(filter.trim().toLowerCase())
+
+    const rows = filtered.filter((participant) => {
+      const participantClass = classMap[participant.class_id ?? ""]
+      const team = teamMap[participant.team_id ?? ""]
+      const contact = [participant.email, participant.phone].filter(Boolean).join(" ")
+      const status = participant.active ? "Active" : "Archived"
+
+      return (
+        matches(displayName(participant), columnFilters.participant) &&
+        matches(participant.cyssa_number, columnFilters.cyssa) &&
+        matches(
+          [participantClass?.code, participantClass?.display_name].filter(Boolean).join(" "),
+          columnFilters.class,
+        ) &&
+        matches(team?.name, columnFilters.team) &&
+        matches(contact, columnFilters.contact) &&
+        matches(participant.registration_count, columnFilters.events) &&
+        matches(status, columnFilters.status)
+      )
+    })
+
+    const valueFor = (participant: ParticipantRecord) => {
+      const participantClass = classMap[participant.class_id ?? ""]
+      const team = teamMap[participant.team_id ?? ""]
+
+      switch (sortKey) {
+        case "participant":
+          return displayName(participant)
+        case "cyssa":
+          return participant.cyssa_number ?? ""
+        case "class":
+          return participantClass?.code ?? ""
+        case "team":
+          return team?.name ?? ""
+        case "contact":
+          return participant.email || participant.phone || ""
+        case "events":
+          return participant.registration_count
+        case "status":
+          return participant.active ? "Active" : "Archived"
+      }
+    }
+
+    return [...rows].sort((left, right) => {
+      const leftValue = valueFor(left)
+      const rightValue = valueFor(right)
+
+      let result: number
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        result = leftValue - rightValue
+      } else {
+        result = String(leftValue).localeCompare(String(rightValue), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      }
+
+      if (result === 0) {
+        result = displayName(left).localeCompare(displayName(right), undefined, {
+          sensitivity: "base",
+        })
+      }
+
+      return sortDirection === "asc" ? result : -result
+    })
+  }, [filtered, columnFilters, sortKey, sortDirection, classMap, teamMap])
+
+  function toggleSort(key: ParticipantSortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc")
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection("asc")
+  }
+
+  function updateColumnFilter(key: keyof ParticipantColumnFilters, value: string) {
+    setColumnFilters((current) => ({ ...current, [key]: value }))
+  }
 
   const stats = useMemo(() => ({
     total: participants.filter((participant) => participant.active).length,
@@ -290,18 +412,49 @@ export function ParticipantsPage() {
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div><h2 className="font-bold text-slate-950">Participants</h2><p className="text-sm text-slate-500">Showing {filtered.length} of {participants.length}</p></div>
+              <div><h2 className="font-bold text-slate-950">Participants</h2><p className="text-sm text-slate-500">Showing {visibleParticipants.length} of {participants.length}</p></div>
             </div>
             {loading ? (
               <div className="p-12 text-center text-sm text-slate-500">Loading participants…</div>
-            ) : filtered.length === 0 ? (
+            ) : visibleParticipants.length === 0 ? (
               <div className="p-12 text-center"><Users className="mx-auto h-10 w-10 text-slate-300" /><h3 className="mt-3 font-bold">No participants found</h3><p className="mt-1 text-sm text-slate-500">Adjust the filters or add the first participant.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[920px] text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Participant</th><th className="px-4 py-3">CYSSA #</th><th className="px-4 py-3">Class</th><th className="px-4 py-3">Team</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Events</th><th className="px-4 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <ParticipantSortableHeader label="Participant" column="participant" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-5 pt-3" />
+                      <ParticipantSortableHeader label="CYSSA #" column="cyssa" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <ParticipantSortableHeader label="Class" column="class" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <ParticipantSortableHeader label="Team" column="team" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <ParticipantSortableHeader label="Contact" column="contact" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <ParticipantSortableHeader label="Events" column="events" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <ParticipantSortableHeader label="Status" column="status" sortKey={sortKey} direction={sortDirection} onSort={toggleSort} className="px-4 pt-3" />
+                      <th className="px-5 py-3 text-right">Actions</th>
+                    </tr>
+                    <tr className="border-t border-slate-200 bg-white normal-case tracking-normal">
+                      <ParticipantFilterCell value={columnFilters.participant} onChange={(value) => updateColumnFilter("participant", value)} placeholder="Filter name…" className="px-5 py-2" />
+                      <ParticipantFilterCell value={columnFilters.cyssa} onChange={(value) => updateColumnFilter("cyssa", value)} placeholder="Filter #…" />
+                      <ParticipantFilterCell value={columnFilters.class} onChange={(value) => updateColumnFilter("class", value)} placeholder="Filter class…" />
+                      <ParticipantFilterCell value={columnFilters.team} onChange={(value) => updateColumnFilter("team", value)} placeholder="Filter team…" />
+                      <ParticipantFilterCell value={columnFilters.contact} onChange={(value) => updateColumnFilter("contact", value)} placeholder="Filter contact…" />
+                      <ParticipantFilterCell value={columnFilters.events} onChange={(value) => updateColumnFilter("events", value)} placeholder="Filter events…" />
+                      <ParticipantFilterCell value={columnFilters.status} onChange={(value) => updateColumnFilter("status", value)} placeholder="Filter status…" />
+                      <th className="px-5 py-2 text-right">
+                        {Object.values(columnFilters).some(Boolean) ? (
+                          <button
+                            type="button"
+                            onClick={() => setColumnFilters(EMPTY_COLUMN_FILTERS)}
+                            className="whitespace-nowrap text-xs font-semibold text-slate-500 hover:text-slate-900"
+                          >
+                            Clear filters
+                          </button>
+                        ) : null}
+                      </th>
+                    </tr>
+                  </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filtered.map((participant) => {
+                    {visibleParticipants.map((participant) => {
                       const participantClass = classMap[participant.class_id ?? ""]
                       const team = teamMap[participant.team_id ?? ""]
                       return <tr key={participant.id} className={!participant.active ? "bg-slate-50 opacity-70" : "hover:bg-slate-50/70"}>
@@ -344,6 +497,63 @@ export function ParticipantsPage() {
 
       {editorOpen ? <ParticipantEditor form={form} setForm={setForm} classes={classes} teams={teams} editing={Boolean(editing)} saving={saving} onClose={() => setEditorOpen(false)} onSave={save} /> : null}
     </div>
+  )
+}
+
+function ParticipantSortableHeader({
+  label,
+  column,
+  sortKey,
+  direction,
+  onSort,
+  className = "px-4 pt-3",
+}: {
+  label: string
+  column: ParticipantSortKey
+  sortKey: ParticipantSortKey
+  direction: "asc" | "desc"
+  onSort: (column: ParticipantSortKey) => void
+  className?: string
+}) {
+  const Icon = sortKey !== column ? ArrowUpDown : direction === "asc" ? ArrowUp : ArrowDown
+
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold hover:text-slate-900"
+        title={`Sort by ${label}`}
+      >
+        {label}
+        <Icon className="h-3.5 w-3.5" />
+      </button>
+    </th>
+  )
+}
+
+function ParticipantFilterCell({
+  value,
+  onChange,
+  placeholder,
+  className = "px-4 py-2",
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  className?: string
+}) {
+  return (
+    <th className={className}>
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="h-8 w-full min-w-24 rounded-md border border-slate-200 bg-white px-2 text-xs font-normal text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400"
+      />
+    </th>
   )
 }
 

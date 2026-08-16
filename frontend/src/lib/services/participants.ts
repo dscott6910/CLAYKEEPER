@@ -62,16 +62,43 @@ type AthleteRow = Omit<ParticipantRecord, "team_id" | "registration_count">
 type TeamAssignmentRow = { athlete_id: string; team_id: string }
 type RegistrationCountRow = { athlete_id: string }
 
+const DIRECTORY_PAGE_SIZE = 1000
+
+async function loadAllPages<T>(
+  loadPage: (from: number, to: number) => PromiseLike<{
+    data: T[] | null
+    error: { message?: string } | null
+  }>,
+): Promise<T[]> {
+  const rows: T[] = []
+
+  for (let from = 0; ; from += DIRECTORY_PAGE_SIZE) {
+    const result = await loadPage(from, from + DIRECTORY_PAGE_SIZE - 1)
+    if (result.error) throw result.error
+
+    const page = result.data ?? []
+    rows.push(...page)
+
+    if (page.length < DIRECTORY_PAGE_SIZE) break
+  }
+
+  return rows
+}
+
 export async function getParticipantDirectory() {
   const organizationId = await getCurrentOrganizationId()
 
-  const [athletesResult, classesResult, teamsResult, assignmentsResult, registrationsResult] = await Promise.all([
-    supabase
-      .from("athletes")
-      .select("id,organization_id,class_id,first_name,last_name,preferred_name,birth_date,gender,graduation_year,cyssa_number,ata_number,nssa_number,external_id,email,phone,emergency_contact_name,emergency_contact_phone,notes,active,created_at,updated_at")
-      .eq("organization_id", organizationId)
-      .order("last_name")
-      .order("first_name"),
+  const [athletes, classesResult, teamsResult, assignments, registrations] = await Promise.all([
+    loadAllPages<AthleteRow>((from, to) =>
+      supabase
+        .from("athletes")
+        .select("id,organization_id,class_id,first_name,last_name,preferred_name,birth_date,gender,graduation_year,cyssa_number,ata_number,nssa_number,external_id,email,phone,emergency_contact_name,emergency_contact_phone,notes,active,created_at,updated_at")
+        .eq("organization_id", organizationId)
+        .order("last_name")
+        .order("first_name")
+        .order("id")
+        .range(from, to),
+    ),
     supabase
       .from("classes")
       .select("id,code,display_name")
@@ -85,31 +112,40 @@ export async function getParticipantDirectory() {
       .eq("organization_id", organizationId)
       .eq("active", true)
       .order("name"),
-    supabase
-      .from("athlete_teams")
-      .select("athlete_id,team_id")
-      .eq("organization_id", organizationId)
-      .eq("is_primary", true)
-      .is("end_date", null),
-    supabase
-      .from("registrations")
-      .select("athlete_id")
-      .eq("organization_id", organizationId),
+    loadAllPages<TeamAssignmentRow>((from, to) =>
+      supabase
+        .from("athlete_teams")
+        .select("athlete_id,team_id")
+        .eq("organization_id", organizationId)
+        .eq("is_primary", true)
+        .is("end_date", null)
+        .order("athlete_id")
+        .range(from, to),
+    ),
+    loadAllPages<RegistrationCountRow>((from, to) =>
+      supabase
+        .from("registrations")
+        .select("athlete_id")
+        .eq("organization_id", organizationId)
+        .order("athlete_id")
+        .range(from, to),
+    ),
   ])
 
-  for (const result of [athletesResult, classesResult, teamsResult, assignmentsResult, registrationsResult]) {
+  for (const result of [classesResult, teamsResult]) {
     if (result.error) throw result.error
   }
 
   const teamByAthlete = Object.fromEntries(
-    ((assignmentsResult.data ?? []) as TeamAssignmentRow[]).map((row) => [row.athlete_id, row.team_id]),
+    assignments.map((row) => [row.athlete_id, row.team_id]),
   )
+
   const registrationCounts: Record<string, number> = {}
-  for (const row of (registrationsResult.data ?? []) as RegistrationCountRow[]) {
+  for (const row of registrations) {
     registrationCounts[row.athlete_id] = (registrationCounts[row.athlete_id] ?? 0) + 1
   }
 
-  const participants = ((athletesResult.data ?? []) as AthleteRow[]).map((athlete) => ({
+  const participants = athletes.map((athlete) => ({
     ...athlete,
     team_id: teamByAthlete[athlete.id] ?? null,
     registration_count: registrationCounts[athlete.id] ?? 0,
