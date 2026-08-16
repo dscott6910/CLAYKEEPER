@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileCheck2, Medal, Printer, RefreshCw, Save, Trophy, Tv, Users, XCircle } from "lucide-react"
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, ChevronRight, Download, FileCheck2, Medal, Printer, RefreshCw, Save, Search, Trophy, Tv, Users, XCircle } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -24,6 +24,13 @@ import { loadReportBaseData, loadShootReportData, type ReportAthlete, type Repor
 
 type ReportPayload = Awaited<ReturnType<typeof loadShootReportData>>
 type TabKey = "overall" | "individual" | "squad" | "stateTeam" | "seriesTeam"
+type IndividualAwardSortKey =
+  | "place"
+  | "participant"
+  | "team"
+  | "squad"
+  | "score"
+  | "shootOff"
 
 function participantName(athlete?: ReportAthlete) {
   if (!athlete) return "Unknown participant"
@@ -110,6 +117,11 @@ export function AwardsPage() {
   const [overallPlaces, setOverallPlaces] = useState(2)
   const [classPlaces, setClassPlaces] = useState(3)
   const [tab, setTab] = useState<TabKey>("overall")
+  const [individualAwardSearch, setIndividualAwardSearch] = useState("")
+  const [individualAwardSortKey, setIndividualAwardSortKey] =
+    useState<IndividualAwardSortKey>("place")
+  const [individualAwardSortDirection, setIndividualAwardSortDirection] =
+    useState<"asc" | "desc">("asc")
   const [tvMode, setTvMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -197,6 +209,104 @@ export function AwardsPage() {
   const squadResults = useMemo(() => calculateSquads(rows, discipline), [rows, discipline])
   const stateTeams = useMemo(() => calculateStateTeams(rows, discipline), [rows, discipline])
   const seriesTeams = useMemo(() => calculateSeriesTeamPoints(eventReports, discipline), [eventReports, discipline])
+  const displayIndividualAwards = useMemo(() => {
+    const query = individualAwardSearch.trim().toLowerCase()
+
+    const prepare = <
+      T extends AwardParticipant & {
+        place: number
+        unresolvedTie: boolean
+      },
+    >(
+      awardRows: T[],
+    ) => {
+      const filtered = query
+        ? awardRows.filter((row) => {
+            const shootOff = row.shootOffs
+              .filter((score) => score >= 0)
+              .join("/")
+
+            return [
+              row.name,
+              row.team,
+              row.classCode,
+              row.squad,
+              row.total,
+              shootOff,
+              row.unresolvedTie ? "tie unresolved" : "resolved",
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(query)
+          })
+        : awardRows
+
+      const valueFor = (row: T): string | number => {
+        if (individualAwardSortKey === "place") return row.place
+        if (individualAwardSortKey === "participant") return row.name
+        if (individualAwardSortKey === "team") return row.team
+        if (individualAwardSortKey === "squad") return row.squad
+        if (individualAwardSortKey === "score") return row.total
+
+        const scores = row.shootOffs.filter((score) => score >= 0)
+        return scores.length ? scores[0] : -1
+      }
+
+      return [...filtered].sort((left, right) => {
+        const leftValue = valueFor(left)
+        const rightValue = valueFor(right)
+
+        let result: number
+        if (typeof leftValue === "number" && typeof rightValue === "number") {
+          result = leftValue - rightValue
+        } else {
+          result = String(leftValue).localeCompare(
+            String(rightValue),
+            undefined,
+            {
+              numeric: true,
+              sensitivity: "base",
+            },
+          )
+        }
+
+        if (result === 0) {
+          result = left.place - right.place
+        }
+
+        return individualAwardSortDirection === "asc"
+          ? result
+          : -result
+      })
+    }
+
+    return {
+      overall: prepare(overallRows),
+      classes: individualGroups.map((group) => ({
+        ...group,
+        rows: prepare(group.rows),
+      })),
+    }
+  }, [
+    individualAwardSearch,
+    individualAwardSortDirection,
+    individualAwardSortKey,
+    individualGroups,
+    overallRows,
+  ])
+
+  function toggleIndividualAwardSort(key: IndividualAwardSortKey) {
+    if (individualAwardSortKey === key) {
+      setIndividualAwardSortDirection((current) =>
+        current === "asc" ? "desc" : "asc",
+      )
+      return
+    }
+
+    setIndividualAwardSortKey(key)
+    setIndividualAwardSortDirection("asc")
+  }
+
   const incompleteCount = rows.filter((row) => !row.complete).length
   const unresolvedTieCount = useMemo(() => {
     const individual = individualGroups.reduce((sum, group) => sum + group.rows.filter((row) => row.unresolvedTie).length, 0)
@@ -409,9 +519,84 @@ export function AwardsPage() {
 
             {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 
+            {!tvMode && (tab === "overall" || tab === "individual") && (
+              <div className="awards-controls mb-5 flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
+                <label className="min-w-[240px] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Search results
+                  <div className="relative mt-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="search"
+                      value={individualAwardSearch}
+                      onChange={(event) => setIndividualAwardSearch(event.target.value)}
+                      placeholder="Participant, team, class, squad, score…"
+                      className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
+                    />
+                  </div>
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["place", "Place"],
+                    ["participant", "Participant"],
+                    ["team", "Team"],
+                    ["squad", "Squad"],
+                    ["score", "Score"],
+                    ["shootOff", "Shoot-off"],
+                  ] as const).map(([key, label]) => {
+                    const active = individualAwardSortKey === key
+                    const Icon = !active
+                      ? ArrowUpDown
+                      : individualAwardSortDirection === "asc"
+                        ? ArrowUp
+                        : ArrowDown
+
+                    return (
+                      <Button
+                        key={key}
+                        type="button"
+                        variant={active ? "default" : "outline"}
+                        onClick={() => toggleIndividualAwardSort(key)}
+                      >
+                        {label}
+                        <Icon className="ml-2 h-4 w-4" />
+                      </Button>
+                    )
+                  })}
+
+                  {individualAwardSearch ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIndividualAwardSearch("")}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
             {loading ? <div className="py-20 text-center text-slate-500">Calculating official awards…</div> : rows.length === 0 ? <div className="py-20 text-center"><Medal className="mx-auto h-12 w-12 text-slate-400" /><p className="mt-3 text-lg font-semibold">No results available</p></div> : <div className="space-y-5">
-              {(tvMode || tab === "overall") && <div className="grid gap-5"><IndividualCard classCode="Overall" rows={overallRows} /></div>}
-              {(tvMode || tab === "individual") && <div className="grid gap-5 xl:grid-cols-2">{individualGroups.map((group) => <IndividualCard key={group.classCode} classCode={group.classCode} rows={group.rows} />)}</div>}
+              {(tvMode || tab === "overall") && (
+                <div className="grid gap-5">
+                  <IndividualCard
+                    classCode="Overall"
+                    rows={tvMode ? overallRows : displayIndividualAwards.overall}
+                  />
+                </div>
+              )}
+              {(tvMode || tab === "individual") && (
+                <div className="grid gap-5 xl:grid-cols-2">
+                  {(tvMode ? individualGroups : displayIndividualAwards.classes).map((group) => (
+                    <IndividualCard
+                      key={group.classCode}
+                      classCode={group.classCode}
+                      rows={group.rows}
+                    />
+                  ))}
+                </div>
+              )}
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team and category. The next shooter is displayed as the team tie-break score when available.`} />}
               {!tvMode && tab === "seriesTeam" && <SeriesTable rows={seriesTeams} />}
