@@ -100,6 +100,7 @@ export type DigitalStationScore = {
   scorecard_id: string
   station_id: string
   hits: number
+  notes: string | null
 }
 
 export type DigitalScoringData = {
@@ -221,7 +222,7 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
   const [stations, members, stationScores] = await Promise.all([
     courseIds.length ? supabase.from("course_stations").select("id,course_id,station_number,bird_count,notes,display_order").in("course_id", courseIds).order("display_order") : Promise.resolve({ data: [], error: null }),
     enrollmentIds.length ? supabase.from("squad_members").select("id,squad_id,registration_shoot_id,position,position_label").in("registration_shoot_id", enrollmentIds).neq("status", "withdrawn").order("position") : Promise.resolve({ data: [], error: null }),
-    scorecardIds.length ? supabase.from("digital_scorecard_station_scores").select("id,scorecard_id,station_id,hits").in("scorecard_id", scorecardIds) : Promise.resolve({ data: [], error: null }),
+    scorecardIds.length ? supabase.from("digital_scorecard_station_scores").select("id,scorecard_id,station_id,hits,notes").in("scorecard_id", scorecardIds) : Promise.resolve({ data: [], error: null }),
   ])
   for (const result of [stations, members, stationScores]) check(result.error)
 
@@ -256,7 +257,12 @@ export async function saveDigitalScorecard(input: {
   notes: string
   status: "draft" | "finalized"
   expectedUpdatedAt?: string | null
-  stationScores: Array<{ stationId: string; hits: number; targets: number }>
+  stationScores: Array<{
+    stationId: string
+    hits: number
+    targets: number
+    notes: string
+  }>
 }) {
   const { data, error } = await supabase.rpc("save_digital_scorecard_atomic", {
     p_organization_id: input.organizationId,

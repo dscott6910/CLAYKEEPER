@@ -40,6 +40,7 @@ function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
 
 type OfflineDraft = {
   scores: Record<string, string>
+  stationNotes?: Record<string, string>
   malfunctions: number
   verified1: string
   verified2: string
@@ -86,6 +87,7 @@ export function DigitalScoringPage() {
   const [memberId, setMemberId] = useState("")
   const [courseId, setCourseId] = useState("")
   const [scores, setScores] = useState<Record<string, string>>({})
+  const [stationNotes, setStationNotes] = useState<Record<string, string>>({})
   const [malfunctions, setMalfunctions] = useState(0)
   const [verified1, setVerified1] = useState("")
   const [verified2, setVerified2] = useState("")
@@ -212,10 +214,14 @@ export function DigitalScoringPage() {
   useEffect(() => {
     if (!data || !memberId) return
 
+    const scorecardStationScores = data.stationScores.filter(
+      (row) => row.scorecard_id === scorecard?.id,
+    )
     const stationMap = new Map(
-      data.stationScores
-        .filter((row) => row.scorecard_id === scorecard?.id)
-        .map((row) => [row.station_id, String(row.hits)]),
+      scorecardStationScores.map((row) => [row.station_id, String(row.hits)]),
+    )
+    const stationNoteMap = new Map(
+      scorecardStationScores.map((row) => [row.station_id, row.notes ?? ""]),
     )
 
     setScores(
@@ -223,6 +229,14 @@ export function DigitalScoringPage() {
         stations.map((station) => [
           station.id,
           stationMap.get(station.id) ?? "",
+        ]),
+      ),
+    )
+    setStationNotes(
+      Object.fromEntries(
+        stations.map((station) => [
+          station.id,
+          stationNoteMap.get(station.id) ?? "",
         ]),
       ),
     )
@@ -261,6 +275,10 @@ export function DigitalScoringPage() {
 
         setSyncConflict(null)
         setScores((current) => ({ ...current, ...draft.scores }))
+        setStationNotes((current) => ({
+          ...current,
+          ...(draft.stationNotes ?? {}),
+        }))
         setMalfunctions(draft.malfunctions)
         setVerified1(draft.verified1)
         setVerified2(draft.verified2)
@@ -286,6 +304,7 @@ export function DigitalScoringPage() {
 
     const draft: OfflineDraft = {
       scores,
+      stationNotes,
       malfunctions,
       verified1,
       verified2,
@@ -327,7 +346,12 @@ export function DigitalScoringPage() {
   const stationRows = stations.map((station) => {
     const raw = scores[station.id] ?? ""
     const parsed = raw === "" ? null : Number(raw)
-    return { station, raw, parsed }
+    return {
+      station,
+      raw,
+      parsed,
+      note: stationNotes[station.id] ?? "",
+    }
   })
 
   const enteredCount = stationRows.filter((row) => row.parsed !== null).length
@@ -403,6 +427,7 @@ export function DigitalScoringPage() {
       if (dirty) {
         const protectedDraft: OfflineDraft = {
           scores,
+          stationNotes,
           malfunctions,
           verified1,
           verified2,
@@ -441,6 +466,7 @@ export function DigitalScoringPage() {
               stationId: row.station.id,
               hits: row.parsed as number,
               targets: row.station.bird_count,
+              notes: row.note,
             })),
         })
 
@@ -554,6 +580,10 @@ export function DigitalScoringPage() {
     if (!syncConflict) return
     const draft = syncConflict.draft
     setScores((current) => ({ ...current, ...draft.scores }))
+    setStationNotes((current) => ({
+      ...current,
+      ...(draft.stationNotes ?? {}),
+    }))
     setMalfunctions(draft.malfunctions)
     setVerified1(draft.verified1)
     setVerified2(draft.verified2)
@@ -571,6 +601,15 @@ export function DigitalScoringPage() {
     setScores((current) => ({
       ...current,
       [stationId]: value.replace(/[^0-9]/g, ""),
+    }))
+    setDirty(true)
+    if (error) setError("")
+  }
+
+  function updateStationNote(stationId: string, value: string) {
+    setStationNotes((current) => ({
+      ...current,
+      [stationId]: value,
     }))
     setDirty(true)
     if (error) setError("")
@@ -1263,8 +1302,25 @@ export function DigitalScoringPage() {
                               : row.station.bird_count - row.parsed}
                           </td>
                           <td className="p-4 text-lg font-bold">{running}</td>
-                          <td className="p-4 text-slate-500">
-                            {row.station.notes || "—"}
+                          <td className="p-4">
+                            {row.station.notes ? (
+                              <p className="mb-2 text-xs text-slate-500">
+                                Instruction:
+                              </p>
+                            ) : null}
+                            <textarea
+                              disabled={locked || Boolean(syncConflict)}
+                              value={row.note}
+                              onChange={(event) =>
+                                updateStationNote(
+                                  row.station.id,
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Optional station note"
+                              rows={2}
+                              className="min-w-52 w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100"
+                            />
                           </td>
                         </tr>
                       )
