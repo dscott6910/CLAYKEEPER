@@ -116,17 +116,20 @@ export async function loadDashboardSnapshot(requestedEventId?: string): Promise<
   let squadRows: Array<{ id: string; shoot_id: string; squad_number: string; start_time: string | null }> = []
   let memberRows: Array<{ id: string; shoot_id: string; squad_id: string; registration_shoot_id: string }> = []
   let scoreRows: Array<{ id: string; shoot_id: string; squad_member_id: string; round_number: number; score: number }> = []
+  let digitalScorecardRows: Array<{ squad_member_id: string; status: string; total_targets: number }> = []
 
   if (shootIds.length) {
-    const [resolvedSquads, resolvedMembers, resolvedScores] = await Promise.all([
+    const [resolvedSquads, resolvedMembers, resolvedScores, resolvedDigitalScorecards] = await Promise.all([
       supabase.from("squads").select("id, shoot_id, squad_number, start_time").eq("organization_id", organizationId).in("shoot_id", shootIds).order("start_time").order("squad_number"),
       supabase.from("squad_members").select("id, shoot_id, squad_id, registration_shoot_id").eq("organization_id", organizationId).in("shoot_id", shootIds).neq("status", "withdrawn"),
       supabase.from("score_entries").select("id, shoot_id, squad_member_id, round_number, score").eq("organization_id", organizationId).in("shoot_id", shootIds).not("score", "is", null),
+      supabase.from("digital_scorecards").select("squad_member_id, status, total_targets").eq("organization_id", organizationId).in("shoot_id", shootIds),
     ])
-    for (const result of [resolvedSquads, resolvedMembers, resolvedScores]) throwIfError(result.error)
+    for (const result of [resolvedSquads, resolvedMembers, resolvedScores, resolvedDigitalScorecards]) throwIfError(result.error)
     squadRows = resolvedSquads.data ?? []
     memberRows = resolvedMembers.data ?? []
     scoreRows = resolvedScores.data ?? []
+    digitalScorecardRows = resolvedDigitalScorecards.data ?? []
   }
 
   const registrations = (registrationsResult.data ?? []) as Array<{ id: string; checked_in: boolean }>
@@ -136,25 +139,38 @@ export async function loadDashboardSnapshot(requestedEventId?: string): Promise<
   const scoreCountByMember = new Map<string, number>()
   for (const score of scoreRows) scoreCountByMember.set(score.squad_member_id, (scoreCountByMember.get(score.squad_member_id) ?? 0) + 1)
 
-  const assignedEnrollmentIds = new Set(memberRows.map((member) => member.registration_shoot_id))
-  const completedParticipants = memberRows.filter((member) => {
+  const finalizedDigitalMembers = new Set(
+    digitalScorecardRows
+      .filter((scorecard) => scorecard.status === "finalized" && scorecard.total_targets > 0)
+      .map((scorecard) => scorecard.squad_member_id),
+  )
+  const startedDigitalMembers = new Set(
+    digitalScorecardRows
+      .filter((scorecard) => scorecard.total_targets > 0)
+      .map((scorecard) => scorecard.squad_member_id),
+  )
+
+  const memberIsComplete = (member: { id: string; shoot_id: string }) => {
+    if (finalizedDigitalMembers.has(member.id)) return true
     const expected = roundsByShoot.get(member.shoot_id) ?? 0
     return expected > 0 && (scoreCountByMember.get(member.id) ?? 0) >= expected
-  }).length
+  }
+
+  const assignedEnrollmentIds = new Set(memberRows.map((member) => member.registration_shoot_id))
+  const completedParticipants = memberRows.filter(memberIsComplete).length
 
   const squadOperations = squadRows.map((squad): SquadOperationsRow => {
     const squadMembers = memberRows.filter((member) => member.squad_id === squad.id)
     const expectedScoreEntries = squadMembers.reduce((total, member) => total + (roundsByShoot.get(member.shoot_id) ?? 0), 0)
     const scoreEntries = squadMembers.reduce((total, member) => total + (scoreCountByMember.get(member.id) ?? 0), 0)
-    const completed = squadMembers.filter((member) => {
-      const expected = roundsByShoot.get(member.shoot_id) ?? 0
-      return expected > 0 && (scoreCountByMember.get(member.id) ?? 0) >= expected
-    }).length
-    const status: SquadOperationsRow["status"] = expectedScoreEntries > 0 && scoreEntries >= expectedScoreEntries
-      ? "complete"
-      : scoreEntries > 0
-        ? "in_progress"
-        : "waiting"
+    const completed = squadMembers.filter(memberIsComplete).length
+    const digitalStarted = squadMembers.some((member) => startedDigitalMembers.has(member.id))
+    const status: SquadOperationsRow["status"] =
+      squadMembers.length > 0 && completed === squadMembers.length
+        ? "complete"
+        : scoreEntries > 0 || digitalStarted
+          ? "in_progress"
+          : "waiting"
 
     return {
       id: squad.id,

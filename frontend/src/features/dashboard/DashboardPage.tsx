@@ -138,8 +138,8 @@ export function DashboardPage() {
     },
     {
       label: "Event Registrations",
-      value: analytics?.totalRegistrations ?? 0,
-      detail: "Total registrations",
+      value: operations?.registrations ?? 0,
+      detail: "Registrations for selected event",
       icon: ClipboardList,
       href: "/reports",
     },
