@@ -254,17 +254,29 @@ export async function loadParticipantProfile(
   )
   const memberIds = members.map((member) => member.id)
 
-  const scoresResult = memberIds.length
-    ? await supabase
-        .from("score_entries")
-        .select("squad_member_id, round_number, score, status")
-        .eq("organization_id", organizationId)
-        .in("squad_member_id", memberIds)
-        .not("score", "is", null)
-        .order("round_number")
-    : { data: [], error: null }
+  const [scoresResult, digitalScorecardsResult] = memberIds.length
+    ? await Promise.all([
+        supabase
+          .from("score_entries")
+          .select("squad_member_id, round_number, score, status")
+          .eq("organization_id", organizationId)
+          .in("squad_member_id", memberIds)
+          .not("score", "is", null)
+          .order("round_number"),
+        supabase
+          .from("digital_scorecards")
+          .select("squad_member_id, status, total_score, total_targets")
+          .eq("organization_id", organizationId)
+          .in("squad_member_id", memberIds)
+          .eq("status", "finalized"),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ]
 
   throwIfError(scoresResult.error)
+  throwIfError(digitalScorecardsResult.error)
 
   const scoresByMemberId = new Map<
     string,
@@ -280,6 +292,13 @@ export async function loadParticipantProfile(
     scoresByMemberId.set(score.squad_member_id, current)
   }
 
+  const finalizedDigitalByMember = new Map(
+    (digitalScorecardsResult.data ?? []).map((scorecard) => [
+      scorecard.squad_member_id,
+      scorecard,
+    ]),
+  )
+
   const shootResults = enrollments
     .map((enrollment) => {
       const registration = registrationById.get(enrollment.registration_id)
@@ -294,13 +313,31 @@ export async function loadParticipantProfile(
       const roundScores = memberScores.map((row) => row.score)
       const scoreTotal = roundScores.reduce((sum, score) => sum + score, 0)
       const historicalTotal = enrollment.historical_total_score ?? null
+      const digitalScorecard = member
+        ? finalizedDigitalByMember.get(member.id)
+        : undefined
+      const digitalComplete = Boolean(
+        digitalScorecard &&
+        digitalScorecard.total_targets > 0,
+      )
       const targetsPerRound = shoot?.targets_per_round ?? 25
       const roundsForTotal =
         roundScores.length > 0
           ? roundScores.length
           : shoot?.number_of_rounds ?? 0
-      const totalPossible = roundsForTotal * targetsPerRound
-      const totalScore = historicalTotal ?? scoreTotal
+      const configuredPossible = roundsForTotal * targetsPerRound
+      const totalScore =
+        historicalTotal !== null
+          ? historicalTotal
+          : digitalComplete
+            ? digitalScorecard!.total_score
+            : scoreTotal
+      const totalPossible =
+        historicalTotal !== null
+          ? configuredPossible
+          : digitalComplete
+            ? digitalScorecard!.total_targets
+            : configuredPossible
 
       return {
         registration_id: enrollment.registration_id,
