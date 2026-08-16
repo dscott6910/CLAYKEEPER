@@ -43,6 +43,11 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
   const squadById = new Map(report.squads.map((row) => [row.id, row]))
   const scoresByMember = new Map<string, typeof report.scores>()
   report.scores.forEach((score) => scoresByMember.set(score.squad_member_id, [...(scoresByMember.get(score.squad_member_id) || []), score]))
+  const finalizedDigitalByMember = new Map(
+    report.digitalScorecards
+      .filter((scorecard) => scorecard.status === "finalized")
+      .map((scorecard) => [scorecard.squad_member_id, scorecard]),
+  )
   const shootOffByKey = new Map(report.shootOffScores.map((score) => [`${score.squad_member_id}:${score.shoot_off_round_id}`, score.score]))
 
   return report.enrollments
@@ -54,6 +59,14 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
       const squad = member ? squadById.get(member.squad_id) : undefined
       const scores = member ? scoresByMember.get(member.id) || [] : []
       const entered = scores.filter((score) => score.score !== null).length
+      const digitalScorecard = member
+        ? finalizedDigitalByMember.get(member.id)
+        : undefined
+      const historical = enrollment.historical_total_score !== null
+      const digitalComplete = Boolean(
+        digitalScorecard &&
+        digitalScorecard.total_targets > 0,
+      )
       return {
         enrollmentId: enrollment.id,
         memberId: member?.id,
@@ -62,8 +75,15 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
         team: teamById.get(registration?.team_id || "")?.name || "No team",
         classCode: (classById.get(registration?.class_id || "")?.code || "Unclassified").toUpperCase(),
         squad: squad ? `Squad ${squad.squad_number}` : "Unassigned",
-        total: enrollment.historical_total_score ?? scores.reduce((sum, score) => sum + (score.score ?? 0), 0),
-        complete: enrollment.historical_total_score !== null || entered >= (shoot?.number_of_rounds || 0),
+        total: historical
+          ? enrollment.historical_total_score!
+          : digitalComplete
+            ? digitalScorecard!.total_score
+            : scores.reduce((sum, score) => sum + (score.score ?? 0), 0),
+        complete:
+          historical ||
+          digitalComplete ||
+          entered >= (shoot?.number_of_rounds || 0),
         shootOffs: member ? report.shootOffRounds.map((round) => shootOffByKey.get(`${member.id}:${round.id}`) ?? -1) : [],
       }
     })

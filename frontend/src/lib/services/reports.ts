@@ -60,6 +60,12 @@ export type ReportMember = { id: string; squad_id: string; registration_shoot_id
 export type ReportScore = { squad_member_id: string; round_number: number; score: number | null; status: string }
 export type ReportShootOffRound = { id: string; round_number: number; label: string | null }
 export type ReportShootOffScore = { shoot_off_round_id: string; squad_member_id: string; score: number | null }
+export type ReportDigitalScorecard = {
+  squad_member_id: string
+  status: "draft" | "finalized"
+  total_score: number
+  total_targets: number
+}
 
 function throwIfError(error: { message?: string } | null) {
   if (error) throw new Error(error.message || "A database error occurred.")
@@ -90,7 +96,7 @@ export async function loadReportBaseData() {
 }
 
 export async function loadShootReportData(organizationId: string, eventId: string, shootId: string) {
-  const [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores] = await Promise.all([
+  const [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards] = await Promise.all([
     supabase.from("registrations").select("id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, checked_in, status").eq("organization_id", organizationId).eq("event_id", eventId),
     supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status, historical_total_score, historical_first_100_total, result_note").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),
@@ -101,9 +107,10 @@ export async function loadShootReportData(organizationId: string, eventId: strin
     supabase.from("score_entries").select("squad_member_id, round_number, score, status").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("shoot_off_rounds").select("id, round_number, label").eq("organization_id", organizationId).eq("shoot_id", shootId).order("round_number"),
     supabase.from("shoot_off_scores").select("shoot_off_round_id, squad_member_id, score").eq("organization_id", organizationId).eq("shoot_id", shootId),
+    supabase.from("digital_scorecards").select("squad_member_id, status, total_score, total_targets").eq("organization_id", organizationId).eq("shoot_id", shootId),
   ])
 
-  for (const result of [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores]) {
+  for (const result of [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards]) {
     throwIfError(result.error)
   }
 
@@ -118,6 +125,7 @@ export async function loadShootReportData(organizationId: string, eventId: strin
     scores: (scores.data ?? []) as ReportScore[],
     shootOffRounds: (shootOffRounds.data ?? []) as ReportShootOffRound[],
     shootOffScores: (shootOffScores.data ?? []) as ReportShootOffScore[],
+    digitalScorecards: (digitalScorecards.data ?? []) as ReportDigitalScorecard[],
   }
 }
 
