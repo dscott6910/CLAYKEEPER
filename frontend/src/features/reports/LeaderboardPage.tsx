@@ -18,6 +18,7 @@ import {
   type ReportShoot,
   type ReportShootOffRound,
   type ReportShootOffScore,
+  type ReportDigitalScorecard,
   type ReportSquad,
 } from "@/lib/services/reports"
 
@@ -32,6 +33,7 @@ type LeaderboardData = {
   scores: ReportScore[]
   shootOffRounds: ReportShootOffRound[]
   shootOffScores: ReportShootOffScore[]
+  digitalScorecards: ReportDigitalScorecard[]
 }
 
 type LeaderRow = {
@@ -56,6 +58,7 @@ const emptyData: LeaderboardData = {
   scores: [],
   shootOffRounds: [],
   shootOffScores: [],
+  digitalScorecards: [],
 }
 
 function participantName(athlete: ReportAthlete | undefined) {
@@ -146,6 +149,11 @@ export function LeaderboardPage() {
       list.push(score)
       scoresByMember.set(score.squad_member_id, list)
     }
+    const finalizedDigitalByMember = new Map(
+      data.digitalScorecards
+        .filter((scorecard) => scorecard.status === "finalized")
+        .map((scorecard) => [scorecard.squad_member_id, scorecard]),
+    )
     const shootOffScoreByKey = new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score ?? 0]))
 
     return data.enrollments.map((enrollment) => {
@@ -154,8 +162,24 @@ export function LeaderboardPage() {
       const athlete = registration ? athleteById.get(registration.athlete_id) : undefined
       const squad = member ? squadById.get(member.squad_id) : undefined
       const memberScores = member ? scoresByMember.get(member.id) ?? [] : []
-      const total = memberScores.reduce((sum, score) => sum + (score.score ?? 0), 0)
-      const complete = memberScores.filter((score) => score.score !== null).length >= (selectedShoot?.number_of_rounds ?? 0)
+      const enteredRounds = memberScores.filter((score) => score.score !== null).length
+      const digitalScorecard = member
+        ? finalizedDigitalByMember.get(member.id)
+        : undefined
+      const historical = enrollment.historical_total_score !== null
+      const digitalComplete = Boolean(
+        digitalScorecard &&
+        digitalScorecard.total_targets > 0,
+      )
+      const total = historical
+        ? enrollment.historical_total_score!
+        : digitalComplete
+          ? digitalScorecard!.total_score
+          : memberScores.reduce((sum, score) => sum + (score.score ?? 0), 0)
+      const complete =
+        historical ||
+        digitalComplete ||
+        enteredRounds >= (selectedShoot?.number_of_rounds ?? 0)
       const shootOffs = member ? data.shootOffRounds.map((round) => shootOffScoreByKey.get(`${member.id}:${round.id}`) ?? 0) : []
       return {
         enrollmentId: enrollment.id,
