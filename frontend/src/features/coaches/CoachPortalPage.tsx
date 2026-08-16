@@ -195,6 +195,21 @@ export function CoachPortalPage() {
     [data, memberIds],
   )
 
+  const finalizedDigitalByMember = useMemo(
+    () =>
+      new Map(
+        (data?.digitalScorecards ?? [])
+          .filter(
+            (scorecard) =>
+              scorecard.status === "finalized" &&
+              scorecard.total_targets > 0 &&
+              memberIds.has(scorecard.squad_member_id),
+          )
+          .map((scorecard) => [scorecard.squad_member_id, scorecard]),
+      ),
+    [data, memberIds],
+  )
+
   const rows = useMemo(
     () =>
       registrations.map((registration) => {
@@ -218,15 +233,29 @@ export function CoachPortalPage() {
           ),
         )
 
-        const total =
-          athleteScores.reduce(
-            (sum, score) => sum + (score.score ?? 0),
-            0,
-          ) +
-          athleteEnrollments.reduce(
-            (sum, entry) => sum + (entry.historical_total_score ?? 0),
-            0,
+        const total = athleteEnrollments.reduce((sum, entry) => {
+          if (entry.historical_total_score !== null) {
+            return sum + entry.historical_total_score
+          }
+
+          const member = athleteMembers.find(
+            (item) => item.registration_shoot_id === entry.id,
           )
+          const digitalScorecard = member
+            ? finalizedDigitalByMember.get(member.id)
+            : undefined
+
+          if (digitalScorecard) {
+            return sum + digitalScorecard.total_score
+          }
+
+          return (
+            sum +
+            athleteScores
+              .filter((score) => score.squad_member_id === member?.id)
+              .reduce((scoreSum, score) => scoreSum + (score.score ?? 0), 0)
+          )
+        }, 0)
 
         const squadMember = athleteMembers[0]
 
@@ -249,7 +278,14 @@ export function CoachPortalPage() {
           classRecord,
         }
       }),
-    [registrations, data, enrollments, members, scores],
+    [
+      registrations,
+      data,
+      enrollments,
+      members,
+      scores,
+      finalizedDigitalByMember,
+    ],
   )
 
   const checkedIn = registrations.filter((row) => row.checked_in).length
@@ -273,6 +309,10 @@ export function CoachPortalPage() {
         const member = members.find(
           (item) => item.registration_shoot_id === entry.id,
         )
+
+        if (member && finalizedDigitalByMember.has(member.id)) {
+          return true
+        }
 
         return (
           !!shoot &&
@@ -852,8 +892,38 @@ export function CoachPortalPage() {
                         athleteRegistrationIds.has(item.registration_id),
                       )
 
-                      const historical = athleteEntries.reduce(
-                        (sum, item) => sum + (item.historical_total_score ?? 0),
+                      const seasonTotal = athleteEntries.reduce(
+                        (sum, entry) => {
+                          if (entry.historical_total_score !== null) {
+                            return sum + entry.historical_total_score
+                          }
+
+                          const member = data.members.find(
+                            (item) =>
+                              item.registration_shoot_id === entry.id,
+                          )
+                          const digitalScorecard = member
+                            ? finalizedDigitalByMember.get(member.id)
+                            : undefined
+
+                          if (digitalScorecard) {
+                            return sum + digitalScorecard.total_score
+                          }
+
+                          return (
+                            sum +
+                            data.scores
+                              .filter(
+                                (score) =>
+                                  score.squad_member_id === member?.id,
+                              )
+                              .reduce(
+                                (scoreSum, score) =>
+                                  scoreSum + (score.score ?? 0),
+                                0,
+                              )
+                          )
+                        },
                         0,
                       )
 
@@ -866,7 +936,7 @@ export function CoachPortalPage() {
                           <p className="text-sm text-slate-500">
                             {athleteRegistrations.length} events
                           </p>
-                          <p className="font-bold">{historical || "—"}</p>
+                          <p className="font-bold">{seasonTotal || "—"}</p>
                         </div>
                       )
                     })}

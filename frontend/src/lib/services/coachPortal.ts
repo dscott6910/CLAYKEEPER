@@ -18,6 +18,12 @@ export type CoachEnrollment = { id: string; registration_id: string; shoot_id: s
 export type CoachSquadMember = { id: string; shoot_id: string; squad_id: string; registration_shoot_id: string; position: number; position_label: string | null; checked_in: boolean }
 export type CoachSquad = { id: string; shoot_id: string; squad_number: string; house_number: string | null; course_name: string | null; start_time: string | null }
 export type CoachScore = { squad_member_id: string; round_number: number; score: number | null; status: string }
+export type CoachDigitalScorecard = {
+  squad_member_id: string
+  status: "draft" | "finalized"
+  total_score: number
+  total_targets: number
+}
 export type CoachClass = { id: string; code: string; display_name: string }
 export type CoachAnnouncement = { id: string; title: string; message: string; severity: string; created_at: string; event_id: string | null }
 
@@ -68,6 +74,7 @@ export async function loadCoachPortalData() {
     squads,
     members,
     scores,
+    digitalScorecards,
   ] = await Promise.all([
     supabase.from("coaches").select("id, first_name, last_name, preferred_name, email, user_id").eq("organization_id", context.organizationId),
     supabase.from("teams").select("id, name, school_club_name, mascot, primary_color, secondary_color, notes").eq("organization_id", context.organizationId).eq("active", true).order("name"),
@@ -99,6 +106,9 @@ export async function loadCoachPortalData() {
     ),
     loadAllPages<CoachScore>((from, to) =>
       supabase.from("score_entries").select("squad_member_id, round_number, score, status").eq("organization_id", context.organizationId).range(from, to)
+    ),
+    loadAllPages<CoachDigitalScorecard>((from, to) =>
+      supabase.from("digital_scorecards").select("squad_member_id, status, total_score, total_targets").eq("organization_id", context.organizationId).range(from, to)
     ),
   ])
 
@@ -147,6 +157,7 @@ export async function loadCoachPortalData() {
     squads,
     members,
     scores,
+    digitalScorecards,
     classes: (classesResult.data ?? []) as CoachClass[],
     announcements: (announcementsResult.data ?? []) as CoachAnnouncement[],
   }
