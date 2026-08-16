@@ -639,7 +639,7 @@ export function DigitalScoringPage() {
 
     const athlete = nameOf(participant?.athlete)
     const confirmation = window.prompt(
-      `FINAL REVIEW\n\nAthlete: ${athlete}\nScore: ${totalScore} / ${totalTargets}\nStations: ${enteredCount} / ${stations.length}\n\nFinalized scorecards are locked from normal editing.\n\nType FINALIZE to confirm.`,
+      `FINAL REVIEW\n\nParticipant: ${athlete}\nScore: ${totalScore} / ${totalTargets}\nStations: ${enteredCount} / ${stations.length}\n\nFinalized scorecards are locked from normal editing.\n\nType FINALIZE to confirm.`,
       "",
     )
 
@@ -884,7 +884,7 @@ export function DigitalScoringPage() {
             }))}
           />
           <Select
-            label="Athlete / Post"
+            label="Participant / Post"
             value={memberId}
             setValue={(value) => {
               void moveToMember(value)
@@ -929,7 +929,7 @@ export function DigitalScoringPage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Current athlete · {currentMemberIndex >= 0 ? currentMemberIndex + 1 : 0} of {members.length}
+                      Current participant · {currentMemberIndex >= 0 ? currentMemberIndex + 1 : 0} of {members.length}
                     </p>
                     {locked ? (
                       <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-800">
@@ -964,7 +964,7 @@ export function DigitalScoringPage() {
                   className="min-h-12"
                 >
                   <ChevronLeft className="h-5 w-5" />
-                  Previous Athlete
+                  Previous Participant
                 </Button>
                 <Button
                   variant="outline"
@@ -972,7 +972,7 @@ export function DigitalScoringPage() {
                   onClick={() => nextMember && void moveToMember(nextMember.id)}
                   className="min-h-12"
                 >
-                  Next Athlete
+                  Next Participant
                   <ChevronRight className="h-5 w-5" />
                 </Button>
               </div>
@@ -1032,7 +1032,7 @@ export function DigitalScoringPage() {
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Summary
-                label="Athlete"
+                label="Participant"
                 value={nameOf(participant?.athlete)}
                 detail={participant?.team?.name || "No team"}
               />

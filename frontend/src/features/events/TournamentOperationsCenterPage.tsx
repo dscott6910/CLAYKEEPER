@@ -202,7 +202,7 @@ export function TournamentOperationsCenterPage() {
       {
         key: "squads",
         title: "Squads and Posts",
-        description: "Assign athletes to squads and post positions.",
+        description: "Assign participants to squads and post positions.",
         detail: `${data.assignedMembers} assigned · ${data.unassignedEnrollments} unassigned`,
         status: squadStatus,
         href: "/squads",

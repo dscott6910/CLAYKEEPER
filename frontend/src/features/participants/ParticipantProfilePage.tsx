@@ -258,7 +258,7 @@ export function ParticipantProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader
-          title="Athlete Dashboard"
+          title="Participant Profile"
           description="Loading participant performance and history"
         />
         <PageContainer>
@@ -274,7 +274,7 @@ export function ParticipantProfilePage() {
     return (
       <div className="min-h-screen">
         <AppHeader
-          title="Athlete Dashboard"
+          title="Participant Profile"
           description="Participant performance and history"
         />
         <PageContainer>
@@ -307,7 +307,7 @@ export function ParticipantProfilePage() {
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
-        title="Athlete Dashboard"
+        title="Participant Profile"
         description="Career statistics, season insights, recent scores, and history"
       />
 
