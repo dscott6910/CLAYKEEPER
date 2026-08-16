@@ -621,11 +621,447 @@ function PlaceBadge({ place }: { place: number }) {
 }
 
 function GroupTable({ rows, label, note }: { rows: ReturnType<typeof calculateSquads>; label: string; note: string }) {
+  type SortKey = "place" | "label" | "members" | "total" | "tieBreaker"
+
+  const [search, setSearch] = useState("")
+  const [sortKey, setSortKey] = useState<SortKey>("place")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+
   const categories = Array.from(new Set(rows.map((row) => row.category)))
-  return <div className="space-y-5"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{note}</p>{categories.map((category) => <div key={category} className="overflow-hidden rounded-2xl border"><div className="border-b bg-slate-50 px-5 py-3 font-bold">{category}</div><div className="grid grid-cols-[70px_1fr_110px_110px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500"><span>Place</span><span>{label}</span><span>Members</span><span>Total</span></div>{rows.filter((row) => row.category === category).map((row) => <div key={`${category}-${row.label}`} className={`grid grid-cols-[70px_1fr_110px_110px] items-center border-t px-5 py-4 ${!row.eligible ? "bg-slate-50 text-slate-400" : ""}`}><span className="font-bold">{row.place ?? "—"}</span><div><p className="font-semibold">{row.label}{row.unresolvedTie && <span className="ml-2 text-xs text-red-600">Tie unresolved</span>}</p><p className="text-xs">{row.members.map((member) => `${member.name} (${member.total})`).join(", ")}</p>{row.tieBreakerScore !== null && <p className="text-xs text-slate-500">Tie-break score: {row.tieBreakerScore}</p>}</div><span>{row.members.length}</span><span className="text-xl font-black">{row.total}</span></div>)}</div>)}</div>
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc")
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection("asc")
+  }
+
+  function SortIcon({ column }: { column: SortKey }) {
+    if (sortKey !== column) {
+      return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5" />
+    }
+
+    return sortDirection === "asc"
+      ? <ArrowUp className="ml-1 inline h-3.5 w-3.5" />
+      : <ArrowDown className="ml-1 inline h-3.5 w-3.5" />
+  }
+
+  const query = search.trim().toLowerCase()
+
+  const displayRows = [...rows]
+    .filter((row) => {
+      if (!query) return true
+
+      return [
+        row.category,
+        row.label,
+        row.place ?? "",
+        row.total,
+        row.members.length,
+        row.members.map((member) => `${member.name} ${member.total}`).join(" "),
+        row.tieBreakerScore ?? "",
+        row.eligible ? "eligible" : "ineligible",
+        row.unresolvedTie ? "tie unresolved" : "resolved",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    })
+    .sort((left, right) => {
+      const valueFor = (row: (typeof rows)[number]): string | number => {
+        if (sortKey === "place") {
+          return row.place ?? Number.MAX_SAFE_INTEGER
+        }
+        if (sortKey === "label") return row.label
+        if (sortKey === "members") return row.members.length
+        if (sortKey === "total") return row.total
+        return row.tieBreakerScore ?? -1
+      }
+
+      const leftValue = valueFor(left)
+      const rightValue = valueFor(right)
+
+      let result: number
+
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        result = leftValue - rightValue
+      } else {
+        result = String(leftValue).localeCompare(
+          String(rightValue),
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        )
+      }
+
+      if (result === 0) {
+        result =
+          (left.place ?? Number.MAX_SAFE_INTEGER) -
+          (right.place ?? Number.MAX_SAFE_INTEGER)
+      }
+
+      return sortDirection === "asc" ? result : -result
+    })
+
+  return (
+    <div className="space-y-5">
+      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+        {note}
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
+        <label className="min-w-[240px] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Search results
+          <div className="relative mt-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={`${label}, participant, category, score...`}
+              className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
+            />
+          </div>
+        </label>
+
+        <Button
+          type="button"
+          variant={sortKey === "tieBreaker" ? "default" : "outline"}
+          onClick={() => toggleSort("tieBreaker")}
+        >
+          Tie-break
+          <SortIcon column="tieBreaker" />
+        </Button>
+
+        {search ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSearch("")}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      {categories.map((category) => {
+        const categoryRows = displayRows.filter(
+          (row) => row.category === category,
+        )
+
+        return (
+          <div
+            key={category}
+            className="overflow-hidden rounded-2xl border"
+          >
+            <div className="border-b bg-slate-50 px-5 py-3 font-bold">
+              {category}
+            </div>
+
+            <div className="grid grid-cols-[70px_1fr_110px_110px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("place")}
+              >
+                Place
+                <SortIcon column="place" />
+              </button>
+
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("label")}
+              >
+                {label}
+                <SortIcon column="label" />
+              </button>
+
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("members")}
+              >
+                Members
+                <SortIcon column="members" />
+              </button>
+
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("total")}
+              >
+                Total
+                <SortIcon column="total" />
+              </button>
+            </div>
+
+            {categoryRows.length === 0 ? (
+              <p className="border-t px-5 py-6 text-sm text-slate-500">
+                No matching results.
+              </p>
+            ) : (
+              categoryRows.map((row) => (
+                <div
+                  key={`${category}-${row.label}`}
+                  className={`grid grid-cols-[70px_1fr_110px_110px] items-center border-t px-5 py-4 ${
+                    !row.eligible ? "bg-slate-50 text-slate-400" : ""
+                  }`}
+                >
+                  <span className="font-bold">{row.place ?? "—"}</span>
+
+                  <div>
+                    <p className="font-semibold">
+                      {row.label}
+                      {row.unresolvedTie && (
+                        <span className="ml-2 text-xs text-red-600">
+                          Tie unresolved
+                        </span>
+                      )}
+                    </p>
+
+                    <p className="text-xs">
+                      {row.members
+                        .map(
+                          (member) =>
+                            `${member.name} (${member.total})`,
+                        )
+                        .join(", ")}
+                    </p>
+
+                    {row.tieBreakerScore !== null && (
+                      <p className="text-xs text-slate-500">
+                        Tie-break score: {row.tieBreakerScore}
+                      </p>
+                    )}
+                  </div>
+
+                  <span>{row.members.length}</span>
+                  <span className="text-xl font-black">{row.total}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function SeriesTable({ rows }: { rows: ReturnType<typeof calculateSeriesTeamPoints> }) {
+  type SortKey = "rank" | "team" | "points"
+
+  const [search, setSearch] = useState("")
+  const [sortKey, setSortKey] = useState<SortKey>("rank")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+
   const categories = Array.from(new Set(rows.map((row) => row.category)))
-  return <div className="space-y-5"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Each series shoot awards 3 points for first, 2 for second, and 1 for third. Teams tied for third both receive 1 point. A season points tie is marked for manual resolution because the supplied rules do not yet define the final tie-breaker.</p>{categories.map((category) => <div key={category} className="overflow-hidden rounded-2xl border"><div className="border-b bg-slate-50 px-5 py-3 font-bold">{category}</div><div className="grid grid-cols-[70px_1fr_100px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500"><span>Rank</span><span>Team</span><span>Points</span></div>{rows.filter((row) => row.category === category).map((row, index) => <div key={`${category}-${row.team}`} className="grid grid-cols-[70px_1fr_100px] items-start border-t px-5 py-4"><span className="font-bold">{index + 1}</span><div><p className="font-semibold">{row.team}{row.unresolvedTie && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Tie needs rule</span>}</p><p className="text-xs text-slate-500">{row.shootPoints.map((shoot) => `${shoot.shootName}: ${shoot.points} pt${shoot.points === 1 ? "" : "s"} (${shoot.score})`).join(" · ")}</p></div><span className="text-2xl font-black">{row.points}</span></div>)}</div>)}</div>
+
+  const officialRankByKey = new Map<string, number>()
+
+  for (const category of categories) {
+    rows
+      .filter((row) => row.category === category)
+      .forEach((row, index) => {
+        officialRankByKey.set(`${category}:${row.team}`, index + 1)
+      })
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc")
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection("asc")
+  }
+
+  function SortIcon({ column }: { column: SortKey }) {
+    if (sortKey !== column) {
+      return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5" />
+    }
+
+    return sortDirection === "asc"
+      ? <ArrowUp className="ml-1 inline h-3.5 w-3.5" />
+      : <ArrowDown className="ml-1 inline h-3.5 w-3.5" />
+  }
+
+  const query = search.trim().toLowerCase()
+
+  const displayRows = [...rows]
+    .filter((row) => {
+      if (!query) return true
+
+      return [
+        row.category,
+        row.team,
+        row.points,
+        row.unresolvedTie ? "tie needs rule" : "resolved",
+        row.shootPoints
+          .map(
+            (shoot) =>
+              `${shoot.shootName} ${shoot.points} ${shoot.score}`,
+          )
+          .join(" "),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    })
+    .sort((left, right) => {
+      const rankFor = (row: (typeof rows)[number]) =>
+        officialRankByKey.get(`${row.category}:${row.team}`) ??
+        Number.MAX_SAFE_INTEGER
+
+      let result: number
+
+      if (sortKey === "rank") {
+        result = rankFor(left) - rankFor(right)
+      } else if (sortKey === "team") {
+        result = left.team.localeCompare(right.team, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        })
+      } else {
+        result = left.points - right.points
+      }
+
+      if (result === 0) {
+        result = rankFor(left) - rankFor(right)
+      }
+
+      return sortDirection === "asc" ? result : -result
+    })
+
+  return (
+    <div className="space-y-5">
+      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+        Each series shoot awards 3 points for first, 2 for second, and 1 for
+        third. Teams tied for third both receive 1 point. A season points tie
+        is marked for manual resolution because the supplied rules do not yet
+        define the final tie-breaker.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
+        <label className="min-w-[240px] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Search results
+          <div className="relative mt-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Team, category, shoot, points, score..."
+              className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
+            />
+          </div>
+        </label>
+
+        {search ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSearch("")}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      {categories.map((category) => {
+        const categoryRows = displayRows.filter(
+          (row) => row.category === category,
+        )
+
+        return (
+          <div
+            key={category}
+            className="overflow-hidden rounded-2xl border"
+          >
+            <div className="border-b bg-slate-50 px-5 py-3 font-bold">
+              {category}
+            </div>
+
+            <div className="grid grid-cols-[70px_1fr_100px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("rank")}
+              >
+                Rank
+                <SortIcon column="rank" />
+              </button>
+
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("team")}
+              >
+                Team
+                <SortIcon column="team" />
+              </button>
+
+              <button
+                type="button"
+                className="text-left"
+                onClick={() => toggleSort("points")}
+              >
+                Points
+                <SortIcon column="points" />
+              </button>
+            </div>
+
+            {categoryRows.length === 0 ? (
+              <p className="border-t px-5 py-6 text-sm text-slate-500">
+                No matching results.
+              </p>
+            ) : (
+              categoryRows.map((row) => (
+                <div
+                  key={`${category}-${row.team}`}
+                  className="grid grid-cols-[70px_1fr_100px] items-start border-t px-5 py-4"
+                >
+                  <span className="font-bold">
+                    {officialRankByKey.get(`${category}:${row.team}`) ?? "—"}
+                  </span>
+
+                  <div>
+                    <p className="font-semibold">
+                      {row.team}
+                      {row.unresolvedTie && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                          Tie needs rule
+                        </span>
+                      )}
+                    </p>
+
+                    <p className="text-xs text-slate-500">
+                      {row.shootPoints
+                        .map(
+                          (shoot) =>
+                            `${shoot.shootName}: ${shoot.points} pt${
+                              shoot.points === 1 ? "" : "s"
+                            } (${shoot.score})`,
+                        )
+                        .join(" · ")}
+                    </p>
+                  </div>
+
+                  <span className="text-2xl font-black">
+                    {row.points}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
