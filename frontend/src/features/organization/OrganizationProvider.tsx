@@ -9,9 +9,14 @@ import {
 
 import { useAuth } from "@/features/auth/useAuth"
 import {
+  defaultBrandSettings,
+  saveBrandSettings,
+} from "@/lib/branding"
+import {
   getCurrentOrganizationContext,
   type OrganizationContext,
 } from "@/lib/services/organizationContext"
+import { loadOrganizationSettings } from "@/lib/services/organizationSettings"
 
 type OrganizationContextValue = {
   organization: OrganizationContext | null
@@ -40,6 +45,7 @@ export function OrganizationProvider({
     if (!session) {
       setOrganization(null)
       setError(null)
+      saveBrandSettings(defaultBrandSettings)
       setLoading(false)
       return
     }
@@ -50,6 +56,9 @@ export function OrganizationProvider({
     try {
       const context = await getCurrentOrganizationContext()
       setOrganization(context)
+
+      const settings = await loadOrganizationSettings()
+      saveBrandSettings(settings)
     } catch (caught) {
       setOrganization(null)
       setError(
