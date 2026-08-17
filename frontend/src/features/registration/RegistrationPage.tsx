@@ -225,6 +225,38 @@ function athleteDisplayName(athlete: AthleteRecord) {
   return `${firstName} ${lastName}`.trim() || "Unnamed athlete"
 }
 
+const REGISTRATION_PAGE_SIZE = 1000
+const REGISTRATION_ID_BATCH_SIZE = 250
+
+async function loadAllRegistrationPages<T>(
+  loadPage: (from: number, to: number) => PromiseLike<{
+    data: T[] | null
+    error: unknown
+  }>,
+): Promise<T[]> {
+  const rows: T[] = []
+
+  for (let from = 0; ; from += REGISTRATION_PAGE_SIZE) {
+    const result = await loadPage(
+      from,
+      from + REGISTRATION_PAGE_SIZE - 1,
+    )
+
+    if (result.error) {
+      throw result.error
+    }
+
+    const page = result.data ?? []
+    rows.push(...page)
+
+    if (page.length < REGISTRATION_PAGE_SIZE) {
+      break
+    }
+  }
+
+  return rows
+}
+
 export function RegistrationPage() {
   const [organizationId, setOrganizationId] = useState<string | null>(
     null,
@@ -646,12 +678,16 @@ export function RegistrationPage() {
           .eq("organization_id", currentOrganizationId)
           .order("start_date", { ascending: false }),
 
-        supabase
-          .from("athletes")
-          .select("*")
-          .eq("organization_id", currentOrganizationId)
-          .order("last_name", { ascending: true })
-          .order("first_name", { ascending: true }),
+        loadAllRegistrationPages<AthleteRecord>((from, to) =>
+          supabase
+            .from("athletes")
+            .select("*")
+            .eq("organization_id", currentOrganizationId)
+            .order("last_name", { ascending: true })
+            .order("first_name", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
 
         supabase
           .from("teams")
@@ -666,12 +702,16 @@ export function RegistrationPage() {
           .eq("active", true)
           .order("display_order", { ascending: true }),
 
-        supabase
-          .from("athlete_teams")
-          .select("athlete_id,team_id,is_primary,end_date")
-          .eq("organization_id", currentOrganizationId)
-          .eq("is_primary", true)
-          .is("end_date", null),
+        loadAllRegistrationPages<AthleteTeamRecord>((from, to) =>
+          supabase
+            .from("athlete_teams")
+            .select("athlete_id,team_id,is_primary,end_date")
+            .eq("organization_id", currentOrganizationId)
+            .eq("is_primary", true)
+            .is("end_date", null)
+            .order("athlete_id", { ascending: true })
+            .range(from, to),
+        ),
       ])
 
       if (eventsResponse.error) {
@@ -682,13 +722,7 @@ export function RegistrationPage() {
         )
       }
 
-      if (athletesResponse.error) {
-        throw new Error(
-          `Athletes could not be loaded: ${getErrorMessage(
-            athletesResponse.error,
-          )}`,
-        )
-      }
+      // Athlete pagination throws immediately if any page fails.
 
       if (teamsResponse.error) {
         throw new Error(
@@ -698,13 +732,7 @@ export function RegistrationPage() {
         )
       }
 
-      if (athleteTeamsResponse.error) {
-        throw new Error(
-          `Athlete teams could not be loaded: ${getErrorMessage(
-            athleteTeamsResponse.error,
-          )}`,
-        )
-      }
+      // Athlete-team pagination throws immediately if any page fails.
 
       if (classesResponse.error) {
         throw new Error(
@@ -717,8 +745,7 @@ export function RegistrationPage() {
       const eventRows =
         (eventsResponse.data ?? []) as EventRecord[]
 
-      const athleteRows =
-        (athletesResponse.data ?? []) as AthleteRecord[]
+      const athleteRows = athletesResponse
 
       const teamRows =
         (teamsResponse.data ?? []) as TeamRecord[]
@@ -730,9 +757,7 @@ export function RegistrationPage() {
       setAthletes(athleteRows)
       setTeams(teamRows)
       setClasses(classRows)
-      setAthleteTeams(
-        (athleteTeamsResponse.data ?? []) as AthleteTeamRecord[],
-      )
+      setAthleteTeams(athleteTeamsResponse)
 
       setSelectedEventId((currentEventId) => {
         if (
@@ -772,12 +797,16 @@ export function RegistrationPage() {
             .eq("event_id", selectedEventId)
             .order("name", { ascending: true }),
 
-          supabase
-            .from("registrations")
-            .select("*")
-            .eq("organization_id", organizationId)
-            .eq("event_id", selectedEventId)
-            .order("created_at", { ascending: false }),
+          loadAllRegistrationPages<RegistrationRecord>((from, to) =>
+            supabase
+              .from("registrations")
+              .select("*")
+              .eq("organization_id", organizationId)
+              .eq("event_id", selectedEventId)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: true })
+              .range(from, to),
+          ),
         ])
 
       if (shootsResponse.error) {
@@ -788,19 +817,12 @@ export function RegistrationPage() {
         )
       }
 
-      if (registrationsResponse.error) {
-        throw new Error(
-          `Registrations could not be loaded: ${getErrorMessage(
-            registrationsResponse.error,
-          )}`,
-        )
-      }
+      // Registration pagination throws immediately if any page fails.
 
       const shootRows =
         (shootsResponse.data ?? []) as ShootRecord[]
 
-      const registrationRows =
-        (registrationsResponse.data ?? []) as RegistrationRecord[]
+      const registrationRows = registrationsResponse
 
       setShoots(shootRows)
       setRegistrations(registrationRows)
@@ -814,23 +836,34 @@ export function RegistrationPage() {
         return
       }
 
-      const registrationShootsResponse = await supabase
-        .from("registration_shoots")
-        .select("*")
-        .in("registration_id", registrationIds)
+      const registrationShootRows: RegistrationShootRecord[] = []
 
-      if (registrationShootsResponse.error) {
-        throw new Error(
-          `Registered shoots could not be loaded: ${getErrorMessage(
-            registrationShootsResponse.error,
-          )}`,
+      for (
+        let index = 0;
+        index < registrationIds.length;
+        index += REGISTRATION_ID_BATCH_SIZE
+      ) {
+        const registrationIdBatch = registrationIds.slice(
+          index,
+          index + REGISTRATION_ID_BATCH_SIZE,
         )
+
+        const batchRows =
+          await loadAllRegistrationPages<RegistrationShootRecord>(
+            (from, to) =>
+              supabase
+                .from("registration_shoots")
+                .select("*")
+                .in("registration_id", registrationIdBatch)
+                .order("registration_id", { ascending: true })
+                .order("id", { ascending: true })
+                .range(from, to),
+          )
+
+        registrationShootRows.push(...batchRows)
       }
 
-      setRegistrationShoots(
-        (registrationShootsResponse.data ??
-          []) as RegistrationShootRecord[],
-      )
+      setRegistrationShoots(registrationShootRows)
     } catch (error) {
       setErrorMessage(getErrorMessage(error))
     } finally {
