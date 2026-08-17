@@ -562,7 +562,7 @@ export function SeasonImportPage() {
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <input className={input} type="number" min="0" step="0.01" value={trapSeriesEntryFee} onChange={(e) => setTrapSeriesEntryFee(e.target.value)} placeholder="Entry fee per shoot" />
-                <input className={input} type="number" min="0" step="0.01" value={trapSeriesOrganizationFee} onChange={(e) => setTrapSeriesOrganizationFee(e.target.value)} placeholder="Organization/CYSSA fee" />
+                <input className={input} type="number" min="0" step="0.01" value={trapSeriesOrganizationFee} onChange={(e) => setTrapSeriesOrganizationFee(e.target.value)} placeholder="Organization fee" />
               </div>
 
               {trapParsed.workbookErrors.length > 0 && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"><strong>Workbook structure errors must be corrected before importing.</strong><ul className="mt-2 list-disc space-y-1 pl-5">{trapParsed.workbookErrors.map((error) => <li key={error}>{error}</li>)}</ul><p className="mt-3">No data will be imported from this workbook. Correct the spreadsheet, press Remove faulty spreadsheet, and select the corrected file.</p></div>}
@@ -713,7 +713,7 @@ export function SeasonImportPage() {
                 <input className={input} type="number" min="0" step="0.01" value={trapEntryFee} onChange={(e) => setTrapEntryFee(e.target.value)} placeholder="Trap fee" />
                 <input className={input} type="number" min="0" step="0.01" value={skeetEntryFee} onChange={(e) => setSkeetEntryFee(e.target.value)} placeholder="Skeet fee" />
                 <input className={input} type="number" min="0" step="0.01" value={sportingEntryFee} onChange={(e) => setSportingEntryFee(e.target.value)} placeholder="Sporting Clays fee" />
-                <input className={input} type="number" min="0" step="0.01" value={organizationFee} onChange={(e) => setOrganizationFee(e.target.value)} placeholder="Organization/CYSSA fee" />
+                <input className={input} type="number" min="0" step="0.01" value={organizationFee} onChange={(e) => setOrganizationFee(e.target.value)} placeholder="Organization fee" />
               </div>
 
               <div className="mt-5 max-h-[520px] overflow-auto rounded-xl border border-slate-200">
