@@ -45,6 +45,7 @@ type LeaderRow = {
   total: number
   complete: boolean
   shootOffs: number[]
+  officialRank?: number
 }
 
 const emptyData: LeaderboardData = {
@@ -80,6 +81,9 @@ export function LeaderboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [displayMode, setDisplayMode] = useState<"overall" | "class" | "team">("overall")
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [leaderSearch, setLeaderSearch] = useState("")
+  const [leaderSortKey, setLeaderSortKey] = useState<"rank" | "name" | "team" | "class" | "squad" | "total" | "status">("rank")
+  const [leaderSortDirection, setLeaderSortDirection] = useState<"asc" | "desc">("asc")
 
   const eventShoots = useMemo(() => shoots.filter((shoot) => shoot.event_id === eventId), [shoots, eventId])
   const selectedEvent = events.find((event) => event.id === eventId)
@@ -199,23 +203,110 @@ export function LeaderboardPage() {
         if (difference !== 0) return difference
       }
       return a.name.localeCompare(b.name)
-    })
+    }).map((row, index) => ({
+      ...row,
+      officialRank: index + 1,
+    }))
   }, [data, selectedShoot])
 
+  const displayLeaders = useMemo(() => {
+    if (isFullscreen) return [...leaders]
+
+    const query = leaderSearch.trim().toLowerCase()
+
+    const filtered = query
+      ? leaders.filter((row) =>
+          [
+            row.name,
+            row.team,
+            row.classCode,
+            row.squad,
+            String(row.total),
+            row.complete ? "complete" : "in progress",
+            String(row.officialRank ?? ""),
+          ].some((value) => value.toLowerCase().includes(query)),
+        )
+      : [...leaders]
+
+    return filtered.sort((a, b) => {
+      let comparison = 0
+
+      switch (leaderSortKey) {
+        case "rank":
+          comparison = (a.officialRank ?? 0) - (b.officialRank ?? 0)
+          break
+        case "name":
+          comparison = a.name.localeCompare(b.name)
+          break
+        case "team":
+          comparison = a.team.localeCompare(b.team)
+          break
+        case "class":
+          comparison = a.classCode.localeCompare(b.classCode, undefined, { numeric: true })
+          break
+        case "squad":
+          comparison = a.squad.localeCompare(b.squad, undefined, { numeric: true })
+          break
+        case "total":
+          comparison = a.total - b.total
+          break
+        case "status":
+          comparison = Number(a.complete) - Number(b.complete)
+          break
+      }
+
+      if (comparison === 0) {
+        comparison = (a.officialRank ?? 0) - (b.officialRank ?? 0)
+      }
+
+      return leaderSortDirection === "asc" ? comparison : -comparison
+    })
+  }, [leaders, leaderSearch, leaderSortKey, leaderSortDirection, isFullscreen])
+
   const groupedLeaders = useMemo(() => {
-    if (displayMode === "overall") return [{ label: "Overall Leaders", rows: leaders.slice(0, 10) }]
-    const keyFor = (row: LeaderRow) => displayMode === "class" ? row.classCode : row.team
-    const groups = new Map<string, LeaderRow[]>()
+    if (displayMode === "overall") {
+      return [{
+        label: "Overall Leaders",
+        rows: displayLeaders
+          .filter((row) => (row.officialRank ?? 0) <= 10)
+          .map((row) => ({ ...row, displayRank: row.officialRank ?? 0 })),
+      }]
+    }
+
+    const keyFor = (row: LeaderRow) =>
+      displayMode === "class" ? row.classCode : row.team
+
+    const officialCategoryRank = new Map<string, number>()
+    const categoryCounts = new Map<string, number>()
+
     for (const row of leaders) {
       const key = keyFor(row)
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key)?.push(row)
+      const nextRank = (categoryCounts.get(key) ?? 0) + 1
+      categoryCounts.set(key, nextRank)
+      officialCategoryRank.set(`${key}:${row.enrollmentId}`, nextRank)
     }
+
+    const groups = new Map<string, Array<LeaderRow & { displayRank: number }>>()
+
+    for (const row of displayLeaders) {
+      const key = keyFor(row)
+      const rank = officialCategoryRank.get(`${key}:${row.enrollmentId}`) ?? 0
+      const limit = displayMode === "class" ? 3 : 5
+
+      if (rank > limit) continue
+      if (!groups.has(key)) groups.set(key, [])
+
+      groups.get(key)?.push({
+        ...row,
+        displayRank: rank,
+      })
+    }
+
     return Array.from(groups.entries())
       .filter(([label]) => label && label !== "—" && label !== "No team")
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([label, rows]) => ({ label, rows: rows.slice(0, displayMode === "class" ? 3 : 5) }))
-  }, [displayMode, leaders])
+      .map(([label, rows]) => ({ label, rows }))
+  }, [displayMode, leaders, displayLeaders])
 
   const completedCount = leaders.filter((row) => row.complete).length
 
@@ -259,9 +350,66 @@ export function LeaderboardPage() {
               </div>
             </div>
 
+            {!isFullscreen && leaders.length > 0 && (
+              <div className="mb-5 flex flex-col gap-3 rounded-xl border bg-slate-50 p-4 lg:flex-row lg:items-end">
+                <label className="flex-1 text-sm font-medium">
+                  Search leaderboard
+                  <input
+                    type="search"
+                    value={leaderSearch}
+                    onChange={(event) => setLeaderSearch(event.target.value)}
+                    placeholder="Participant, team, class, squad, score or status"
+                    className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Sort by
+                  <select
+                    value={leaderSortKey}
+                    onChange={(event) => setLeaderSortKey(event.target.value as typeof leaderSortKey)}
+                    className="mt-1 block rounded-lg border bg-white px-3 py-2"
+                  >
+                    <option value="rank">Official rank</option>
+                    <option value="name">Participant</option>
+                    <option value="team">Team</option>
+                    <option value="class">Class</option>
+                    <option value="squad">Squad</option>
+                    <option value="total">Total</option>
+                    <option value="status">Status</option>
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium">
+                  Direction
+                  <select
+                    value={leaderSortDirection}
+                    onChange={(event) => setLeaderSortDirection(event.target.value as "asc" | "desc")}
+                    className="mt-1 block rounded-lg border bg-white px-3 py-2"
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </label>
+
+                {(leaderSearch || leaderSortKey !== "rank" || leaderSortDirection !== "asc") && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setLeaderSearch("")
+                      setLeaderSortKey("rank")
+                      setLeaderSortDirection("asc")
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
+
             {loading ? <div className="py-20 text-center text-slate-500">Loading live standings…</div> : leaders.length === 0 ? <div className="py-20 text-center"><Trophy className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold">No standings available yet</h2><p className="mt-2 text-slate-500">Register participants, assign squads, and enter scores to populate the leaderboard.</p></div> : (
               <div className={`grid gap-5 ${displayMode === "overall" ? "grid-cols-1" : "xl:grid-cols-2"}`}>
-                {groupedLeaders.map((group) => <div key={group.label} className={`overflow-hidden rounded-2xl border ${isFullscreen ? "border-slate-800 bg-slate-950" : "bg-white"}`}><div className={`border-b px-5 py-4 ${isFullscreen ? "border-slate-800" : "bg-slate-50"}`}><h2 className={isFullscreen ? "text-2xl font-bold" : "text-lg font-semibold"}>{group.label}</h2></div><div className="divide-y divide-slate-200/20">{group.rows.map((row, index) => <div key={row.enrollmentId} className={`grid grid-cols-[64px_1fr_auto] items-center gap-4 px-5 py-4 ${isFullscreen ? "text-xl" : ""}`}><div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold ${index === 0 ? "bg-amber-400 text-slate-950" : index === 1 ? "bg-slate-300 text-slate-950" : index === 2 ? "bg-amber-700 text-white" : isFullscreen ? "bg-slate-800" : "bg-slate-100"}`}>{index + 1}</div><div><p className="font-bold">{row.name}</p><p className={`${isFullscreen ? "text-sm text-slate-400" : "text-xs text-slate-500"}`}>{row.team} · {row.classCode} · {row.squad}</p></div><div className="text-right"><p className={`${isFullscreen ? "text-4xl" : "text-2xl"} font-black`}>{row.total}</p>{row.shootOffs.some((score) => score > 0) && <p className="text-xs font-semibold text-amber-500">SO {row.shootOffs.join(" / ")}</p>}</div></div>)}</div></div>)}
+                {groupedLeaders.map((group) => <div key={group.label} className={`overflow-hidden rounded-2xl border ${isFullscreen ? "border-slate-800 bg-slate-950" : "bg-white"}`}><div className={`border-b px-5 py-4 ${isFullscreen ? "border-slate-800" : "bg-slate-50"}`}><h2 className={isFullscreen ? "text-2xl font-bold" : "text-lg font-semibold"}>{group.label}</h2></div><div className="divide-y divide-slate-200/20">{group.rows.map((row) => <div key={row.enrollmentId} className={`grid grid-cols-[64px_1fr_auto] items-center gap-4 px-5 py-4 ${isFullscreen ? "text-xl" : ""}`}><div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold ${row.displayRank === 1 ? "bg-amber-400 text-slate-950" : row.displayRank === 2 ? "bg-slate-300 text-slate-950" : row.displayRank === 3 ? "bg-amber-700 text-white" : isFullscreen ? "bg-slate-800" : "bg-slate-100"}`}>{row.displayRank}</div><div><p className="font-bold">{row.name}</p><p className={`${isFullscreen ? "text-sm text-slate-400" : "text-xs text-slate-500"}`}>{row.team} · {row.classCode} · {row.squad}</p></div><div className="text-right"><p className={`${isFullscreen ? "text-4xl" : "text-2xl"} font-black`}>{row.total}</p>{row.shootOffs.some((score) => score > 0) && <p className="text-xs font-semibold text-amber-500">SO {row.shootOffs.join(" / ")}</p>}</div></div>)}</div></div>)}
               </div>
             )}
 
