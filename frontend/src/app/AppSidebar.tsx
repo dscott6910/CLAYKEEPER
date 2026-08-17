@@ -15,7 +15,38 @@ export function AppSidebar({
   onNavigate,
 }: AppSidebarProps = {}) {
   const brand = useBrandSettings()
-  const { role, loading: organizationLoading } = useOrganization()
+  const {
+    organizationId,
+    role,
+    memberships,
+    loading: organizationLoading,
+    switching,
+    switchOrganization,
+  } = useOrganization()
+
+  async function handleOrganizationChange(
+    nextOrganizationId: string,
+  ) {
+    if (
+      !nextOrganizationId ||
+      nextOrganizationId === organizationId
+    ) {
+      return
+    }
+
+    try {
+      await switchOrganization(nextOrganizationId)
+
+      // Existing feature pages often resolve organization context
+      // independently during initial load. Reloading after a deliberate
+      // organization switch guarantees every scoped page starts fresh
+      // against the newly selected organization.
+      window.location.reload()
+    } catch {
+      // OrganizationProvider exposes the switch error through context.
+      // Keep the current organization active if switching fails.
+    }
+  }
 
   const visibleSections = navigationSections
     .map((section) => ({
@@ -85,6 +116,31 @@ export function AppSidebar({
       </nav>
 
       <div className="border-t border-slate-800 p-4">
+        {memberships.length > 1 ? (
+          <label className="mb-3 block">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Organization
+            </span>
+            <select
+              value={organizationId ?? ""}
+              onChange={(event) =>
+                void handleOrganizationChange(event.target.value)
+              }
+              disabled={organizationLoading || switching}
+              className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-xs font-medium text-slate-200 outline-none transition focus:border-emerald-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              {memberships.map((membership) => (
+                <option
+                  key={membership.organizationId}
+                  value={membership.organizationId}
+                >
+                  {membership.organizationName}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
         <p className="truncate text-xs font-medium text-slate-300">
           {brand.organizationName}
         </p>

@@ -124,7 +124,7 @@ export function SeasonTeamRankingsPage() {
         </section>
 
         <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
-          <div className="flex items-start gap-3"><Medal className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Team scoring rule</p><p className="mt-1 text-blue-800">{data.scoringRule}</p><p className="mt-2 text-xs text-blue-700">ClayKeeper currently operates within one organization context, so this sprint ranks teams inside the organization and provides the organization-wide season summary above. Cross-organization competition would require a separate shared-data model.</p></div></div>
+          <div className="flex items-start gap-3"><Medal className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Team scoring rule</p><p className="mt-1 text-blue-800">{data.scoringRule}</p><p className="mt-2 text-xs text-blue-700">Team rankings are calculated within the currently selected organization. Cross-organization competition would require a separate shared-data model.</p></div></div>
         </section>
 
         {incompleteTeamResults > 0 ? (
