@@ -209,7 +209,7 @@ function QualificationRow(props: { row: SeasonQualificationRow; open: boolean; t
   const row = props.row
   return <>
     <tr className="align-top">
-      <td className="p-4"><p className="font-bold text-slate-950">{row.athleteName}</p><p className="mt-1 text-xs text-slate-500">{row.cyssaNumber ? `CYSSA ${row.cyssaNumber}` : "No CYSSA number"}</p></td>
+      <td className="p-4"><p className="font-bold text-slate-950">{row.athleteName}</p><p className="mt-1 text-xs text-slate-500">{row.cyssaNumber ? `Participant # ${row.cyssaNumber}` : "No participant number"}</p></td>
       <td className="p-4"><p>{row.teamName}</p><p className="mt-1 text-xs text-slate-500">Class {row.classCode}</p></td>
       <td className="p-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses(row.status)}`}>{statusLabel(row.status)}</span>{row.incompleteEnteredEvents > 0 ? <p className="mt-2 text-xs font-semibold text-amber-700">{row.incompleteEnteredEvents} entered result{row.incompleteEnteredEvents === 1 ? "" : "s"} incomplete</p> : null}</td>
       <td className="p-4 text-right"><p className="text-lg font-black">{row.completedEvents} / {row.minimumEvents}</p><p className="text-xs text-slate-500">events</p></td>

@@ -222,7 +222,7 @@ function SeasonStandingRows(props: { row: SeasonStandingRow; rank: number; open:
     <>
       <tr className="align-top">
         <td className="p-4 text-lg font-black">{props.rank}</td>
-        <td className="p-4"><p className="font-bold text-slate-950">{row.athleteName}{row.tied ? <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Tie</span> : null}</p><p className="mt-1 text-xs text-slate-500">{row.cyssaNumber ? `CYSSA ${row.cyssaNumber}` : "No CYSSA number"}</p></td>
+        <td className="p-4"><p className="font-bold text-slate-950">{row.athleteName}{row.tied ? <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Tie</span> : null}</p><p className="mt-1 text-xs text-slate-500">{row.cyssaNumber ? `Participant # ${row.cyssaNumber}` : "No participant number"}</p></td>
         <td className="p-4"><p>{row.teamName}</p><p className="mt-1 text-xs text-slate-500">Class {row.classCode}</p></td>
         <td className="p-4 text-right"><p className="font-bold">{row.eventsCounted} / {row.eventsEntered}</p><p className="text-xs text-slate-500">counted / entered</p></td>
         <td className="p-4 text-right text-xl font-black">{formatPoints(row.seasonPoints)}</td>

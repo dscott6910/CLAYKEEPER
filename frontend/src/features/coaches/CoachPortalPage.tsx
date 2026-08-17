@@ -826,7 +826,7 @@ export function CoachPortalPage() {
                           <div>
                             <p className="font-semibold">{athleteName(athlete)}</p>
                             <p className="text-xs text-slate-500">
-                              CYSSA #{athlete.cyssa_number || "—"}
+                              Participant # {athlete.cyssa_number || "—"}
                             </p>
                           </div>
 

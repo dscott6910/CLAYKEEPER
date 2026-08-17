@@ -593,7 +593,7 @@ export function ReportsPage() {
 
   function exportCsv() {
     if (!selectedShoot) return
-    const headers = ["Place", "Participant", "CYSSA #", "Team", "Class", "Squad", "Position", ...Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => `R${i + 1}`), "Total", ...data.shootOffRounds.map((round) => round.label || `SO${round.round_number}`), "Complete"]
+    const headers = ["Place", "Participant", "Participant Number", "Team", "Class", "Squad", "Position", ...Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => `R${i + 1}`), "Total", ...data.shootOffRounds.map((round) => round.label || `SO${round.round_number}`), "Complete"]
     const lines = [headers.map(csvValue).join(",")]
     filteredStandings.forEach((row, index) => {
       lines.push([index + 1, row.athleteName, row.cyssaNumber, row.teamName, row.classCode, row.squadLabel, row.positionLabel, ...row.rounds, row.total, ...row.shootOffs, row.complete ? "Yes" : "No"].map(csvValue).join(","))
@@ -859,7 +859,7 @@ export function ReportsPage() {
                         <td className="px-4 py-3">
                           <div className="font-semibold">{row.athleteName}</div>
                           <div className="text-xs text-slate-500">
-                            {row.cyssaNumber ? `CYSSA ${row.cyssaNumber}` : "No CYSSA number"}
+                            {row.cyssaNumber ? `Participant # ${row.cyssaNumber}` : "No participant number"}
                           </div>
                         </td>
                         <td className="px-3 py-3">{row.teamName}</td>

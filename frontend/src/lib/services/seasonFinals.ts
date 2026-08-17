@@ -203,7 +203,7 @@ export function buildSeasonFinalCsv(record: SeasonFinalRecord) {
   lines.push(["Finalized", record.finalized_at].map(csvCell).join(","))
   lines.push("")
   lines.push(["Individual Standings"].map(csvCell).join(","))
-  lines.push(["Rank", "Athlete", "CYSSA", "Team", "Class", "Events Counted", "Season Points", "Average %"].map(csvCell).join(","))
+  lines.push(["Rank", "Participant", "Participant Number", "Team", "Class", "Events Counted", "Season Points", "Average %"].map(csvCell).join(","))
   for (const row of record.individual_standings) {
     lines.push([
       row.rank,

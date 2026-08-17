@@ -470,7 +470,7 @@ export function CheckInCenterPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Athlete, team, squad, CYSSA…"
+                placeholder="Participant, team, squad, participant number…"
                 className="mt-1 min-h-11 w-full rounded-lg border pl-9 pr-3 text-sm"
               />
             </label>
@@ -570,7 +570,7 @@ export function CheckInCenterPage() {
                         <p className="font-semibold">{row.athleteName}</p>
                         <p className="text-xs text-slate-500">
                           {row.cyssa
-                            ? `CYSSA ${row.cyssa}`
+                            ? `Participant # ${row.cyssa}`
                             : row.registration.registration_number ??
                               "No number"}
                         </p>

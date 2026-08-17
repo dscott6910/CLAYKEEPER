@@ -437,7 +437,7 @@ const checkboxes: Array<
   ["show_team_name", "Team name"],
   ["show_squad_number", "Squad number"],
   ["show_post_number", "Post number"],
-  ["show_cyssa_number", "CYSSA number"],
+  ["show_cyssa_number", "Participant number"],
   ["show_station_total", "Station total"],
   ["show_running_total", "Running total"],
   ["show_malfunctions", "Malfunctions"],
