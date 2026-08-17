@@ -107,7 +107,7 @@ export function SeasonTeamRankingsPage() {
               <p className="mt-2 text-sm text-slate-600">{formatDate(data.season.start_date)} – {formatDate(data.season.end_date)} · {data.events.length} event{data.events.length === 1 ? "" : "s"}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link to={`/seasons/${data.season.id}/standings`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />Athlete Standings</Link>
+              <Link to={`/seasons/${data.season.id}/standings`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"><Trophy className="mr-2 h-4 w-4" />Participant Standings</Link>
               <Link to={`/seasons/${data.season.id}/qualification`} className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50">Qualification</Link>
               <Button variant="outline" onClick={() => void load()}><RefreshCw className="h-4 w-4" />Refresh</Button>
             </div>
@@ -118,7 +118,7 @@ export function SeasonTeamRankingsPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Summary label="Teams" value={String(data.totals.teams)} detail="Teams represented this season" />
-          <Summary label="Team Athletes" value={String(data.totals.athletesOnTeams)} detail="Athletes assigned to a team" />
+          <Summary label="Team Participants" value={String(data.totals.athletesOnTeams)} detail="Participants assigned to a team" />
           <Summary label="Season Events" value={String(data.totals.events)} detail="Assigned tournaments" />
           <Summary label="Current Leader" value={data.totals.leader ?? "—"} detail={data.totals.leader ? "Provisional season leader" : "No team results yet"} />
         </section>
@@ -129,20 +129,20 @@ export function SeasonTeamRankingsPage() {
 
         {incompleteTeamResults > 0 ? (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-            <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Team standings are provisional.</p><p className="mt-1 text-amber-800">{incompleteTeamResults} team-event result{incompleteTeamResults === 1 ? " is" : "s are"} still incomplete. Only finalized athlete results contribute points.</p></div></div>
+            <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Team standings are provisional.</p><p className="mt-1 text-amber-800">{incompleteTeamResults} team-event result{incompleteTeamResults === 1 ? " is" : "s are"} still incomplete. Only finalized participant results contribute points.</p></div></div>
           </section>
         ) : null}
 
         <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div><h2 className="text-lg font-bold">Team Season Championship</h2><p className="mt-1 text-sm text-slate-500">Expand a team to audit its counting athletes and event results.</p></div>
-              <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team or athlete…" className="mt-1 min-h-10 w-full min-w-64 rounded-lg border border-slate-200 px-3 font-normal" /></label>
+              <div><h2 className="text-lg font-bold">Team Season Championship</h2><p className="mt-1 text-sm text-slate-500">Expand a team to audit its counting participants and event results.</p></div>
+              <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team or participant…" className="mt-1 min-h-10 w-full min-w-64 rounded-lg border border-slate-200 px-3 font-normal" /></label>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="w-14 p-4">#</th><th className="p-4">Team</th><th className="p-4 text-right">Athletes</th><th className="p-4 text-right">Events</th><th className="p-4 text-right">Team Points</th><th className="p-4 text-right">Aggregate</th><th className="w-12 p-4" /></tr></thead>
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="w-14 p-4">#</th><th className="p-4">Team</th><th className="p-4 text-right">Participants</th><th className="p-4 text-right">Events</th><th className="p-4 text-right">Team Points</th><th className="p-4 text-right">Aggregate</th><th className="w-12 p-4" /></tr></thead>
               <tbody className="divide-y">{rows.map((row) => <TeamRows key={row.teamName} row={row} open={expanded.has(row.teamName)} toggle={() => toggle(row)} />)}</tbody>
             </table>
           </div>
@@ -158,14 +158,14 @@ function TeamRows(props: { row: SeasonTeamRankingRow; open: boolean; toggle: () 
   return <>
     <tr className="align-top">
       <td className="p-4 text-lg font-black">{row.rank}</td>
-      <td className="p-4"><p className="font-bold text-slate-950">{row.teamName}{row.tied ? <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Tie</span> : null}</p><p className="mt-1 text-xs text-slate-500">Top {Math.min(5, row.athletes)} athlete{Math.min(5, row.athletes) === 1 ? "" : "s"} count</p></td>
+      <td className="p-4"><p className="font-bold text-slate-950">{row.teamName}{row.tied ? <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Tie</span> : null}</p><p className="mt-1 text-xs text-slate-500">Top {Math.min(5, row.athletes)} participant{Math.min(5, row.athletes) === 1 ? "" : "s"} count</p></td>
       <td className="p-4 text-right"><p className="font-bold">{row.athletes}</p><p className="text-xs text-slate-500">{row.athletesCounted} with finalized results</p></td>
       <td className="p-4 text-right"><p className="font-bold">{row.eventsRepresented}</p><p className="text-xs text-slate-500">represented</p></td>
       <td className="p-4 text-right text-xl font-black">{formatPoints(row.seasonPoints)}</td>
       <td className="p-4 text-right"><p className="font-bold">{formatPercent(row.aggregatePercentage)}</p><p className="text-xs text-slate-500">{row.totalScore}/{row.totalTargets}</p></td>
       <td className="p-4"><button type="button" onClick={props.toggle} className="rounded-lg border p-2 text-slate-600 hover:bg-slate-50" aria-label={props.open ? "Hide team audit" : "Show team audit"}>{props.open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button></td>
     </tr>
-    {props.open ? <tr className="bg-slate-50/70"><td colSpan={7} className="p-4"><div className="grid gap-4 xl:grid-cols-2"><div className="rounded-xl border bg-white p-4"><div className="flex items-center gap-2"><Users className="h-4 w-4 text-emerald-700" /><h3 className="font-bold">Counting Athletes</h3></div><div className="mt-3 space-y-2">{row.leaders.map((athlete, index) => <div key={athlete.athleteId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><div><span className="mr-2 font-bold">{index + 1}.</span>{athlete.athleteName}</div><div className="text-right"><p className="font-bold">{formatPoints(athlete.seasonPoints)}</p><p className="text-xs text-slate-500">{athlete.eventsCounted} event{athlete.eventsCounted === 1 ? "" : "s"}</p></div></div>)}</div></div><div className="rounded-xl border bg-white p-4"><div className="flex items-center gap-2"><Trophy className="h-4 w-4 text-emerald-700" /><h3 className="font-bold">Event Audit</h3></div><div className="mt-3 space-y-2">{row.eventResults.map((event) => <div key={event.eventId} className="rounded-lg border border-slate-100 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{event.eventName}</p><p className="text-xs text-slate-500">{formatDate(event.startDate)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${event.complete ? "bg-emerald-100 text-emerald-800" : event.athletesEntered > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{event.complete ? "Complete" : event.athletesEntered > 0 ? "Provisional" : "No Entry"}</span></div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><p className="text-slate-500">Athletes</p><p className="font-bold">{event.athletesCounted}/{event.athletesEntered}</p></div><div><p className="text-slate-500">Team Points</p><p className="font-bold">{formatPoints(event.teamPoints)}</p></div><div><p className="text-slate-500">Average</p><p className="font-bold">{formatPercent(event.averagePercentage)}</p></div></div></div>)}</div></div></div></td></tr> : null}
+    {props.open ? <tr className="bg-slate-50/70"><td colSpan={7} className="p-4"><div className="grid gap-4 xl:grid-cols-2"><div className="rounded-xl border bg-white p-4"><div className="flex items-center gap-2"><Users className="h-4 w-4 text-emerald-700" /><h3 className="font-bold">Counting Participants</h3></div><div className="mt-3 space-y-2">{row.leaders.map((athlete, index) => <div key={athlete.athleteId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><div><span className="mr-2 font-bold">{index + 1}.</span>{athlete.athleteName}</div><div className="text-right"><p className="font-bold">{formatPoints(athlete.seasonPoints)}</p><p className="text-xs text-slate-500">{athlete.eventsCounted} event{athlete.eventsCounted === 1 ? "" : "s"}</p></div></div>)}</div></div><div className="rounded-xl border bg-white p-4"><div className="flex items-center gap-2"><Trophy className="h-4 w-4 text-emerald-700" /><h3 className="font-bold">Event Audit</h3></div><div className="mt-3 space-y-2">{row.eventResults.map((event) => <div key={event.eventId} className="rounded-lg border border-slate-100 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{event.eventName}</p><p className="text-xs text-slate-500">{formatDate(event.startDate)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${event.complete ? "bg-emerald-100 text-emerald-800" : event.athletesEntered > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{event.complete ? "Complete" : event.athletesEntered > 0 ? "Provisional" : "No Entry"}</span></div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><p className="text-slate-500">Participants</p><p className="font-bold">{event.athletesCounted}/{event.athletesEntered}</p></div><div><p className="text-slate-500">Team Points</p><p className="font-bold">{formatPoints(event.teamPoints)}</p></div><div><p className="text-slate-500">Average</p><p className="font-bold">{formatPercent(event.averagePercentage)}</p></div></div></div>)}</div></div></div></td></tr> : null}
   </>
 }
 

@@ -164,6 +164,6 @@ export async function loadSeasonTeamRankings(seasonId: string): Promise<SeasonTe
       events: standings.events.length,
       leader: rows[0]?.teamName ?? null,
     },
-    scoringRule: `The top ${COUNTING_ATHLETES} athletes on each team count toward the team season total. Each athlete contributes the same normalized season points used in individual standings.`,
+    scoringRule: `The top ${COUNTING_ATHLETES} participants on each team count toward the team season total. Each participant contributes the same normalized season points used in individual standings.`,
   }
 }

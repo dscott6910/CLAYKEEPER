@@ -529,7 +529,7 @@ export function CoachPortalPage() {
     <div className="min-h-screen">
       <AppHeader
         title="Coach Portal"
-        description="Team roster, event readiness, squadding, scores, and athlete history in one workspace."
+        description="Team roster, event readiness, squadding, scores, and participant history in one workspace."
       />
 
       <PageContainer>
@@ -600,7 +600,7 @@ export function CoachPortalPage() {
                 ["roster", "Roster"],
                 ["events", "Event Readiness"],
                 ["scores", "Scores"],
-                ["history", "Athlete History"],
+                ["history", "Participant History"],
                 ...(data?.isManager
                   ? ([["management", "Team Management"]] as const)
                   : []),
@@ -876,7 +876,7 @@ export function CoachPortalPage() {
               {tab === "history" ? (
                 <section className="rounded-2xl border bg-white shadow-sm">
                   <div className="border-b p-5">
-                    <h2 className="text-lg font-bold">Athlete season history</h2>
+                    <h2 className="text-lg font-bold">Participant season history</h2>
                     <p className="text-sm text-slate-500">
                       Completed and historical totals across available events.
                     </p>

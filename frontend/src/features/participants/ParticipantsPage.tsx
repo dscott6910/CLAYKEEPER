@@ -367,13 +367,13 @@ export function ParticipantsPage() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader title="Participants" description="Manage the organization athlete directory" />
+      <AppHeader title="Participants" description="Manage the organization participant directory" />
       <PageContainer>
         <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-950">Participant Directory</h1>
-              <p className="mt-1 text-sm text-slate-500">Athlete profiles, classifications, team assignments, and registration history.</p>
+              <p className="mt-1 text-sm text-slate-500">Participant profiles, classifications, team assignments, and registration history.</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => void load()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold hover:bg-slate-50"><RefreshCw size={16} />Refresh</button>
@@ -560,7 +560,7 @@ function ParticipantFilterCell({
 function ParticipantEditor({ form, setForm, classes, teams, editing, saving, onClose, onSave }: { form: ParticipantForm; setForm: React.Dispatch<React.SetStateAction<ParticipantForm>>; classes: ParticipantClass[]; teams: ParticipantTeam[]; editing: boolean; saving: boolean; onClose: () => void; onSave: (event: FormEvent) => void }) {
   const set = (key: keyof ParticipantForm, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4"><form onSubmit={onSave} className="mx-auto my-4 w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
-    <div className="flex items-start justify-between border-b p-5"><div><h2 className="text-xl font-bold">{editing ? "Edit Participant" : "Add Participant"}</h2><p className="mt-1 text-sm text-slate-500">Maintain the athlete profile, classification, and current team.</p></div><button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-sm font-semibold">Close</button></div>
+    <div className="flex items-start justify-between border-b p-5"><div><h2 className="text-xl font-bold">{editing ? "Edit Participant" : "Add Participant"}</h2><p className="mt-1 text-sm text-slate-500">Maintain the participant profile, classification, and current team.</p></div><button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-sm font-semibold">Close</button></div>
     <div className="space-y-6 p-5">
       <EditorSection title="Participant information"><div className="grid gap-4 md:grid-cols-3"><Input label="First name" value={form.first_name} onChange={(value) => set("first_name", value)} required /><Input label="Last name" value={form.last_name} onChange={(value) => set("last_name", value)} required /><Input label="Preferred name" value={form.preferred_name} onChange={(value) => set("preferred_name", value)} /><Input label="Birth date" type="date" value={form.birth_date} onChange={(value) => set("birth_date", value)} /><Input label="Gender" value={form.gender} onChange={(value) => set("gender", value)} /><Input label="Graduation year" type="number" value={form.graduation_year} onChange={(value) => set("graduation_year", value)} /></div></EditorSection>
       <EditorSection title="Competition details"><div className="grid gap-4 md:grid-cols-2"><Select label="Class" value={form.class_id} onChange={(value) => set("class_id", value)} options={[{ value: "", label: "Not assigned" }, ...classes.map((item) => ({ value: item.id, label: `${item.code} — ${item.display_name}` }))]} /><Select label="Primary team" value={form.team_id} onChange={(value) => set("team_id", value)} options={[{ value: "", label: "Not assigned" }, ...teams.map((item) => ({ value: item.id, label: item.name }))]} /><Input label="Participant Number" value={form.cyssa_number} onChange={(value) => set("cyssa_number", value)} /><Input label="ATA number" value={form.ata_number} onChange={(value) => set("ata_number", value)} /><Input label="NSSA number" value={form.nssa_number} onChange={(value) => set("nssa_number", value)} /></div></EditorSection>

@@ -136,7 +136,7 @@ export function SeasonStandingsPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Summary label="Season Events" value={String(data.totals.events)} detail="Assigned tournaments" />
-          <Summary label="Athletes" value={String(data.totals.athletes)} detail="Unique season participants" />
+          <Summary label="Participants" value={String(data.totals.athletes)} detail="Unique season participants" />
           <Summary label="Completed Results" value={String(data.totals.completedResults)} detail="Fully finalized event results" />
           <Summary label="Incomplete Results" value={String(data.totals.incompleteResults)} detail="Not counted in season points" attention={data.totals.incompleteResults > 0} />
         </section>
@@ -171,7 +171,7 @@ export function SeasonStandingsPage() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-950">Event Completion</h2>
-              <p className="mt-1 text-sm text-slate-500">Only fully finalized athlete results count toward season standings.</p>
+              <p className="mt-1 text-sm text-slate-500">Only fully finalized participant results count toward season standings.</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {data.eventSummaries.map((event) => (
@@ -189,14 +189,14 @@ export function SeasonStandingsPage() {
         <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div><h2 className="text-lg font-bold">Season Standings</h2><p className="mt-1 text-sm text-slate-500">Expand an athlete to audit every event contribution.</p></div>
-              <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Athlete, team, class…" className="mt-1 min-h-10 w-full min-w-64 rounded-lg border border-slate-200 px-3 font-normal" /></label>
+              <div><h2 className="text-lg font-bold">Season Standings</h2><p className="mt-1 text-sm text-slate-500">Expand a participant to audit every event contribution.</p></div>
+              <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Participant, team, class…" className="mt-1 min-h-10 w-full min-w-64 rounded-lg border border-slate-200 px-3 font-normal" /></label>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr><th className="w-12 p-4">#</th><th className="p-4">Athlete</th><th className="p-4">Team / Class</th><th className="p-4 text-right">Events</th><th className="p-4 text-right">Season Points</th><th className="p-4 text-right">Average</th><th className="w-12 p-4" /></tr>
+                <tr><th className="w-12 p-4">#</th><th className="p-4">Participant</th><th className="p-4">Team / Class</th><th className="p-4 text-right">Events</th><th className="p-4 text-right">Season Points</th><th className="p-4 text-right">Average</th><th className="w-12 p-4" /></tr>
               </thead>
               <tbody className="divide-y">
                 {rows.map((row) => {
@@ -209,7 +209,7 @@ export function SeasonStandingsPage() {
               </tbody>
             </table>
           </div>
-          {rows.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No athletes match the current search.</div> : null}
+          {rows.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No participants match the current search.</div> : null}
         </section>
       </div>
     </PageContainer>

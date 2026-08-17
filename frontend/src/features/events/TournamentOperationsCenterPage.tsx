@@ -159,7 +159,7 @@ export function TournamentOperationsCenterPage() {
       {
         key: "import",
         title: "ActiveNet Import",
-        description: "Bring registered athletes into the event.",
+        description: "Bring registered participants into the event.",
         detail:
           data.registrations > 0
             ? `${data.registrations} event registration${data.registrations === 1 ? "" : "s"} available.`
@@ -172,7 +172,7 @@ export function TournamentOperationsCenterPage() {
       {
         key: "registration",
         title: "Registration Review",
-        description: "Confirm eligible athletes and payment status.",
+        description: "Confirm eligible participants and payment status.",
         detail: `${data.eligibleRegistrations} eligible · ${data.unpaidRegistrations} need attention`,
         status: registrationStatus,
         href: "/registration",
@@ -215,7 +215,7 @@ export function TournamentOperationsCenterPage() {
         description: "Generate QR-coded cards from the saved course.",
         detail:
           data.courses > 0 && data.assignedMembers > 0
-            ? `${data.assignedMembers} assigned athlete card${data.assignedMembers === 1 ? "" : "s"} can be prepared.`
+            ? `${data.assignedMembers} assigned participant card${data.assignedMembers === 1 ? "" : "s"} can be prepared.`
             : "Courses and squad assignments are required.",
         status:
           data.courses > 0 && data.assignedMembers > 0
@@ -228,7 +228,7 @@ export function TournamentOperationsCenterPage() {
       {
         key: "checkin",
         title: "Check-In",
-        description: "Track arriving athletes and last-minute no-shows.",
+        description: "Track arriving participants and last-minute no-shows.",
         detail: `${data.checkedIn} / ${data.eligibleRegistrations} checked in`,
         status: checkInStatus,
         href: `/events/${eventId}/check-in`,
@@ -444,7 +444,7 @@ export function TournamentOperationsCenterPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Summary
-            label="Eligible Athletes"
+            label="Eligible Participants"
             value={data.eligibleRegistrations}
             detail={`${data.unpaidRegistrations} need attention`}
           />

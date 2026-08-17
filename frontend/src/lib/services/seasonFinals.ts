@@ -107,12 +107,12 @@ export async function loadSeasonFinals(seasonId: string): Promise<SeasonFinalsDa
 
   if (standings.events.length === 0) blockers.push("No tournaments are assigned to this season.")
   if (standings.totals.incompleteResults > 0) {
-    blockers.push(`${standings.totals.incompleteResults} athlete-event result${standings.totals.incompleteResults === 1 ? " is" : "s are"} incomplete.`)
+    blockers.push(`${standings.totals.incompleteResults} participant-event result${standings.totals.incompleteResults === 1 ? " is" : "s are"} incomplete.`)
   }
   if (unavailableEvents > 0) {
     blockers.push(`${unavailableEvents} event${unavailableEvents === 1 ? " has" : "s have"} unavailable scoring data.`)
   }
-  if (individualRows.length === 0) blockers.push("No athlete season results are available.")
+  if (individualRows.length === 0) blockers.push("No participant season results are available.")
 
   return {
     mode: "draft",
@@ -218,7 +218,7 @@ export function buildSeasonFinalCsv(record: SeasonFinalRecord) {
   }
   lines.push("")
   lines.push(["Team Standings"].map(csvCell).join(","))
-  lines.push(["Rank", "Team", "Athletes Counted", "Events Represented", "Season Points", "Aggregate %"].map(csvCell).join(","))
+  lines.push(["Rank", "Team", "Participants Counted", "Events Represented", "Season Points", "Aggregate %"].map(csvCell).join(","))
   for (const row of record.team_standings) {
     lines.push([
       row.rank,

@@ -74,10 +74,10 @@ function check(error: { message?: string } | null) {
 function athleteName(
   athlete: DigitalScoringData["athletes"][number] | undefined,
 ) {
-  if (!athlete) return "Unknown Athlete"
+  if (!athlete) return "Unknown participant"
   const first =
     athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
-  return `${first} ${athlete.last_name?.trim() || ""}`.trim() || "Unnamed Athlete"
+  return `${first} ${athlete.last_name?.trim() || ""}`.trim() || "Unnamed participant"
 }
 
 function scorecardStatus(scorecard: DigitalScorecard | undefined) {

@@ -154,7 +154,7 @@ export function SeasonQualificationPage() {
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <Summary label="Athletes" value={String(data.totals.athletes)} detail="Season participants" />
+          <Summary label="Participants" value={String(data.totals.athletes)} detail="Season participants" />
           <Summary label="Qualified" value={String(data.totals.qualified)} detail="Minimum completed" />
           <Summary label="On Track" value={String(data.totals.onTrack)} detail="Qualification still comfortable" />
           <Summary label="At Risk" value={String(data.totals.atRisk)} detail="Little margin remaining" attention={data.totals.atRisk > 0} />
@@ -164,7 +164,7 @@ export function SeasonQualificationPage() {
         <section className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700"><GraduationCap className="h-5 w-5" /></div>
-            <div><h2 className="text-lg font-bold">Qualification Rules</h2><p className="mt-1 text-sm text-slate-500">A qualifying event counts only after all of that athlete&apos;s assigned scorecards for the tournament are finalized.</p></div>
+            <div><h2 className="text-lg font-bold">Qualification Rules</h2><p className="mt-1 text-sm text-slate-500">A qualifying event counts only after all of that participant&apos;s assigned scorecards for the tournament are finalized.</p></div>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-[220px_240px_1fr] lg:items-end">
             <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 text-sm font-semibold"><input type="checkbox" checked={enabled} disabled={locked} onChange={(event) => setEnabled(event.target.checked)} className="h-4 w-4 rounded border-slate-300" />Enable qualification tracking</label>
@@ -179,26 +179,26 @@ export function SeasonQualificationPage() {
         ) : null}
 
         {!data.season.qualification_enabled ? (
-          <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Qualification tracking is currently disabled.</p><p className="mt-1 text-blue-800">You can review participation below, but ClayKeeper will not label athletes Qualified, On Track, At Risk, or Not Qualified until the rule is enabled.</p></div></section>
+          <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-bold">Qualification tracking is currently disabled.</p><p className="mt-1 text-blue-800">You can review participation below, but ClayKeeper will not label participants Qualified, On Track, At Risk, or Not Qualified until the rule is enabled.</p></div></section>
         ) : null}
 
         <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div><h2 className="text-lg font-bold">Athlete Qualification Progress</h2><p className="mt-1 text-sm text-slate-500">Expand an athlete for the event-by-event audit trail.</p></div>
+              <div><h2 className="text-lg font-bold">Participant Qualification Progress</h2><p className="mt-1 text-sm text-slate-500">Expand a participant for the event-by-event audit trail.</p></div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="text-sm font-semibold">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as QualificationStatus | "all")} className={`${inputClass} mt-1 min-w-48`}><option value="all">All statuses</option><option value="qualified">Qualified</option><option value="on_track">On Track</option><option value="at_risk">At Risk</option><option value="not_qualified">Not Qualified</option><option value="tracking_disabled">Tracking Disabled</option></select></label>
-                <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Athlete, team, class…" className={`${inputClass} mt-1 min-w-64`} /></label>
+                <label className="text-sm font-semibold">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Participant, team, class…" className={`${inputClass} mt-1 min-w-64`} /></label>
               </div>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="p-4">Athlete</th><th className="p-4">Team / Class</th><th className="p-4">Status</th><th className="p-4 text-right">Completed</th><th className="p-4">Progress</th><th className="p-4 text-right">Needed</th><th className="w-12 p-4" /></tr></thead>
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="p-4">Participant</th><th className="p-4">Team / Class</th><th className="p-4">Status</th><th className="p-4 text-right">Completed</th><th className="p-4">Progress</th><th className="p-4 text-right">Needed</th><th className="w-12 p-4" /></tr></thead>
               <tbody className="divide-y">{rows.map((row) => <QualificationRow key={row.athleteId} row={row} open={expanded.has(row.athleteId)} toggle={() => toggle(row)} />)}</tbody>
             </table>
           </div>
-          {rows.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No athletes match the current filters.</div> : null}
+          {rows.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">No participants match the current filters.</div> : null}
         </section>
       </div>
     </PageContainer>
@@ -217,7 +217,7 @@ function QualificationRow(props: { row: SeasonQualificationRow; open: boolean; t
       <td className="p-4 text-right"><p className="font-bold">{row.eventsNeeded}</p><p className="text-xs text-slate-500">more event{row.eventsNeeded === 1 ? "" : "s"}</p></td>
       <td className="p-4"><button type="button" onClick={props.toggle} className="rounded-lg border p-2 text-slate-600 hover:bg-slate-50" aria-label={props.open ? "Hide qualification audit" : "Show qualification audit"}>{props.open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button></td>
     </tr>
-    {props.open ? <tr className="bg-slate-50/70"><td colSpan={7} className="p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{row.audits.map((audit) => <div key={audit.eventId} className={`rounded-xl border bg-white p-4 ${audit.state === "complete" ? "border-emerald-200" : audit.state === "incomplete" ? "border-amber-200" : "border-slate-200"}`}><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{audit.eventName}</p><p className="mt-1 text-xs text-slate-500">{formatDate(audit.startDate)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${audit.state === "complete" ? "bg-emerald-100 text-emerald-800" : audit.state === "incomplete" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>{audit.state === "complete" ? "Counts" : audit.state === "incomplete" ? "Incomplete" : "Not Entered"}</span></div>{audit.state === "complete" ? <div className="mt-3 flex items-center gap-2 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />{audit.score}/{audit.targets} · {audit.percentage.toFixed(2)}%</div> : audit.state === "incomplete" ? <div className="mt-3 flex items-center gap-2 text-sm text-amber-800"><CircleAlert className="h-4 w-4" />Finish all assigned scorecards for this event to count.</div> : <p className="mt-3 text-sm text-slate-500">No season contribution recorded for this athlete.</p>}<Link to={`/events/${audit.eventId}/digital-scoring`} className="mt-3 inline-flex text-xs font-bold text-emerald-700 hover:text-emerald-900">Open event scoring →</Link></div>)}</div></td></tr> : null}
+    {props.open ? <tr className="bg-slate-50/70"><td colSpan={7} className="p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{row.audits.map((audit) => <div key={audit.eventId} className={`rounded-xl border bg-white p-4 ${audit.state === "complete" ? "border-emerald-200" : audit.state === "incomplete" ? "border-amber-200" : "border-slate-200"}`}><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{audit.eventName}</p><p className="mt-1 text-xs text-slate-500">{formatDate(audit.startDate)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${audit.state === "complete" ? "bg-emerald-100 text-emerald-800" : audit.state === "incomplete" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>{audit.state === "complete" ? "Counts" : audit.state === "incomplete" ? "Incomplete" : "Not Entered"}</span></div>{audit.state === "complete" ? <div className="mt-3 flex items-center gap-2 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />{audit.score}/{audit.targets} · {audit.percentage.toFixed(2)}%</div> : audit.state === "incomplete" ? <div className="mt-3 flex items-center gap-2 text-sm text-amber-800"><CircleAlert className="h-4 w-4" />Finish all assigned scorecards for this event to count.</div> : <p className="mt-3 text-sm text-slate-500">No season contribution recorded for this participant.</p>}<Link to={`/events/${audit.eventId}/digital-scoring`} className="mt-3 inline-flex text-xs font-bold text-emerald-700 hover:text-emerald-900">Open event scoring →</Link></div>)}</div></td></tr> : null}
   </>
 }
 

@@ -609,7 +609,7 @@ export function SeasonImportPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">ActiveNet registration import</h2>
-                <p className="mt-1 text-sm text-slate-600">Permanent importer for ActiveNet Excel or CSV reports. Participants are matched by name, new athletes are created when needed, and each ActiveNet session becomes a Trap, Skeet, Sporting Clays, or Bunker enrollment.</p>
+                <p className="mt-1 text-sm text-slate-600">Permanent importer for ActiveNet Excel or CSV reports. Participants are matched by name, new participants are created when needed, and each ActiveNet session becomes a Trap, Skeet, Sporting Clays, or Bunker enrollment.</p>
               </div>
               <UsersRound className="h-6 w-6 text-orange-600" />
             </div>

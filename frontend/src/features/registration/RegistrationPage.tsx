@@ -222,7 +222,7 @@ function athleteDisplayName(athlete: AthleteRecord) {
 
   const lastName = athlete.last_name?.trim() || ""
 
-  return `${firstName} ${lastName}`.trim() || "Unnamed athlete"
+  return `${firstName} ${lastName}`.trim() || "Unnamed participant"
 }
 
 const REGISTRATION_PAGE_SIZE = 1000
@@ -955,7 +955,7 @@ export function RegistrationPage() {
     }
 
     if (!selectedEventId) {
-      setErrorMessage("Select an event before registering athletes.")
+      setErrorMessage("Select an event before registering participants.")
       return
     }
 
@@ -970,7 +970,7 @@ export function RegistrationPage() {
     ].filter((value, index, values) => values.indexOf(value) === index)
 
     if (athleteIds.length === 0) {
-      setErrorMessage("Select at least one athlete.")
+      setErrorMessage("Select at least one participant.")
       return
     }
 
@@ -1017,7 +1017,7 @@ export function RegistrationPage() {
             existingRegistration.status !== "registered"
           ) {
             throw new Error(
-              `${athlete ? athleteDisplayName(athlete) : "An athlete"} is not registered and paid for this event.`,
+              `${athlete ? athleteDisplayName(athlete) : "A participant"} is not registered and paid for this event.`,
             )
           }
         } else {
@@ -1034,7 +1034,7 @@ export function RegistrationPage() {
               payment_status: "unpaid",
               amount_paid: 0,
               notes: [
-                "Manually added by coach; athlete must complete registration and payment before official participation.",
+                "Manually added by coach; participant must complete registration and payment before official participation.",
                 form.notes.trim(),
               ]
                 .filter(Boolean)
@@ -1115,8 +1115,8 @@ export function RegistrationPage() {
 
       setSuccessMessage(
         pendingCount > 0
-          ? `${updatedCount} athlete${updatedCount === 1 ? "" : "s"} processed. ${pendingCount} manual athlete${pendingCount === 1 ? "" : "s"} remain pending registration and payment.`
-          : `${updatedCount} paid athlete${updatedCount === 1 ? "" : "s"} added to the selected shoots.`,
+          ? `${updatedCount} participant${updatedCount === 1 ? "" : "s"} processed. ${pendingCount} manual participant${pendingCount === 1 ? "" : "s"} remain pending registration and payment.`
+          : `${updatedCount} paid participant${updatedCount === 1 ? "" : "s"} added to the selected shoots.`,
       )
 
       setForm(initialFormState)
@@ -1161,8 +1161,8 @@ export function RegistrationPage() {
 
       setSuccessMessage(
         newCheckedInStatus
-          ? "Athlete checked in successfully."
-          : "Athlete check-in was removed.",
+          ? "Participant checked in successfully."
+          : "Participant check-in was removed.",
       )
 
       await loadSelectedEventData()
@@ -1337,7 +1337,7 @@ export function RegistrationPage() {
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                Select a team first, then choose paid athletes from that
+                Select a team first, then choose paid participants from that
                 team. Manual additions remain pending until registration and
                 payment are completed.
               </p>
@@ -1365,7 +1365,7 @@ export function RegistrationPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
                       <div>
                         <h3 className="text-sm font-semibold">
-                          Registered and Paid Athletes
+                          Registered and Paid Participants
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Only paid registrations for this event are selectable.
@@ -1421,7 +1421,7 @@ export function RegistrationPage() {
 
                       {eligibleTeamAthletes.length === 0 ? (
                         <p className="p-5 text-center text-sm text-muted-foreground">
-                          No registered and paid athletes from this team are
+                          No registered and paid participants from this team are
                           available for the selected event.
                         </p>
                       ) : null}
@@ -1442,10 +1442,10 @@ export function RegistrationPage() {
                       <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
                       <div className="min-w-0 flex-1">
                         <h3 className="font-semibold text-amber-950">
-                          Add Athlete Manually
+                          Add Participant Manually
                         </h3>
                         <p className="mt-1 text-xs text-amber-800">
-                          Add an athlete who is not yet registered for this event.
+                          Add a participant who is not yet registered for this event.
                           Once checked in, they will be available for squadding.
                         </p>
                         <select
@@ -1458,7 +1458,7 @@ export function RegistrationPage() {
                           }
                           className="mt-3 h-10 w-full rounded-md border border-amber-300 bg-white px-3 text-sm"
                         >
-                          <option value="">Choose an unregistered athlete</option>
+                          <option value="">Choose an unregistered participant</option>
                           {manualAthleteOptions.map((athlete) => (
                             <option key={athlete.id} value={athlete.id}>
                               {athleteDisplayName(athlete)}
@@ -1490,7 +1490,7 @@ export function RegistrationPage() {
                   </h3>
 
                   <p className="text-xs text-muted-foreground">
-                    Select every shoot the athlete is entering.
+                    Select every shoot the participant is entering.
                   </p>
                 </div>
 
@@ -1602,7 +1602,7 @@ export function RegistrationPage() {
                 onChange={(event) => {
                   setSearchText(event.target.value)
                 }}
-                placeholder="Search athlete or registration…"
+                placeholder="Search participant or registration…"
                 className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm"
               />
             </div>
@@ -1762,7 +1762,7 @@ export function RegistrationPage() {
                           <div className="font-medium">
                             {athlete
                               ? athleteDisplayName(athlete)
-                              : "Unknown athlete"}
+                              : "Unknown participant"}
                           </div>
 
                           {athlete?.cyssa_number ? (

@@ -245,7 +245,7 @@ export function DirectorDashboardPage() {
         id: "missing-scorecards",
         severity: "critical",
         title: `${data.scorecardsMissing} scorecards have not been started`,
-        detail: "Assigned athletes are missing scorecard activity while scoring is underway.",
+        detail: "Assigned participants are missing scorecard activity while scoring is underway.",
         href: `/events/${eventId}/digital-scoring`,
         action: "Review scoring",
       })
@@ -267,7 +267,7 @@ export function DirectorDashboardPage() {
         id: "unassigned-enrollments",
         severity: "critical",
         title: `${data.unassignedEnrollments} shoot enrollments are not assigned to squads`,
-        detail: "These athletes cannot progress normally through squad-based tournament operations.",
+        detail: "These participants cannot progress normally through squad-based tournament operations.",
         href: `/events/${eventId}/operations`,
         action: "Review assignments",
       })
@@ -299,7 +299,7 @@ export function DirectorDashboardPage() {
       next.push({
         id: "no-shows",
         severity: "info",
-        title: `${data.noShows} athletes are marked as no-shows`,
+        title: `${data.noShows} participants are marked as no-shows`,
         detail: "Confirm attendance records before finalizing tournament participation totals.",
         href: `/events/${eventId}/check-in`,
         action: "Review check-in",
@@ -372,8 +372,8 @@ export function DirectorDashboardPage() {
     }
     if (data.checkedIn < data.eligibleRegistrations) {
       return {
-        title: "Continue athlete check-in",
-        detail: `${data.eligibleRegistrations - data.checkedIn} eligible athletes have not checked in yet.`,
+        title: "Continue participant check-in",
+        detail: `${data.eligibleRegistrations - data.checkedIn} eligible participants have not checked in yet.`,
         href: `/events/${eventId}/check-in`,
         action: "Open Check-In",
         severity: "info" as AlertSeverity,
@@ -550,12 +550,12 @@ export function DirectorDashboardPage() {
             <ProgressRow
               label="Check-In"
               value={data.checkInPercent}
-              detail={`${data.checkedIn} of ${data.eligibleRegistrations} eligible athletes checked in`}
+              detail={`${data.checkedIn} of ${data.eligibleRegistrations} eligible participants checked in`}
             />
             <ProgressRow
               label="Scoring"
               value={data.scoringCompletionPercent}
-              detail={`${data.scorecardsFinalized} of ${data.assignedMembers} assigned athletes finalized`}
+              detail={`${data.scorecardsFinalized} of ${data.assignedMembers} assigned participants finalized`}
             />
             <ProgressRow
               label="Awards"

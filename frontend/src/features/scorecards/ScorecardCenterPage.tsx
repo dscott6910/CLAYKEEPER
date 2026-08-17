@@ -44,7 +44,7 @@ const STEPS: Array<{ step: WizardStep; label: string }> = [
 function athleteName(
   athlete: ScorecardCenterData["athletes"][number] | undefined,
 ) {
-  if (!athlete) return "Unknown Athlete"
+  if (!athlete) return "Unknown Participant"
   const first =
     athlete.preferred_name?.trim() ||
     athlete.first_name?.trim() ||
@@ -235,7 +235,7 @@ export function ScorecardCenterPage() {
       return
     }
     if (cards.length === 0) {
-      setError("No eligible athletes match the selected print mode.")
+      setError("No eligible participants match the selected print mode.")
       return
     }
 
@@ -519,7 +519,7 @@ function StepShoot(props: {
     <div>
       <h2 className="text-xl font-bold">2. Select Shoot</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Only athletes entered in this shoot will be included.
+        Only participants entered in this shoot will be included.
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {props.shoots.map((shoot) => (
@@ -558,10 +558,10 @@ function StepPrintMode(props: {
   setAthleteFilter: (value: string) => void
 }) {
   const options: Array<{ value: PrintMode; title: string; detail: string }> = [
-    { value: "event", title: "Entire Shoot", detail: "Print every eligible athlete" },
+    { value: "event", title: "Entire Shoot", detail: "Print every eligible participant" },
     { value: "team", title: "One Team", detail: "Print one selected team" },
     { value: "squad", title: "One Squad", detail: "Print one selected squad" },
-    { value: "athlete", title: "One Athlete", detail: "Print or reprint one card" },
+    { value: "athlete", title: "One Participant", detail: "Print or reprint one card" },
   ]
   return (
     <div>
@@ -599,7 +599,7 @@ function StepPrintMode(props: {
         ) : null}
         {props.mode === "athlete" ? (
           <select value={props.athleteFilter} onChange={(e) => props.setAthleteFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
-            <option value="">Select an athlete</option>
+            <option value="">Select a participant</option>
             {props.cards.map((card) => <option key={card.registration.id} value={card.registration.athlete_id}>{card.athleteName} · {card.teamName}</option>)}
           </select>
         ) : null}
@@ -724,7 +724,7 @@ async function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8)
-  pdf.text(`Athlete: ${card.athleteName}`, x + margin, y + 1.08)
+  pdf.text(`Participant: ${card.athleteName}`, x + margin, y + 1.08)
   pdf.text(`Team: ${card.teamName}`, x + margin, y + 1.24)
   pdf.text(
     `Squad: ${card.squadNumber || "—"}   ${card.postLabel || ""}`,

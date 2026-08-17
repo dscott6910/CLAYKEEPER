@@ -376,7 +376,7 @@ export function ScorecardTemplateDesignerPage() {
                     <div>
                       <h3 className="font-black">{form.title_text}</h3>
                       {form.show_event_name ? <p className="text-xs">2026 Sporting Clays Series 3</p> : null}
-                      {form.show_athlete_name ? <p className="mt-2 text-sm font-bold">Athlete: Sample Athlete</p> : null}
+                      {form.show_athlete_name ? <p className="mt-2 text-sm font-bold">Participant: Sample Participant</p> : null}
                       {form.show_team_name ? <p className="text-xs">Team: Sample Team</p> : null}
                     </div>
                     {form.show_qr_code ? (
@@ -433,7 +433,7 @@ const checkboxes: Array<
   ["show_event_date", "Event date"],
   ["show_location", "Location"],
   ["show_host_sponsor", "Host / sponsor"],
-  ["show_athlete_name", "Athlete name"],
+  ["show_athlete_name", "Participant name"],
   ["show_team_name", "Team name"],
   ["show_squad_number", "Squad number"],
   ["show_post_number", "Post number"],

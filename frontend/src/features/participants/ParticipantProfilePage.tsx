@@ -263,7 +263,7 @@ export function ParticipantProfilePage() {
         />
         <PageContainer>
           <div className="py-24 text-center text-slate-500">
-            Loading athlete dashboard…
+            Loading participant dashboard…
           </div>
         </PageContainer>
       </div>
@@ -341,7 +341,7 @@ export function ParticipantProfilePage() {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">
-                  Athlete Dashboard
+                  Participant Dashboard
                 </p>
 
                 <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">

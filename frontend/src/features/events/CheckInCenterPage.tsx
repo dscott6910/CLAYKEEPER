@@ -75,7 +75,7 @@ type RegistrationRow = {
 }
 
 function athleteName(athlete: CheckInData["athletes"][number] | undefined) {
-  if (!athlete) return "Unknown Athlete"
+  if (!athlete) return "Unknown Participant"
   const first =
     athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
   return `${first} ${athlete.last_name?.trim() || ""}`.trim()
@@ -323,7 +323,7 @@ export function CheckInCenterPage() {
           kind: "error",
           title: "Registration Not Found",
           message:
-            "This QR code is not assigned to a registered athlete in this event.",
+            "This QR code is not assigned to a registered participant in this event.",
         })
         return
       }
@@ -355,7 +355,7 @@ export function CheckInCenterPage() {
 
       setScanNotice({
         kind: "success",
-        title: "Athlete Checked In",
+        title: "Participant Checked In",
         message: row.athleteName,
         details: [...detailLines, "Checked in successfully"],
       })
@@ -546,7 +546,7 @@ export function CheckInCenterPage() {
             <table className="w-full min-w-[1050px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="p-4">Athlete</th>
+                  <th className="p-4">Participant</th>
                   <th className="p-4">Team</th>
                   <th className="p-4">Squad / Post</th>
                   <th className="p-4">Payment</th>
@@ -662,7 +662,7 @@ export function CheckInCenterPage() {
 
           {rows.length === 0 ? (
             <div className="p-12 text-center text-sm text-slate-500">
-              No athletes match the selected filters.
+              No participants match the selected filters.
             </div>
           ) : null}
         </section>
@@ -873,7 +873,7 @@ function QrScannerDialog(props: {
           <div>
             <h2 className="text-xl font-bold">Scan Scorecard QR</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Point the camera at the QR code printed on the athlete scorecard.
+              Point the camera at the QR code printed on the participant scorecard.
             </p>
           </div>
           <button
