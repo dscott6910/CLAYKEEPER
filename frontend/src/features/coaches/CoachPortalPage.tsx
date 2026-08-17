@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Bell,
   CheckCircle2,
   ClipboardList,
@@ -863,8 +866,9 @@ export function CoachPortalPage() {
                   </div>
 
                   <TeamTable
-                    rows={[...rows].sort((a, b) => b.total - a.total)}
+                    rows={rows}
                     showScore
+                    defaultSort="score"
                   />
                 </section>
               ) : null}
@@ -1217,10 +1221,48 @@ function Metric({
 function TeamTable({
   rows,
   showScore = false,
+  defaultSort = "participant",
 }: {
   rows: Array<any>
   showScore?: boolean
+  defaultSort?: "participant" | "score"
 }) {
+  type SortKey =
+    | "participant"
+    | "class"
+    | "checkin"
+    | "squad"
+    | "payment"
+    | "score"
+
+  type Filters = {
+    participant: string
+    class: string
+    checkin: string
+    squad: string
+    payment: string
+    score: string
+  }
+
+  const EMPTY_FILTERS: Filters = {
+    participant: "",
+    class: "",
+    checkin: "",
+    squad: "",
+    payment: "",
+    score: "",
+  }
+
+  const [sortKey, setSortKey] = useState<SortKey>(defaultSort)
+  const [sortDirection, setSortDirection] =
+    useState<"asc" | "desc">(defaultSort === "score" ? "desc" : "asc")
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+
+  useEffect(() => {
+    setSortKey(defaultSort)
+    setSortDirection(defaultSort === "score" ? "desc" : "asc")
+  }, [defaultSort])
+
   if (rows.length === 0) {
     return (
       <div className="p-10 text-center text-slate-500">
@@ -1229,69 +1271,324 @@ function TeamTable({
     )
   }
 
+  function participantValue(row: any) {
+    return row.athlete
+      ? athleteName(row.athlete)
+      : "Unknown participant"
+  }
+
+  function classValue(row: any) {
+    return row.classRecord?.code || "—"
+  }
+
+  function checkInValue(row: any) {
+    return row.registration.checked_in ? "Checked in" : "Pending"
+  }
+
+  function squadValue(row: any) {
+    return row.squad
+      ? `Squad ${row.squad.squad_number}${
+          row.squadMember
+            ? ` · ${
+                row.squadMember.position_label ||
+                `Post ${row.squadMember.position}`
+              }`
+            : ""
+        }`
+      : "Unassigned"
+  }
+
+  function paymentValue(row: any) {
+    return (row.registration.payment_status || "unknown").replaceAll("_", " ")
+  }
+
+  function matches(value: unknown, filter: string) {
+    return (
+      !filter.trim() ||
+      String(value ?? "")
+        .toLowerCase()
+        .includes(filter.trim().toLowerCase())
+    )
+  }
+
+  const visibleRows = [...rows]
+    .filter(
+      (row) =>
+        matches(participantValue(row), filters.participant) &&
+        matches(classValue(row), filters.class) &&
+        matches(checkInValue(row), filters.checkin) &&
+        matches(squadValue(row), filters.squad) &&
+        matches(paymentValue(row), filters.payment) &&
+        (!showScore || matches(row.total, filters.score)),
+    )
+    .sort((left, right) => {
+      const valueFor = (row: any): string | number => {
+        if (sortKey === "participant") return participantValue(row)
+        if (sortKey === "class") return classValue(row)
+        if (sortKey === "checkin") return checkInValue(row)
+        if (sortKey === "squad") return squadValue(row)
+        if (sortKey === "payment") return paymentValue(row)
+        return row.total ?? 0
+      }
+
+      const leftValue = valueFor(left)
+      const rightValue = valueFor(right)
+
+      let result: number
+
+      if (
+        typeof leftValue === "number" &&
+        typeof rightValue === "number"
+      ) {
+        result = leftValue - rightValue
+      } else {
+        result = String(leftValue).localeCompare(
+          String(rightValue),
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        )
+      }
+
+      if (result === 0) {
+        result = participantValue(left).localeCompare(
+          participantValue(right),
+          undefined,
+          {
+            sensitivity: "base",
+          },
+        )
+      }
+
+      return sortDirection === "asc" ? result : -result
+    })
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) =>
+        current === "asc" ? "desc" : "asc",
+      )
+      return
+    }
+
+    setSortKey(key)
+    setSortDirection(key === "score" ? "desc" : "asc")
+  }
+
+  function SortHeader({
+    column,
+    label,
+    align = "left",
+  }: {
+    column: SortKey
+    label: string
+    align?: "left" | "right"
+  }) {
+    const Icon =
+      sortKey !== column
+        ? ArrowUpDown
+        : sortDirection === "asc"
+          ? ArrowUp
+          : ArrowDown
+
+    return (
+      <th className={`px-5 pt-3 ${align === "right" ? "text-right" : ""}`}>
+        <button
+          type="button"
+          onClick={() => toggleSort(column)}
+          className={`inline-flex items-center gap-1 font-semibold hover:text-slate-900 ${
+            align === "right" ? "justify-end" : ""
+          }`}
+        >
+          {label}
+          <Icon className="h-3.5 w-3.5" />
+        </button>
+      </th>
+    )
+  }
+
+  function FilterCell({
+    value,
+    onChange,
+    placeholder,
+    align = "left",
+  }: {
+    value: string
+    onChange: (value: string) => void
+    placeholder: string
+    align?: "left" | "right"
+  }) {
+    return (
+      <th className="px-5 py-2">
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={`h-8 w-full min-w-20 rounded-md border border-slate-200 bg-white px-2 text-xs font-normal normal-case tracking-normal text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 ${
+            align === "right" ? "text-right" : ""
+          }`}
+        />
+      </th>
+    )
+  }
+
+  const filtersActive = Object.values(filters).some(Boolean)
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="w-full min-w-[900px] text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
-            <th className="px-5 py-3">Participant</th>
-            <th className="px-5 py-3">Class</th>
-            <th className="px-5 py-3">Check-in</th>
-            <th className="px-5 py-3">Squad / Post</th>
-            <th className="px-5 py-3">Payment</th>
+            <SortHeader column="participant" label="Participant" />
+            <SortHeader column="class" label="Class" />
+            <SortHeader column="checkin" label="Check-in" />
+            <SortHeader column="squad" label="Squad / Post" />
+            <SortHeader column="payment" label="Payment" />
 
             {showScore ? (
-              <th className="px-5 py-3 text-right">Score</th>
+              <SortHeader column="score" label="Score" align="right" />
+            ) : null}
+          </tr>
+
+          <tr className="border-t border-slate-200 bg-white normal-case tracking-normal print:hidden">
+            <FilterCell
+              value={filters.participant}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  participant: value,
+                }))
+              }
+              placeholder="Filter participant…"
+            />
+
+            <FilterCell
+              value={filters.class}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  class: value,
+                }))
+              }
+              placeholder="Filter class…"
+            />
+
+            <FilterCell
+              value={filters.checkin}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  checkin: value,
+                }))
+              }
+              placeholder="Filter check-in…"
+            />
+
+            <FilterCell
+              value={filters.squad}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  squad: value,
+                }))
+              }
+              placeholder="Filter squad/post…"
+            />
+
+            <FilterCell
+              value={filters.payment}
+              onChange={(value) =>
+                setFilters((current) => ({
+                  ...current,
+                  payment: value,
+                }))
+              }
+              placeholder="Filter payment…"
+            />
+
+            {showScore ? (
+              <FilterCell
+                value={filters.score}
+                onChange={(value) =>
+                  setFilters((current) => ({
+                    ...current,
+                    score: value,
+                  }))
+                }
+                placeholder="Filter score…"
+                align="right"
+              />
             ) : null}
           </tr>
         </thead>
 
         <tbody className="divide-y">
-          {rows.map((row) => (
-            <tr key={row.registration.id}>
-              <td className="px-5 py-4 font-semibold">
-                {row.athlete
-                  ? athleteName(row.athlete)
-                  : "Unknown participant"}
+          {visibleRows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={showScore ? 6 : 5}
+                className="px-5 py-8 text-center text-slate-500"
+              >
+                No matching participants.
+                {filtersActive ? (
+                  <button
+                    type="button"
+                    onClick={() => setFilters(EMPTY_FILTERS)}
+                    className="ml-2 font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
               </td>
-
-              <td className="px-5 py-4">
-                {row.classRecord?.code || "—"}
-              </td>
-
-              <td className="px-5 py-4">
-                {row.registration.checked_in ? "Checked in" : "Pending"}
-              </td>
-
-              <td className="px-5 py-4">
-                {row.squad
-                  ? `Squad ${row.squad.squad_number}${
-                      row.squadMember
-                        ? ` · ${
-                            row.squadMember.position_label ||
-                            `Post ${row.squadMember.position}`
-                          }`
-                        : ""
-                    }`
-                  : "Unassigned"}
-              </td>
-
-              <td className="px-5 py-4 capitalize">
-                {(row.registration.payment_status || "unknown").replaceAll(
-                  "_",
-                  " ",
-                )}
-              </td>
-
-              {showScore ? (
-                <td className="px-5 py-4 text-right text-lg font-bold">
-                  {row.total}
-                </td>
-              ) : null}
             </tr>
-          ))}
+          ) : (
+            visibleRows.map((row) => (
+              <tr key={row.registration.id}>
+                <td className="px-5 py-4 font-semibold">
+                  {participantValue(row)}
+                </td>
+
+                <td className="px-5 py-4">
+                  {classValue(row)}
+                </td>
+
+                <td className="px-5 py-4">
+                  {checkInValue(row)}
+                </td>
+
+                <td className="px-5 py-4">
+                  {squadValue(row)}
+                </td>
+
+                <td className="px-5 py-4 capitalize">
+                  {paymentValue(row)}
+                </td>
+
+                {showScore ? (
+                  <td className="px-5 py-4 text-right text-lg font-bold">
+                    {row.total}
+                  </td>
+                ) : null}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
+
+      {filtersActive && visibleRows.length > 0 ? (
+        <div className="border-t bg-slate-50 px-5 py-2 text-right print:hidden">
+          <button
+            type="button"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-900"
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
