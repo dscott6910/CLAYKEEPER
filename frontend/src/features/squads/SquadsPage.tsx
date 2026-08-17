@@ -82,6 +82,7 @@ export function SquadsPage() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState("")
+  const [squadSearch, setSquadSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [loadingShoot, setLoadingShoot] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -117,15 +118,30 @@ export function SquadsPage() {
     }
   }, [athleteById, classById, registrationById, teamById])
 
+  const allUnassigned = useMemo(
+    () => enrollments.filter((row) => !memberByEnrollmentId.has(row.id)),
+    [enrollments, memberByEnrollmentId],
+  )
+
   const unassigned = useMemo(() => {
     const query = search.trim().toLowerCase()
-    return enrollments.filter((row) => !memberByEnrollmentId.has(row.id)).filter((row) => {
-      if (!query) return true
+    if (!query) return allUnassigned
+
+    return allUnassigned.filter((row) => {
       const participant = participantForEnrollment(row)
-      return [participant.name, participant.team, participant.competitionClass, participant.athlete?.cyssa_number, participant.registration?.registration_number]
-        .filter(Boolean).join(" ").toLowerCase().includes(query)
+      return [
+        participant.name,
+        participant.team,
+        participant.competitionClass,
+        participant.athlete?.cyssa_number,
+        participant.registration?.registration_number,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
     })
-  }, [enrollments, memberByEnrollmentId, participantForEnrollment, search])
+  }, [allUnassigned, participantForEnrollment, search])
 
   const membersBySquad = useMemo(() => {
     const map = new Map<string, SquadMemberRecord[]>()
@@ -138,6 +154,58 @@ export function SquadsPage() {
     for (const rows of map.values()) rows.sort((a, b) => a.position - b.position)
     return map
   }, [members])
+
+  const visibleSquads = useMemo(() => {
+    const query = squadSearch.trim().toLowerCase()
+    if (!query) return squads
+
+    return squads.filter((squad) => {
+      const squadMembers = membersBySquad.get(squad.id) ?? []
+
+      const participantText = squadMembers
+        .map((member) => {
+          const enrollment = enrollmentById.get(member.registration_shoot_id)
+          if (!enrollment) return ""
+
+          const participant = participantForEnrollment(enrollment)
+
+          return [
+            participant.name,
+            participant.team,
+            participant.competitionClass,
+            participant.athlete?.cyssa_number,
+            participant.registration?.registration_number,
+            member.position,
+            member.position_label,
+          ]
+            .filter((value) => value !== null && value !== undefined)
+            .join(" ")
+        })
+        .join(" ")
+
+      return [
+        squad.squad_number,
+        squad.name,
+        squad.house_number,
+        squad.course_name,
+        squad.station_name,
+        squad.flight_name,
+        squad.start_time,
+        squad.is_locked ? "locked" : "unlocked",
+        participantText,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    })
+  }, [
+    squads,
+    squadSearch,
+    membersBySquad,
+    enrollmentById,
+    participantForEnrollment,
+  ])
 
   const loadBase = useCallback(async () => {
     setLoading(true); setError("")
@@ -207,7 +275,7 @@ export function SquadsPage() {
   }
 
   async function autoGenerate() {
-    if (!selectedShoot || unassigned.length === 0) return
+    if (!selectedShoot || allUnassigned.length === 0) return
     await runAction(async () => {
       const capacity = selectedShoot.squad_size || 5
       const currentSquads = [...squads].filter((squad) => !squad.is_locked)
@@ -220,7 +288,7 @@ export function SquadsPage() {
       }
 
       let nextNumber = squads.length + 1
-      for (const enrollment of unassigned) {
+      for (const enrollment of allUnassigned) {
         let target = currentSquads.find((squad) => (occupiedBySquad.get(squad.id)?.size ?? 0) < squad.capacity)
         if (!target) {
           const squadNumber = String(nextNumber++)
@@ -345,7 +413,7 @@ export function SquadsPage() {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div><h3 className="text-xl font-semibold">{selectedShoot.name}</h3><p className="text-sm text-slate-500">{label(selectedShoot.discipline)} · Standard squad size {selectedShoot.squad_size || 5}</p></div>
-              <div className="flex gap-2"><Button variant="outline" onClick={() => setShowForm((value) => !value)}><Plus className="h-4 w-4" />New Squad</Button><Button onClick={() => void autoGenerate()} disabled={busy || unassigned.length === 0}><Sparkles className="h-4 w-4" />Auto Squad {unassigned.length}</Button></div>
+              <div className="flex gap-2"><Button variant="outline" onClick={() => setShowForm((value) => !value)}><Plus className="h-4 w-4" />New Squad</Button><Button onClick={() => void autoGenerate()} disabled={busy || allUnassigned.length === 0}><Sparkles className="h-4 w-4" />Auto Squad {allUnassigned.length}</Button></div>
             </div>
 
             {showForm ? <section className="rounded-2xl border bg-white p-5 shadow-sm"><h4 className="mb-4 font-semibold">Create squad</h4><div className="grid gap-4 md:grid-cols-5">
@@ -358,13 +426,35 @@ export function SquadsPage() {
 
             <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
               <aside className="rounded-2xl border bg-white shadow-sm">
-                <div className="border-b p-4"><h4 className="font-semibold">Unassigned participants</h4><div className="relative mt-3"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm" placeholder="Search name, team, class..." value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
+                <div className="border-b p-4"><h4 className="font-semibold">Unassigned participants</h4><div className="relative mt-3"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm" placeholder="Search participant, team, class, number..." value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
                 <div className="max-h-[720px] space-y-2 overflow-y-auto p-3">{unassigned.map((enrollment) => { const participant = participantForEnrollment(enrollment); return <div key={enrollment.id} className="rounded-xl border p-3"><p className="font-medium">{participant.name}</p><p className="text-xs text-slate-500">{participant.team} · {participant.competitionClass}</p><select className="mt-3 w-full rounded-lg border px-2 py-1.5 text-sm" defaultValue="" onChange={(e) => { const squad = squads.find((row) => row.id === e.target.value); if (squad) void assignToSquad(enrollment, squad); e.currentTarget.value = "" }} disabled={busy || squads.length === 0}><option value="">Assign to squad...</option>{squads.filter((squad) => !squad.is_locked && (membersBySquad.get(squad.id)?.length ?? 0) < squad.capacity).map((squad) => <option key={squad.id} value={squad.id}>{squad.name || `Squad ${squad.squad_number}`}</option>)}</select></div> })}{unassigned.length === 0 ? <p className="p-6 text-center text-sm text-slate-500">Everyone is assigned.</p> : null}</div>
               </aside>
 
-              <main className="grid content-start gap-4 md:grid-cols-2 2xl:grid-cols-3">{squads.map((squad) => { const squadMembers = membersBySquad.get(squad.id) ?? []; const full = squadMembers.length >= squad.capacity; return <article key={squad.id} className="overflow-hidden rounded-2xl border bg-white shadow-sm"><header className="flex items-start justify-between border-b p-4"><div><div className="flex items-center gap-2"><h4 className="font-semibold">{squad.name || `Squad ${squad.squad_number}`}</h4>{squad.is_locked ? <Lock className="h-4 w-4 text-amber-600" /> : null}</div><p className="text-xs text-slate-500">{squad.course_name ? `Course ${squad.course_name}` : squad.house_number ? `House ${squad.house_number}` : "Assignment not set"}{squad.start_time ? ` · ${squad.start_time.slice(0, 5)}` : ""}</p></div><span className={`rounded-full px-2 py-1 text-xs font-medium ${full ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{squadMembers.length}/{squad.capacity}</span></header>
+              <div className="space-y-4">
+                <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="font-semibold">Find squads and assigned participants</h4>
+                      <p className="text-xs text-slate-500">
+                        Search without changing squad or post order.
+                      </p>
+                    </div>
+                    <div className="relative w-full sm:max-w-md">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input
+                        className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"
+                        placeholder="Search squad, participant, team, class..."
+                        value={squadSearch}
+                        onChange={(e) => setSquadSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <main className="grid content-start gap-4 md:grid-cols-2 2xl:grid-cols-3">{visibleSquads.map((squad) => { const squadMembers = membersBySquad.get(squad.id) ?? []; const full = squadMembers.length >= squad.capacity; return <article key={squad.id} className="overflow-hidden rounded-2xl border bg-white shadow-sm"><header className="flex items-start justify-between border-b p-4"><div><div className="flex items-center gap-2"><h4 className="font-semibold">{squad.name || `Squad ${squad.squad_number}`}</h4>{squad.is_locked ? <Lock className="h-4 w-4 text-amber-600" /> : null}</div><p className="text-xs text-slate-500">{squad.course_name ? `Course ${squad.course_name}` : squad.house_number ? `House ${squad.house_number}` : "Assignment not set"}{squad.start_time ? ` · ${squad.start_time.slice(0, 5)}` : ""}</p></div><span className={`rounded-full px-2 py-1 text-xs font-medium ${full ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{squadMembers.length}/{squad.capacity}</span></header>
                 <div className="space-y-2 p-3">{Array.from({ length: squad.capacity }, (_, index) => index + 1).map((position) => { const member = squadMembers.find((row) => row.position === position); const enrollment = member ? enrollmentById.get(member.registration_shoot_id) : undefined; const participant = enrollment ? participantForEnrollment(enrollment) : null; return <div key={position} className="flex min-h-16 items-center gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm font-semibold shadow-sm">{position}</div>{member && participant ? <><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{participant.name}</p><p className="truncate text-xs text-slate-500">{participant.team} · {participant.competitionClass}</p></div><div className="flex flex-col gap-1"><button type="button" title="Move up one post" className="rounded border bg-white p-1 text-slate-500 hover:text-slate-950 disabled:opacity-30" disabled={busy || squad.is_locked || member.position <= 1} onClick={() => void moveWithinSquad(member, squad, -1)}><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" title="Move down one post" className="rounded border bg-white p-1 text-slate-500 hover:text-slate-950 disabled:opacity-30" disabled={busy || squad.is_locked || member.position >= squad.capacity} onClick={() => void moveWithinSquad(member, squad, 1)}><ArrowDown className="h-3.5 w-3.5" /></button></div><select className="w-9 rounded border bg-white py-1 text-xs" value={member.squad_id} title="Move participant" disabled={busy || squad.is_locked} onChange={(e) => { const destination = squads.find((row) => row.id === e.target.value); if (!destination) return; const taken = new Set((membersBySquad.get(destination.id) ?? []).map((row) => row.position)); const next = Array.from({ length: destination.capacity }, (_, i) => i + 1).find((value) => !taken.has(value)); if (next) void runAction(() => moveMember(member.id, destination.id, next, positionLabel(selectedShoot.discipline, next)), "Participant moved.") }}><option value={squad.id}>↔</option>{squads.filter((row) => row.id !== squad.id && !row.is_locked && (membersBySquad.get(row.id)?.length ?? 0) < row.capacity).map((row) => <option key={row.id} value={row.id}>{row.squad_number}</option>)}</select><button className="text-slate-400 hover:text-red-600 disabled:opacity-40" disabled={busy || squad.is_locked} onClick={() => void runAction(() => removeMember(member.id), "Participant returned to unassigned.")}><Trash2 className="h-4 w-4" /></button></> : <p className="text-sm text-slate-400">Open {positionLabel(selectedShoot.discipline, position).toLowerCase()}</p>}</div> })}</div>
-                <footer className="flex items-center justify-between border-t bg-slate-50 px-3 py-2"><Button size="sm" variant="ghost" onClick={() => void runAction(() => updateSquad(squad.id, { is_locked: !squad.is_locked }), squad.is_locked ? "Squad unlocked." : "Squad locked.")} disabled={busy}>{squad.is_locked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}{squad.is_locked ? "Unlock" : "Lock"}</Button><Button size="sm" variant="ghost" className="text-red-600" disabled={busy || squad.is_locked || squadMembers.length > 0} onClick={() => void runAction(() => deleteSquad(squad.id), "Empty squad deleted.")}><Trash2 className="h-4 w-4" />Delete</Button></footer></article> })}{squads.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed bg-white p-12 text-center"><Target className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h4 className="font-semibold">No squads yet</h4><p className="mt-1 text-sm text-slate-500">Create one manually or automatically place all registered participants.</p></div> : null}</main>
+                <footer className="flex items-center justify-between border-t bg-slate-50 px-3 py-2"><Button size="sm" variant="ghost" onClick={() => void runAction(() => updateSquad(squad.id, { is_locked: !squad.is_locked }), squad.is_locked ? "Squad unlocked." : "Squad locked.")} disabled={busy}>{squad.is_locked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}{squad.is_locked ? "Unlock" : "Lock"}</Button><Button size="sm" variant="ghost" className="text-red-600" disabled={busy || squad.is_locked || squadMembers.length > 0} onClick={() => void runAction(() => deleteSquad(squad.id), "Empty squad deleted.")}><Trash2 className="h-4 w-4" />Delete</Button></footer></article> })}{squads.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed bg-white p-12 text-center"><Target className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h4 className="font-semibold">No squads yet</h4><p className="mt-1 text-sm text-slate-500">Create one manually or automatically place all registered participants.</p></div> : visibleSquads.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed bg-white p-12 text-center"><Search className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h4 className="font-semibold">No matching squads</h4><p className="mt-1 text-sm text-slate-500">Try another squad, participant, team, class, or number.</p></div> : null}</main>
+              </div>
             </div>
           </>
         )}
