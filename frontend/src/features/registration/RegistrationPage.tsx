@@ -251,6 +251,22 @@ export function RegistrationPage() {
     useState<RegistrationFormState>(initialFormState)
 
   const [searchText, setSearchText] = useState("")
+  const [registrationSort, setRegistrationSort] = useState<{
+    key: "registration" | "athlete" | "team" | "shoots" | "fees" | "payment" | "checkin"
+    direction: "asc" | "desc"
+  }>({
+    key: "registration",
+    direction: "asc",
+  })
+  const [registrationFilters, setRegistrationFilters] = useState({
+    registration: "",
+    athlete: "",
+    team: "",
+    shoots: "",
+    fees: "",
+    payment: "",
+    checkin: "",
+  })
   const [showRegistrationForm, setShowRegistrationForm] =
     useState(false)
 
@@ -384,49 +400,184 @@ export function RegistrationPage() {
   const filteredRegistrations = useMemo(() => {
     const searchValue = searchText.trim().toLowerCase()
 
-    if (!searchValue) {
-      return registrations
-    }
-
-    return registrations.filter((registration) => {
+    function rowValues(registration: RegistrationRecord) {
       const athlete = athleteById.get(registration.athlete_id)
       const athleteName = athlete
-        ? athleteDisplayName(athlete).toLowerCase()
+        ? athleteDisplayName(athlete)
         : ""
 
-      const membershipNumber = [
+      const participantNumbers = [
         athlete?.cyssa_number,
         athlete?.ata_number,
         athlete?.nssa_number,
       ]
         .filter(Boolean)
         .join(" ")
+
+      const team = registration.team_id
+        ? teamById.get(registration.team_id)
+        : null
+
+      const competitionClass = registration.class_id
+        ? classById.get(registration.class_id)
+        : null
+
+      const shootRows =
+        registrationShootsByRegistrationId.get(registration.id) ?? []
+
+      const shootNames = shootRows
+        .map((row) => shootById.get(row.shoot_id)?.name ?? "")
+        .filter(Boolean)
+        .join(" ")
+
+      const registrationTotal =
+        Number(registration.registration_fee ?? 0) -
+        Number(registration.discount_amount ?? 0)
+
+      const shootTotal = shootRows.reduce((total, row) => {
+        const calculatedTotal =
+          Number(row.entry_fee ?? 0) +
+          Number(row.organization_fee ?? 0) +
+          Number(row.fee_adjustment ?? 0)
+
+        return total + Number(row.total_fee ?? calculatedTotal)
+      }, 0)
+
+      const feeTotal = registrationTotal + shootTotal
+
+      return {
+        registration:
+          registration.registration_number ?? "Pending Number",
+        athlete: athleteName,
+        participantNumbers,
+        team: [
+          team?.name ?? "No team",
+          competitionClass?.code ?? "",
+          competitionClass?.display_name ?? "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        shoots: shootNames || "No shoots",
+        fees: feeTotal,
+        payment: [
+          registration.payment_status ?? "",
+          `Paid ${registration.amount_paid ?? 0}`,
+        ].join(" "),
+        checkin: registration.checked_in ? "Checked In" : "Not Checked In",
+      }
+    }
+
+    const filtered = registrations.filter((registration) => {
+      const values = rowValues(registration)
+
+      const searchable = [
+        values.registration,
+        values.athlete,
+        values.participantNumbers,
+        values.team,
+        values.shoots,
+        String(values.fees),
+        values.payment,
+        values.checkin,
+      ]
+        .join(" ")
         .toLowerCase()
 
-      const registrationNumber =
-        registration.registration_number?.toLowerCase() ?? ""
+      if (searchValue && !searchable.includes(searchValue)) {
+        return false
+      }
 
-      const paymentStatus =
-        registration.payment_status?.toLowerCase() ?? ""
+      const filterValues = {
+        registration: values.registration,
+        athlete: `${values.athlete} ${values.participantNumbers}`,
+        team: values.team,
+        shoots: values.shoots,
+        fees: String(values.fees),
+        payment: values.payment,
+        checkin: values.checkin,
+      }
 
-      const teamName = registration.team_id
-        ? teamById.get(registration.team_id)?.name.toLowerCase() ?? ""
-        : ""
+      return Object.entries(registrationFilters).every(([key, value]) => {
+        const query = value.trim().toLowerCase()
+        if (!query) return true
 
-      return (
-        athleteName.includes(searchValue) ||
-        membershipNumber.includes(searchValue) ||
-        registrationNumber.includes(searchValue) ||
-        paymentStatus.includes(searchValue) ||
-        teamName.includes(searchValue)
-      )
+        return filterValues[
+          key as keyof typeof filterValues
+        ].toLowerCase().includes(query)
+      })
+    })
+
+    return filtered.sort((a, b) => {
+      const aValues = rowValues(a)
+      const bValues = rowValues(b)
+
+      let comparison = 0
+
+      if (registrationSort.key === "fees") {
+        comparison = aValues.fees - bValues.fees
+      } else if (registrationSort.key === "checkin") {
+        comparison =
+          Number(Boolean(a.checked_in)) -
+          Number(Boolean(b.checked_in))
+      } else {
+        const aValue = aValues[registrationSort.key]
+        const bValue = bValues[registrationSort.key]
+
+        comparison = String(aValue).localeCompare(
+          String(bValue),
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        )
+      }
+
+      if (comparison === 0) {
+        comparison = aValues.athlete.localeCompare(
+          bValues.athlete,
+          undefined,
+          {
+            sensitivity: "base",
+          },
+        )
+      }
+
+      return registrationSort.direction === "asc"
+        ? comparison
+        : -comparison
     })
   }, [
     athleteById,
+    classById,
+    registrationFilters,
     registrations,
+    registrationShootsByRegistrationId,
+    registrationSort,
     searchText,
+    shootById,
     teamById,
   ])
+
+  function sortRegistrationTable(
+    key: typeof registrationSort.key,
+  ) {
+    setRegistrationSort((current) => ({
+      key,
+      direction:
+        current.key === key && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+
+  function registrationSortLabel(
+    key: typeof registrationSort.key,
+  ) {
+    if (registrationSort.key !== key) return ""
+
+    return registrationSort.direction === "asc" ? " ▲" : " ▼"
+  }
 
   const paidCount = useMemo(() => {
     return registrations.filter((registration) => {
@@ -1224,8 +1375,8 @@ export function RegistrationPage() {
                               </span>
                               <span className="block text-xs text-muted-foreground">
                                 {athlete.cyssa_number
-                                  ? `CYSSA ${athlete.cyssa_number}`
-                                  : "No CYSSA number"}
+                                  ? `Participant # ${athlete.cyssa_number}`
+                                  : "No participant number"}
                               </span>
                             </span>
                             <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
@@ -1453,27 +1604,52 @@ export function RegistrationPage() {
               <table className="w-full min-w-[950px] text-left text-sm">
                 <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-5 py-3 font-medium">
-                      Registration
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Athlete
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Team / Class
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Shoots
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Fees
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Payment
-                    </th>
-                    <th className="px-5 py-3 font-medium">
-                      Check-In
-                    </th>
+                    {([
+                      ["registration", "Registration"],
+                      ["athlete", "Participant"],
+                      ["team", "Team / Class"],
+                      ["shoots", "Shoots"],
+                      ["fees", "Fees"],
+                      ["payment", "Payment"],
+                      ["checkin", "Check-In"],
+                    ] as const).map(([key, label]) => (
+                      <th key={key} className="px-5 py-3 font-medium">
+                        <button
+                          type="button"
+                          className="whitespace-nowrap text-left hover:text-foreground"
+                          onClick={() => sortRegistrationTable(key)}
+                        >
+                          {label}
+                          {registrationSortLabel(key)}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+
+                  <tr className="border-t bg-background normal-case tracking-normal">
+                    {([
+                      ["registration", "Filter registration"],
+                      ["athlete", "Filter participant"],
+                      ["team", "Filter team / class"],
+                      ["shoots", "Filter shoots"],
+                      ["fees", "Filter fees"],
+                      ["payment", "Filter payment"],
+                      ["checkin", "Filter check-in"],
+                    ] as const).map(([key, placeholder]) => (
+                      <th key={key} className="px-3 py-2">
+                        <input
+                          value={registrationFilters[key]}
+                          onChange={(event) =>
+                            setRegistrationFilters((current) => ({
+                              ...current,
+                              [key]: event.target.value,
+                            }))
+                          }
+                          placeholder={placeholder}
+                          className="w-full min-w-24 rounded-md border bg-background px-2 py-1.5 text-xs font-normal text-foreground"
+                        />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
@@ -1558,7 +1734,7 @@ export function RegistrationPage() {
 
                           {athlete?.cyssa_number ? (
                             <div className="text-xs text-muted-foreground">
-                              CYSSA {athlete.cyssa_number}
+                              Participant # {athlete.cyssa_number}
                             </div>
                           ) : null}
                         </td>
