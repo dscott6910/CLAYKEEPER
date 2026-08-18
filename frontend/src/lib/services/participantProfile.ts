@@ -9,6 +9,7 @@ export type ParticipantProfile = {
     preferred_name: string | null
     class_id: string | null
     graduation_year: number | null
+    participant_number: string
     cyssa_number: string | null
     ata_number: string | null
     nssa_number: string | null
@@ -109,7 +110,7 @@ export async function loadParticipantProfile(
       supabase
         .from("athletes")
         .select(
-          "id, first_name, last_name, preferred_name, class_id, graduation_year, cyssa_number, ata_number, nssa_number, email, phone, emergency_contact_name, emergency_contact_phone, notes, active",
+          "id, first_name, last_name, preferred_name, class_id, graduation_year, participant_number, cyssa_number, ata_number, nssa_number, email, phone, emergency_contact_name, emergency_contact_phone, notes, active",
         )
         .eq("organization_id", organizationId)
         .eq("id", athleteId)

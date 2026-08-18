@@ -385,13 +385,8 @@ export function ParticipantProfilePage() {
 
               <div className="grid gap-2 text-sm lg:text-right">
                 <p>
-                  Participant #: <strong>{athlete.cyssa_number || "—"}</strong>
-                </p>
-                <p>
-                  ATA: <strong>{athlete.ata_number || "—"}</strong>
-                </p>
-                <p>
-                  NSSA: <strong>{athlete.nssa_number || "—"}</strong>
+                  Participant Number:{" "}
+                  <strong>{athlete.participant_number}</strong>
                 </p>
               </div>
             </div>

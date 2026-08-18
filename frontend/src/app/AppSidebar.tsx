@@ -51,12 +51,18 @@ export function AppSidebar({
   const visibleSections = navigationSections
     .map((section) => ({
       ...section,
-      items: section.items.filter(
-        (item) =>
-          organizationLoading ||
+      items: section.items.filter((item) => {
+        if (organizationLoading) return true
+
+        if (role === "member") {
+          return item.memberVisible === true
+        }
+
+        return (
           !item.capability ||
-          hasCapability(role, item.capability),
-      ),
+          hasCapability(role, item.capability)
+        )
+      }),
     }))
     .filter((section) => section.items.length > 0)
 

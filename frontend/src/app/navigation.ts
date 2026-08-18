@@ -19,6 +19,7 @@ import {
   Trophy,
   Tv,
   Users,
+  UserRound,
   Globe2,
   Smartphone,
   CreditCard,
@@ -30,6 +31,7 @@ export type NavigationItem = {
   path: string
   icon: LucideIcon
   capability?: OrganizationCapability
+  memberVisible?: boolean
 }
 
 export type NavigationSection = {
@@ -44,6 +46,13 @@ export const navigationSections: NavigationSection[] = [
         label: "Dashboard",
         path: "/",
         icon: LayoutDashboard,
+        memberVisible: false,
+      },
+      {
+        label: "My Profile",
+        path: "/my-profile",
+        icon: UserRound,
+        memberVisible: true,
       },
     ],
   },

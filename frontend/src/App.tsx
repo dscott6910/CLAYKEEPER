@@ -13,6 +13,8 @@ const ParticipantSignupPage = lazy(() =>
 )
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
+import { OrganizationHomeRoute } from "@/features/auth/OrganizationHomeRoute"
+import { NonMemberRoute } from "@/features/auth/NonMemberRoute"
 import { OrganizationProvider } from "@/features/organization/OrganizationProvider"
 
 const DashboardPage = lazy(() =>
@@ -50,6 +52,14 @@ const ParticipantProfilePage = lazy(() =>
   import("@/features/participants/ParticipantProfilePage").then(
     (module) => ({
       default: module.ParticipantProfilePage,
+    }),
+  ),
+)
+
+const ParticipantHomePage = lazy(() =>
+  import("@/features/participants/ParticipantHomePage").then(
+    (module) => ({
+      default: module.ParticipantHomePage,
     }),
   ),
 )
@@ -343,17 +353,30 @@ function App() {
                 <Route
                   index
                   element={
-                    <LazyRoute>
-                      <DashboardPage />
-                    </LazyRoute>
+                    <OrganizationHomeRoute>
+                      <LazyRoute>
+                        <DashboardPage />
+                      </LazyRoute>
+                    </OrganizationHomeRoute>
                   }
                 />
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="participants"
                   element={
                     <LazyRoute>
                       <ParticipantsPage />
+                    </LazyRoute>
+                  }
+                />
+                </Route>
+
+                <Route
+                  path="my-profile"
+                  element={
+                    <LazyRoute>
+                      <ParticipantHomePage />
                     </LazyRoute>
                   }
                 />
@@ -402,7 +425,8 @@ function App() {
                   />
                 </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId"
                   element={
                     <LazyRoute>
@@ -410,6 +434,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="operateEvents" />}>
                   <Route
@@ -488,7 +513,8 @@ function App() {
                   />
                 </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId/leaderboard"
                   element={
                     <LazyRoute>
@@ -496,6 +522,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="score" />}>
                   <Route
@@ -508,7 +535,8 @@ function App() {
                 />
                 </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId/shoots"
                   element={
                     <LazyRoute>
@@ -516,8 +544,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId/participants"
                   element={
                     <LazyRoute>
@@ -525,6 +555,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="manageRegistration" />}>
                   <Route
@@ -568,7 +599,8 @@ function App() {
                    }
                 />
                 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId/reports"
                   element={
                     <LazyRoute>
@@ -576,8 +608,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="reports"
                   element={
                     <LazyRoute>
@@ -585,8 +619,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="analytics"
                   element={
                     <LazyRoute>
@@ -594,8 +630,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="events/:eventId/awards"
                   element={
                     <LazyRoute>
@@ -603,8 +641,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="awards"
                   element={
                     <LazyRoute>
@@ -612,6 +652,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="managePayments" />}>
                   <Route
@@ -635,7 +676,8 @@ function App() {
                   />
                 </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="leaderboard"
                   element={
                     <LazyRoute>
@@ -643,6 +685,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="operateEvents" />}>
                   <Route
@@ -677,7 +720,8 @@ function App() {
                   />
                 </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="seasons/:seasonId/standings"
                   element={
                     <LazyRoute>
@@ -685,8 +729,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="seasons/:seasonId/qualification"
                   element={
                     <LazyRoute>
@@ -694,8 +740,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="seasons/:seasonId/teams"
                   element={
                     <LazyRoute>
@@ -703,8 +751,10 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
-                <Route
+                <Route element={<NonMemberRoute />}>
+                  <Route
                   path="seasons/:seasonId/finals"
                   element={
                     <LazyRoute>
@@ -712,6 +762,7 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="manageImports" />}>
                   <Route
