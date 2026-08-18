@@ -26,6 +26,8 @@ type WizardStep = 1 | 2 | 3 | 4 | 5
 
 type PrintableCard = {
   registration: ScorecardRegistration
+  memberId: string
+  shootId: string
   athleteName: string
   teamName: string
   squadNumber: string
@@ -139,10 +141,14 @@ export function ScorecardCenterPage() {
         const registration = registrationMap.get(enrollment.registration_id)
         if (!registration) return null
         const member = memberByEnrollment.get(enrollment.id)
-        const squad = member ? squadMap.get(member.squad_id) : undefined
+        if (!member) return null
+
+        const squad = squadMap.get(member.squad_id)
 
         return {
           registration,
+          memberId: member.id,
+          shootId: selectedShootId,
           athleteName: athleteName(athleteMap.get(registration.athlete_id)),
           teamName: registration.team_id
             ? teamMap.get(registration.team_id)?.name ?? "Unassigned"
@@ -677,7 +683,7 @@ async function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(10)
-  pdf.text("CYSSA SCORECARD", x + margin, y + 0.28)
+  pdf.text("CLAYKEEPER SCORECARD", x + margin, y + 0.28)
 
   pdf.setFontSize(7)
   pdf.setFont("helvetica", "normal")
@@ -704,23 +710,33 @@ async function drawScorecard(
     y + 0.88,
   )
 
-  const qrPayload = JSON.stringify({
-    v: 1,
-    organizationId: data.event.organization_id,
-    eventId: data.event.id,
-    courseId: course.id,
-    registrationId: card.registration.id,
-    athleteId: card.registration.athlete_id,
-    squad: card.squadNumber || null,
-    post: card.postLabel || null,
-    generatedAt: new Date().toISOString(),
-  })
-  const qr = await QRCode.toDataURL(qrPayload, {
+  const scoringUrl = new URL(
+    `/events/${data.event.id}/digital-scoring`,
+    window.location.origin,
+  )
+
+  scoringUrl.searchParams.set("shootId", card.shootId)
+  scoringUrl.searchParams.set("memberId", card.memberId)
+  scoringUrl.searchParams.set("courseId", course.id)
+
+  const qr = await QRCode.toDataURL(scoringUrl.toString(), {
     margin: 0,
     width: 256,
     errorCorrectionLevel: "M",
   })
   pdf.addImage(qr, "PNG", x + width - 0.95, y + 0.14, 0.74, 0.74)
+
+  pdf.setFont("helvetica", "normal")
+  pdf.setFontSize(4.8)
+  pdf.text(
+    "Scan to enter this participant's score",
+    x + width - 1.08,
+    y + 0.96,
+    {
+      maxWidth: 1.0,
+      align: "center",
+    },
+  )
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8)

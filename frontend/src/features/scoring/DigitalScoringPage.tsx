@@ -19,7 +19,11 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import {
+  Link,
+  useParams,
+  useSearchParams,
+} from "react-router-dom"
 import { toast } from "sonner"
 
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -81,6 +85,15 @@ function formatConflictTime(value: string | null) {
 
 export function DigitalScoringPage() {
   const { eventId } = useParams()
+  const [searchParams] = useSearchParams()
+
+  const requestedShootId =
+    searchParams.get("shootId") ?? ""
+  const requestedMemberId =
+    searchParams.get("memberId") ?? ""
+  const requestedCourseId =
+    searchParams.get("courseId") ?? ""
+
   const [data, setData] = useState<DigitalScoringData | null>(null)
   const [shootId, setShootId] = useState("")
   const [squadId, setSquadId] = useState("")
@@ -124,8 +137,70 @@ export function DigitalScoringPage() {
 
     try {
       const next = await loadDigitalScoring(eventId)
+
+      const requestedMember = requestedMemberId
+        ? next.members.find(
+            (row) => row.id === requestedMemberId,
+          )
+        : undefined
+
+      const requestedSquad = requestedMember
+        ? next.squads.find(
+            (row) => row.id === requestedMember.squad_id,
+          )
+        : undefined
+
+      const requestedShoot =
+        requestedSquad &&
+        next.shoots.some(
+          (row) =>
+            row.id === requestedSquad.shoot_id &&
+            (
+              !requestedShootId ||
+              row.id === requestedShootId
+            ),
+        )
+          ? requestedSquad.shoot_id
+          : requestedShootId &&
+              next.shoots.some(
+                (row) => row.id === requestedShootId,
+              )
+            ? requestedShootId
+            : ""
+
+      const requestedCourse =
+        requestedCourseId &&
+        next.courses.some(
+          (row) => row.id === requestedCourseId,
+        )
+          ? requestedCourseId
+          : ""
+
       setData(next)
-      setShootId((current) => current || next.shoots[0]?.id || "")
+
+      if (
+        requestedMember &&
+        requestedSquad &&
+        requestedShoot
+      ) {
+        setShootId(requestedShoot)
+        setSquadId(requestedSquad.id)
+        setMemberId(requestedMember.id)
+
+        if (requestedCourse) {
+          setCourseId(requestedCourse)
+        }
+
+        return
+      }
+
+      setShootId(
+        (current) =>
+          current ||
+          requestedShoot ||
+          next.shoots[0]?.id ||
+          "",
+      )
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -135,7 +210,12 @@ export function DigitalScoringPage() {
     } finally {
       setLoading(false)
     }
-  }, [eventId])
+  }, [
+    eventId,
+    requestedCourseId,
+    requestedMemberId,
+    requestedShootId,
+  ])
 
   useEffect(() => {
     void load()
