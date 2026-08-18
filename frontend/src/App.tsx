@@ -5,6 +5,12 @@ import { AppShell } from "@/app/AppShell"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { AuthProvider } from "@/features/auth/AuthProvider"
 import { LoginPage } from "@/features/auth/LoginPage"
+
+const ParticipantSignupPage = lazy(() =>
+  import("@/features/auth/ParticipantSignupPage").then((module) => ({
+    default: module.ParticipantSignupPage,
+  })),
+)
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
 import { OrganizationProvider } from "@/features/organization/OrganizationProvider"
@@ -295,6 +301,15 @@ function App() {
           <OrganizationProvider>
             <Routes>
             <Route path="/login" element={<LoginPage />} />
+
+            <Route
+              path="/signup/:organizationSlug"
+              element={
+                <LazyRoute>
+                  <ParticipantSignupPage />
+                </LazyRoute>
+              }
+            />
 
             <Route
               path="/public"
