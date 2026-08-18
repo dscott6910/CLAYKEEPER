@@ -19,6 +19,8 @@ import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
   assignCoachToTeam,
+  createCoachPortalCoach,
+  createCoachPortalTeam,
   endCoachTeamAssignment,
   loadCoachManagementData,
   loadCoachPortalData,
@@ -77,6 +79,19 @@ export function CoachPortalPage() {
   const [coachIdToAssign, setCoachIdToAssign] = useState("")
   const [coachRole, setCoachRole] = useState("coach")
   const [headCoach, setHeadCoach] = useState(false)
+
+  const [newTeamName, setNewTeamName] = useState("")
+  const [newTeamSchoolClub, setNewTeamSchoolClub] =
+    useState("")
+
+  const [newCoachFirstName, setNewCoachFirstName] =
+    useState("")
+  const [newCoachLastName, setNewCoachLastName] =
+    useState("")
+  const [newCoachPreferredName, setNewCoachPreferredName] =
+    useState("")
+  const [newCoachEmail, setNewCoachEmail] = useState("")
+  const [newCoachPhone, setNewCoachPhone] = useState("")
 
   async function refresh() {
     setLoading(true)
@@ -434,6 +449,74 @@ export function CoachPortalPage() {
       void loadManagement()
     }
   }, [tab, data?.isManager, managementLoaded])
+
+  async function createTeam() {
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      const created = await createCoachPortalTeam({
+        name: newTeamName,
+        schoolClubName: newTeamSchoolClub,
+      })
+
+      setNewTeamName("")
+      setNewTeamSchoolClub("")
+
+      await refresh()
+      setTeamId(created.id)
+      setManagementMessage("Team created.")
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to create team.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function createCoach() {
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      const created = await createCoachPortalCoach({
+        firstName: newCoachFirstName,
+        lastName: newCoachLastName,
+        preferredName: newCoachPreferredName,
+        email: newCoachEmail,
+        phone: newCoachPhone,
+      })
+
+      setNewCoachFirstName("")
+      setNewCoachLastName("")
+      setNewCoachPreferredName("")
+      setNewCoachEmail("")
+      setNewCoachPhone("")
+
+      const result = await loadCoachManagementData()
+
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(result.assignments)
+      setManagementLoaded(true)
+      setCoachIdToAssign(created.id)
+      setManagementMessage(
+        "Coach created and ready to assign.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to create coach.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
 
   async function saveTeam() {
     if (!teamId) return
@@ -950,6 +1033,148 @@ export function CoachPortalPage() {
 
               {tab === "management" && data.isManager ? (
                 <div className="space-y-6">
+                  <section className="grid gap-6 xl:grid-cols-2">
+                    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                      <h2 className="text-lg font-bold">
+                        Create Team
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Add a team to this organization.
+                      </p>
+
+                      <div className="mt-4 space-y-4">
+                        <label className="block text-sm font-medium">
+                          Team Name
+                          <input
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newTeamName}
+                            onChange={(event) =>
+                              setNewTeamName(event.target.value)
+                            }
+                            placeholder="Team name"
+                          />
+                        </label>
+
+                        <label className="block text-sm font-medium">
+                          School / Club Name
+                          <input
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newTeamSchoolClub}
+                            onChange={(event) =>
+                              setNewTeamSchoolClub(
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Optional"
+                          />
+                        </label>
+
+                        <Button
+                          onClick={() => void createTeam()}
+                          disabled={
+                            managementBusy ||
+                            !newTeamName.trim()
+                          }
+                        >
+                          Create Team
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                      <h2 className="text-lg font-bold">
+                        Create Coach
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Add a coach, then assign the coach to a
+                        team below.
+                      </p>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label className="text-sm font-medium">
+                          First Name
+                          <input
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newCoachFirstName}
+                            onChange={(event) =>
+                              setNewCoachFirstName(
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium">
+                          Last Name
+                          <input
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newCoachLastName}
+                            onChange={(event) =>
+                              setNewCoachLastName(
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium">
+                          Preferred Name
+                          <input
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newCoachPreferredName}
+                            onChange={(event) =>
+                              setNewCoachPreferredName(
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium">
+                          Email
+                          <input
+                            type="email"
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newCoachEmail}
+                            onChange={(event) =>
+                              setNewCoachEmail(event.target.value)
+                            }
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium sm:col-span-2">
+                          Phone
+                          <input
+                            type="tel"
+                            className="mt-1 w-full rounded-lg border px-3 py-2"
+                            value={newCoachPhone}
+                            onChange={(event) =>
+                              setNewCoachPhone(event.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <Button
+                        className="mt-4"
+                        onClick={() => void createCoach()}
+                        disabled={
+                          managementBusy ||
+                          !newCoachFirstName.trim() ||
+                          !newCoachLastName.trim()
+                        }
+                      >
+                        Create Coach
+                      </Button>
+                    </div>
+                  </section>
+
+                  {managementMessage ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                      {managementMessage}
+                    </div>
+                  ) : null}
+
                   {managementError ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
                       {managementError}

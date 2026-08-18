@@ -309,3 +309,98 @@ export async function endCoachTeamAssignment(assignmentId: string) {
 
   assert(error)
 }
+
+export async function createCoachPortalTeam(input: {
+  name: string
+  schoolClubName?: string | null
+}) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can create teams.",
+    )
+  }
+
+  const name = input.name.trim()
+
+  if (!name) {
+    throw new Error("Team name is required.")
+  }
+
+  const { data, error } = await supabase
+    .from("teams")
+    .insert({
+      organization_id: context.organizationId,
+      name,
+      school_club_name: cleanOptional(
+        input.schoolClubName,
+      ),
+      active: true,
+    })
+    .select(
+      "id, name, school_club_name, mascot, primary_color, secondary_color, notes",
+    )
+    .single()
+
+  assert(error)
+
+  if (!data) {
+    throw new Error("The team could not be created.")
+  }
+
+  return data as CoachTeam
+}
+
+export async function createCoachPortalCoach(input: {
+  firstName: string
+  lastName: string
+  preferredName?: string | null
+  email?: string | null
+  phone?: string | null
+}) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can create coaches.",
+    )
+  }
+
+  const firstName = input.firstName.trim()
+  const lastName = input.lastName.trim()
+
+  if (!firstName) {
+    throw new Error("Coach first name is required.")
+  }
+
+  if (!lastName) {
+    throw new Error("Coach last name is required.")
+  }
+
+  const { data, error } = await supabase
+    .from("coaches")
+    .insert({
+      organization_id: context.organizationId,
+      first_name: firstName,
+      last_name: lastName,
+      preferred_name: cleanOptional(
+        input.preferredName,
+      ),
+      email: cleanOptional(input.email),
+      phone: cleanOptional(input.phone),
+      active: true,
+    })
+    .select(
+      "id, first_name, last_name, preferred_name, email, phone, active",
+    )
+    .single()
+
+  assert(error)
+
+  if (!data) {
+    throw new Error("The coach could not be created.")
+  }
+
+  return data as CoachManagementRecord
+}
