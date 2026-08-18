@@ -22,6 +22,7 @@ export type ParticipantRecord = {
   birth_date: string | null
   gender: string | null
   graduation_year: number | null
+  participant_number: string
   cyssa_number: string | null
   ata_number: string | null
   nssa_number: string | null
@@ -92,7 +93,7 @@ export async function getParticipantDirectory() {
     loadAllPages<AthleteRow>((from, to) =>
       supabase
         .from("athletes")
-        .select("id,organization_id,class_id,first_name,last_name,preferred_name,birth_date,gender,graduation_year,cyssa_number,ata_number,nssa_number,external_id,email,phone,emergency_contact_name,emergency_contact_phone,notes,active,created_at,updated_at")
+        .select("id,organization_id,class_id,first_name,last_name,preferred_name,birth_date,gender,graduation_year,participant_number,cyssa_number,ata_number,nssa_number,external_id,email,phone,emergency_contact_name,emergency_contact_phone,notes,active,created_at,updated_at")
         .eq("organization_id", organizationId)
         .order("last_name")
         .order("first_name")

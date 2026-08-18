@@ -96,6 +96,7 @@ export type AthleteRecord = {
   first_name: string
   last_name: string
   preferred_name: string | null
+  participant_number: string
   cyssa_number: string | null
 }
 

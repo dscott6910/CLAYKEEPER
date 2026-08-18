@@ -168,6 +168,7 @@ export function ParticipantsPage() {
         displayName(participant),
         participant.first_name,
         participant.last_name,
+        participant.participant_number,
         participant.cyssa_number,
         participant.ata_number,
         participant.nssa_number,
@@ -197,7 +198,7 @@ export function ParticipantsPage() {
 
       return (
         matches(displayName(participant), columnFilters.participant) &&
-        matches(participant.cyssa_number, columnFilters.cyssa) &&
+        matches(participant.participant_number, columnFilters.cyssa) &&
         matches(
           [participantClass?.code, participantClass?.display_name].filter(Boolean).join(" "),
           columnFilters.class,
@@ -217,7 +218,7 @@ export function ParticipantsPage() {
         case "participant":
           return displayName(participant)
         case "cyssa":
-          return participant.cyssa_number ?? ""
+          return participant.participant_number
         case "class":
           return participantClass?.code ?? ""
         case "team":
@@ -478,7 +479,7 @@ export function ParticipantsPage() {
                             </div>
                           ) : null}
                         </td>
-                        <td className="px-4 py-4 font-medium text-slate-700">{participant.cyssa_number || "—"}</td>
+                        <td className="px-4 py-4 font-medium text-slate-700">{participant.participant_number}</td>
                         <td className="px-4 py-4">{participantClass ? <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700" title={participantClass.display_name}>{participantClass.code}</span> : <span className="text-slate-400">Not set</span>}</td>
                         <td className="px-4 py-4 text-slate-700">{team?.name ?? "Not assigned"}</td>
                         <td className="px-4 py-4"><div className="space-y-1 text-xs text-slate-600">{participant.email ? <div className="flex items-center gap-1.5"><Mail size={13} />{participant.email}</div> : null}{participant.phone ? <div className="flex items-center gap-1.5"><Phone size={13} />{participant.phone}</div> : null}{!participant.email && !participant.phone ? "—" : null}</div></td>
@@ -495,7 +496,7 @@ export function ParticipantsPage() {
         </div>
       </PageContainer>
 
-      {editorOpen ? <ParticipantEditor form={form} setForm={setForm} classes={classes} teams={teams} editing={Boolean(editing)} saving={saving} onClose={() => setEditorOpen(false)} onSave={save} /> : null}
+      {editorOpen ? <ParticipantEditor form={form} setForm={setForm} classes={classes} teams={teams} participantNumber={editing?.participant_number ?? null} editing={Boolean(editing)} saving={saving} onClose={() => setEditorOpen(false)} onSave={save} /> : null}
     </div>
   )
 }
@@ -557,13 +558,59 @@ function ParticipantFilterCell({
   )
 }
 
-function ParticipantEditor({ form, setForm, classes, teams, editing, saving, onClose, onSave }: { form: ParticipantForm; setForm: React.Dispatch<React.SetStateAction<ParticipantForm>>; classes: ParticipantClass[]; teams: ParticipantTeam[]; editing: boolean; saving: boolean; onClose: () => void; onSave: (event: FormEvent) => void }) {
+function ParticipantEditor({ form, setForm, classes, teams, participantNumber, editing, saving, onClose, onSave }: { form: ParticipantForm; setForm: React.Dispatch<React.SetStateAction<ParticipantForm>>; classes: ParticipantClass[]; teams: ParticipantTeam[]; participantNumber: string | null; editing: boolean; saving: boolean; onClose: () => void; onSave: (event: FormEvent) => void }) {
   const set = (key: keyof ParticipantForm, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4"><form onSubmit={onSave} className="mx-auto my-4 w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
     <div className="flex items-start justify-between border-b p-5"><div><h2 className="text-xl font-bold">{editing ? "Edit Participant" : "Add Participant"}</h2><p className="mt-1 text-sm text-slate-500">Maintain the participant profile, classification, and current team.</p></div><button type="button" onClick={onClose} className="rounded-lg border px-3 py-2 text-sm font-semibold">Close</button></div>
     <div className="space-y-6 p-5">
       <EditorSection title="Participant information"><div className="grid gap-4 md:grid-cols-3"><Input label="First name" value={form.first_name} onChange={(value) => set("first_name", value)} required /><Input label="Last name" value={form.last_name} onChange={(value) => set("last_name", value)} required /><Input label="Preferred name" value={form.preferred_name} onChange={(value) => set("preferred_name", value)} /><Input label="Birth date" type="date" value={form.birth_date} onChange={(value) => set("birth_date", value)} /><Input label="Gender" value={form.gender} onChange={(value) => set("gender", value)} /><Input label="Graduation year" type="number" value={form.graduation_year} onChange={(value) => set("graduation_year", value)} /></div></EditorSection>
-      <EditorSection title="Competition details"><div className="grid gap-4 md:grid-cols-2"><Select label="Class" value={form.class_id} onChange={(value) => set("class_id", value)} options={[{ value: "", label: "Not assigned" }, ...classes.map((item) => ({ value: item.id, label: `${item.code} — ${item.display_name}` }))]} /><Select label="Primary team" value={form.team_id} onChange={(value) => set("team_id", value)} options={[{ value: "", label: "Not assigned" }, ...teams.map((item) => ({ value: item.id, label: item.name }))]} /><Input label="Participant Number" value={form.cyssa_number} onChange={(value) => set("cyssa_number", value)} /><Input label="ATA number" value={form.ata_number} onChange={(value) => set("ata_number", value)} /><Input label="NSSA number" value={form.nssa_number} onChange={(value) => set("nssa_number", value)} /></div></EditorSection>
+      <EditorSection title="Competition details">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Select
+            label="Class"
+            value={form.class_id}
+            onChange={(value) => set("class_id", value)}
+            options={[
+              { value: "", label: "Not assigned" },
+              ...classes.map((item) => ({
+                value: item.id,
+                label: `${item.code} — ${item.display_name}`,
+              })),
+            ]}
+          />
+
+          <Select
+            label="Primary team"
+            value={form.team_id}
+            onChange={(value) => set("team_id", value)}
+            options={[
+              { value: "", label: "Not assigned" },
+              ...teams.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
+            ]}
+          />
+
+          <div>
+            <span className="text-sm font-semibold text-slate-700">
+              Participant Number
+            </span>
+
+            <div className="mt-1 flex min-h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+              {editing && participantNumber
+                ? participantNumber
+                : "Assigned automatically when saved"}
+            </div>
+
+            <p className="mt-1 text-xs text-slate-500">
+              ClayKeeper assigns the permanent organization-specific number.
+            </p>
+          </div>
+
+
+        </div>
+      </EditorSection>
       <EditorSection title="Contact and emergency information"><div className="grid gap-4 md:grid-cols-2"><Input label="Email" type="email" value={form.email} onChange={(value) => set("email", value)} /><Input label="Phone" type="tel" value={form.phone} onChange={(value) => set("phone", value)} /><Input label="Emergency contact" value={form.emergency_contact_name} onChange={(value) => set("emergency_contact_name", value)} /><Input label="Emergency phone" type="tel" value={form.emergency_contact_phone} onChange={(value) => set("emergency_contact_phone", value)} /></div></EditorSection>
       <EditorSection title="Notes"><textarea value={form.notes} onChange={(event) => set("notes", event.target.value)} className="min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm" placeholder="Optional notes about this participant" /></EditorSection>
       <label className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm font-semibold"><input type="checkbox" checked={form.active} onChange={(event) => set("active", event.target.checked)} />Active participant</label>
