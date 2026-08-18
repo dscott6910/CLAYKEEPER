@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { FormEvent } from "react"
-import { Navigate, useLocation, useNavigate } from "react-router-dom"
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
 import { LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -157,6 +157,18 @@ export function LoginPage() {
                 {submitting ? "Signing in..." : "Sign in"}
               </Button>
             </form>
+
+            <div className="mt-6 border-t border-slate-200 pt-6 text-center">
+              <p className="text-sm text-slate-600">
+                Don&apos;t have an account?{" "}
+                <Link
+                  to="/signup"
+                  className="font-semibold text-emerald-700 hover:text-emerald-800"
+                >
+                  Create an account
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       </section>

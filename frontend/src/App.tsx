@@ -11,6 +11,12 @@ const ParticipantSignupPage = lazy(() =>
     default: module.ParticipantSignupPage,
   })),
 )
+
+const SignupDirectoryPage = lazy(() =>
+  import("@/features/auth/SignupDirectoryPage").then((module) => ({
+    default: module.SignupDirectoryPage,
+  })),
+)
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
 import { OrganizationHomeRoute } from "@/features/auth/OrganizationHomeRoute"
@@ -311,6 +317,15 @@ function App() {
           <OrganizationProvider>
             <Routes>
             <Route path="/login" element={<LoginPage />} />
+
+            <Route
+              path="/signup"
+              element={
+                <LazyRoute>
+                  <SignupDirectoryPage />
+                </LazyRoute>
+              }
+            />
 
             <Route
               path="/signup/:organizationSlug"
