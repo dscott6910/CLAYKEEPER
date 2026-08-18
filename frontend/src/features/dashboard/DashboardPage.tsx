@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 
 import { AppHeader } from "@/app/AppHeader"
+import { useOrganization } from "@/features/organization/OrganizationProvider"
 import { DashboardSkeleton } from "@/features/analytics/components/DashboardSkeleton"
 import { loadExecutiveAnalytics, type ExecutiveAnalytics } from "@/lib/services/analytics"
 import { loadDashboardSnapshot, type DashboardSnapshot } from "@/lib/services/dashboard"
@@ -42,6 +43,13 @@ function percent(part: number, total: number) {
 }
 
 export function DashboardPage() {
+  const { organizationId, memberships } = useOrganization()
+
+  const currentOrganizationName =
+    memberships.find(
+      (membership) => membership.organizationId === organizationId,
+    )?.organizationName || "Organization"
+
   const [analytics, setAnalytics] = useState<ExecutiveAnalytics | null>(null)
   const [operations, setOperations] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -154,55 +162,73 @@ export function DashboardPage() {
 
       <main className="space-y-5 p-4 md:p-6">
         <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white shadow-sm">
-          <div className="grid min-h-[276px] grid-cols-1 items-center gap-6 p-6 lg:grid-cols-[240px_1fr_260px] lg:p-7">
-            <div className="flex items-center justify-center lg:justify-start">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-center lg:text-left">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-400">
-                  ClayKeeper
-                </p>
-                <p className="mt-2 text-lg font-semibold text-white">
-                  Tournament Management
-                </p>
-              </div>
+          <div className="grid min-h-[276px] grid-cols-1 gap-6 p-6 lg:grid-cols-3 lg:p-7">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">
+                Organization
+              </p>
+
+              <h2 className="mt-2 break-words text-3xl font-bold tracking-tight text-white md:text-4xl">
+                {currentOrganizationName}
+              </h2>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 lg:col-span-2">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">
                 Active Season
               </p>
+
               <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
                 {analytics?.activeSeason?.name ?? "No active season"}
               </h2>
+
               <p className="mt-2 text-sm text-slate-200">
                 {analytics?.activeSeason
                   ? `${dateLabel(analytics.activeSeason.startDate)} – ${dateLabel(analytics.activeSeason.endDate)}`
                   : "Create or activate a season to organize events and analytics."}
               </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {readiness.map((item) => (
-                  <Link
-                    key={item.label}
-                    to={item.href}
-                    className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm transition hover:bg-white/10"
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-slate-100">{item.label}</span>
-                      <span className="font-bold">{item.value}%</span>
-                    </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-emerald-400"
-                        style={{ width: `${Math.min(100, item.value)}%` }}
-                      />
-                    </div>
-                    <p className="mt-2 text-xs text-slate-400">{item.detail}</p>
-                  </Link>
-                ))}
-              </div>
             </div>
 
-            <div aria-hidden="true" className="hidden min-h-44 lg:block" />
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">
+                ClayKeeper
+              </p>
+
+              <p className="mt-1 text-sm font-semibold text-white">
+                Tournament Management
+              </p>
+            </div>
+
+            {readiness.map((item) => (
+              <Link
+                key={item.label}
+                to={item.href}
+                className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm transition hover:bg-white/10"
+              >
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-slate-100">
+                    {item.label}
+                  </span>
+
+                  <span className="font-bold">
+                    {item.value}%
+                  </span>
+                </div>
+
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-emerald-400"
+                    style={{
+                      width: `${Math.min(100, item.value)}%`,
+                    }}
+                  />
+                </div>
+
+                <p className="mt-2 text-xs text-slate-400">
+                  {item.detail}
+                </p>
+              </Link>
+            ))}
           </div>
         </section>
 

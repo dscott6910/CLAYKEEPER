@@ -194,3 +194,89 @@ export async function getCurrentOrganizationId(): Promise<string> {
   const context = await getCurrentOrganizationContext()
   return context.organizationId
 }
+
+export type CreateOrganizationInput = {
+  name: string
+  email?: string
+  phone?: string
+  website?: string
+  city?: string
+  state?: string
+  postalCode?: string
+  timezone?: string
+}
+
+function createOrganizationSlug(name: string) {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48)
+
+  return base || "organization"
+}
+
+export async function createOrganization(
+  input: CreateOrganizationInput,
+): Promise<OrganizationContext> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError) throw userError
+
+  if (!user) {
+    throw new Error(
+      "No authenticated user was found. Please sign in again.",
+    )
+  }
+
+  const name = input.name.trim()
+
+  if (!name) {
+    throw new Error("Organization name is required.")
+  }
+
+  const baseSlug = createOrganizationSlug(name)
+
+  // Add a short random suffix so two organizations with the same
+  // display name can coexist without exposing slug management to users.
+  const suffix = crypto.randomUUID().slice(0, 8)
+  const slug = `${baseSlug}-${suffix}`
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .insert({
+      name,
+      slug,
+      email: input.email?.trim() || null,
+      phone: input.phone?.trim() || null,
+      website: input.website?.trim() || null,
+      city: input.city?.trim() || null,
+      state: input.state?.trim() || null,
+      postal_code: input.postalCode?.trim() || null,
+      timezone:
+        input.timezone?.trim() || "America/Los_Angeles",
+      country_code: "US",
+      created_by: user.id,
+      active: true,
+    })
+    .select("id")
+    .single()
+
+  if (error) throw error
+
+  if (!data?.id) {
+    throw new Error(
+      "The organization was created but could not be selected.",
+    )
+  }
+
+  // The database trigger automatically creates the creator's
+  // owner membership. Select it immediately for the current session.
+  return selectCurrentOrganization(data.id as string)
+}

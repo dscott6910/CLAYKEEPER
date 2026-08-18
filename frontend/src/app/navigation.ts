@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react"
 
 import type { OrganizationCapability } from "@/lib/permissions"
 import {
+  Building2,
   BarChart3,
   CalendarDays,
   CalendarRange,
@@ -168,6 +169,12 @@ export const navigationSections: NavigationSection[] = [
         path: "/public",
         icon: Globe2,
         capability: "managePublicPortal",
+      },
+      {
+        label: "Create Organization",
+        path: "/organizations/new",
+        icon: Building2,
+        capability: "admin",
       },
       {
         label: "Settings",

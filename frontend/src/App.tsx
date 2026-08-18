@@ -146,6 +146,12 @@ const SettingsPage = lazy(() =>
   })),
 )
 
+const CreateOrganizationPage = lazy(() =>
+  import("@/features/organization/CreateOrganizationPage").then((module) => ({
+    default: module.CreateOrganizationPage,
+  })),
+)
+
 const NotFoundPage = lazy(() =>
   import("@/features/system/NotFoundPage").then((module) => ({
     default: module.NotFoundPage,
@@ -729,6 +735,15 @@ function App() {
                     element={
                       <LazyRoute>
                         <SettingsPage />
+                      </LazyRoute>
+                    }
+                  />
+
+                  <Route
+                    path="organizations/new"
+                    element={
+                      <LazyRoute>
+                        <CreateOrganizationPage />
                       </LazyRoute>
                     }
                   />
