@@ -9,6 +9,7 @@ export type CoachTeam = {
   primary_color: string | null
   secondary_color: string | null
   notes: string | null
+  active?: boolean
 }
 export type CoachAthlete = { id: string; first_name: string; last_name: string; preferred_name: string | null; class_id: string | null; cyssa_number: string | null; email: string | null; phone: string | null }
 export type CoachEvent = { id: string; name: string; start_date: string | null; end_date: string | null; status: string }
@@ -234,12 +235,24 @@ export async function loadCoachManagementData() {
 
   if (!["owner", "admin"].includes(context.role)) {
     return {
+      teams: [] as CoachTeam[],
       coaches: [] as CoachManagementRecord[],
       assignments: [] as TeamCoachAssignment[],
     }
   }
 
-  const [coaches, assignments] = await Promise.all([
+  const [teams, coaches, assignments] = await Promise.all([
+    loadAllPages<CoachTeam>((from, to) =>
+      supabase
+        .from("teams")
+        .select(
+          "id, name, school_club_name, mascot, primary_color, secondary_color, notes, active",
+        )
+        .eq("organization_id", context.organizationId)
+        .order("active", { ascending: false })
+        .order("name")
+        .range(from, to),
+    ),
     loadAllPages<CoachManagementRecord>((from, to) =>
       supabase
         .from("coaches")
@@ -247,7 +260,7 @@ export async function loadCoachManagementData() {
           "id, first_name, last_name, preferred_name, email, phone, active",
         )
         .eq("organization_id", context.organizationId)
-        .eq("active", true)
+        .order("active", { ascending: false })
         .order("last_name")
         .order("first_name")
         .range(from, to),
@@ -263,7 +276,7 @@ export async function loadCoachManagementData() {
     ),
   ])
 
-  return { coaches, assignments }
+  return { teams, coaches, assignments }
 }
 
 export async function assignCoachToTeam(input: {
@@ -524,6 +537,145 @@ export async function updateCoachPortalCoach(
       email: cleanOptional(input.email),
       phone: cleanOptional(input.phone),
     })
+    .eq("organization_id", context.organizationId)
+    .eq("id", coachId)
+
+  assert(error)
+}
+
+export async function setCoachPortalTeamActive(
+  teamId: string,
+  active: boolean,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can archive or restore teams.",
+    )
+  }
+
+  const { error } = await supabase
+    .from("teams")
+    .update({ active })
+    .eq("organization_id", context.organizationId)
+    .eq("id", teamId)
+
+  assert(error)
+}
+
+export async function deleteCoachPortalTeam(
+  teamId: string,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can permanently delete teams.",
+    )
+  }
+
+  const [
+    { count: registrationCount, error: registrationError },
+    { count: athleteCount, error: athleteError },
+  ] = await Promise.all([
+    supabase
+      .from("registrations")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("organization_id", context.organizationId)
+      .eq("team_id", teamId),
+
+    supabase
+      .from("athlete_teams")
+      .select("athlete_id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("organization_id", context.organizationId)
+      .eq("team_id", teamId),
+  ])
+
+  assert(registrationError)
+  assert(athleteError)
+
+  if ((registrationCount ?? 0) > 0) {
+    throw new Error(
+      "This team has registration history and cannot be permanently deleted. Archive it instead.",
+    )
+  }
+
+  if ((athleteCount ?? 0) > 0) {
+    throw new Error(
+      "This team still has participants assigned and cannot be permanently deleted. Archive it instead.",
+    )
+  }
+
+  const { error } = await supabase
+    .from("teams")
+    .delete()
+    .eq("organization_id", context.organizationId)
+    .eq("id", teamId)
+
+  assert(error)
+}
+
+export async function setCoachPortalCoachActive(
+  coachId: string,
+  active: boolean,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can archive or restore coaches.",
+    )
+  }
+
+  const { error } = await supabase
+    .from("coaches")
+    .update({ active })
+    .eq("organization_id", context.organizationId)
+    .eq("id", coachId)
+
+  assert(error)
+}
+
+export async function deleteCoachPortalCoach(
+  coachId: string,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can permanently delete coaches.",
+    )
+  }
+
+  const { data: coach, error: coachError } = await supabase
+    .from("coaches")
+    .select("id,first_name,last_name,user_id")
+    .eq("organization_id", context.organizationId)
+    .eq("id", coachId)
+    .single()
+
+  assert(coachError)
+
+  if (!coach) {
+    throw new Error("Coach not found.")
+  }
+
+  if (coach.user_id) {
+    throw new Error(
+      "This coach has an activated ClayKeeper account and cannot be permanently deleted. Archive the coach instead.",
+    )
+  }
+
+  const { error } = await supabase
+    .from("coaches")
+    .delete()
     .eq("organization_id", context.organizationId)
     .eq("id", coachId)
 

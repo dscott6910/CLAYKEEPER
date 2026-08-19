@@ -22,9 +22,13 @@ import {
   createCoachActivationLink,
   createCoachPortalCoach,
   createCoachPortalTeam,
+  deleteCoachPortalCoach,
+  deleteCoachPortalTeam,
   endCoachTeamAssignment,
   loadCoachManagementData,
   loadCoachPortalData,
+  setCoachPortalCoachActive,
+  setCoachPortalTeamActive,
   updateCoachPortalCoach,
   updateCoachPortalTeam,
   type CoachManagementRecord,
@@ -62,6 +66,9 @@ export function CoachPortalPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const [managementTeams, setManagementTeams] = useState<
+    PortalData["teams"]
+  >([])
   const [managementCoaches, setManagementCoaches] = useState<
     CoachManagementRecord[]
   >([])
@@ -423,6 +430,7 @@ export function CoachPortalPage() {
 
     try {
       const result = await loadCoachManagementData()
+      setManagementTeams(result.teams)
       setManagementCoaches(result.coaches)
       setManagementAssignments(result.assignments)
       setManagementLoaded(true)
@@ -541,6 +549,7 @@ export function CoachPortalPage() {
 
       const result = await loadCoachManagementData()
 
+      setManagementTeams(result.teams)
       setManagementCoaches(result.coaches)
       setManagementAssignments(result.assignments)
       setManagementLoaded(true)
@@ -664,6 +673,186 @@ export function CoachPortalPage() {
     }
   }
 
+  async function changeTeamActive(
+    targetTeamId: string,
+    active: boolean,
+  ) {
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await setCoachPortalTeamActive(
+        targetTeamId,
+        active,
+      )
+
+      const result =
+        await loadCoachManagementData()
+
+      setManagementTeams(result.teams)
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(
+        result.assignments,
+      )
+
+      await refresh()
+
+      setManagementMessage(
+        active
+          ? "Team restored."
+          : "Team archived.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to update team.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function permanentlyDeleteTeam(
+    targetTeamId: string,
+    targetTeamName: string,
+  ) {
+    const confirmed = window.confirm(
+      `Permanently delete team "${targetTeamName}"?\n\n` +
+        "This cannot be undone. Teams with participants or registration history cannot be permanently deleted.",
+    )
+
+    if (!confirmed) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await deleteCoachPortalTeam(
+        targetTeamId,
+      )
+
+      const result =
+        await loadCoachManagementData()
+
+      setManagementTeams(result.teams)
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(
+        result.assignments,
+      )
+
+      await refresh()
+
+      setManagementMessage(
+        "Team permanently deleted.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to permanently delete team.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function changeCoachActive(
+    targetCoachId: string,
+    active: boolean,
+  ) {
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await setCoachPortalCoachActive(
+        targetCoachId,
+        active,
+      )
+
+      const result =
+        await loadCoachManagementData()
+
+      setManagementTeams(result.teams)
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(
+        result.assignments,
+      )
+
+      if (!active) {
+        setCoachIdToAssign((current) =>
+          current === targetCoachId ? "" : current,
+        )
+      }
+
+      setManagementMessage(
+        active
+          ? "Coach restored."
+          : "Coach archived.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to update coach.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function permanentlyDeleteCoach(
+    targetCoachId: string,
+    targetCoachName: string,
+  ) {
+    const confirmed = window.confirm(
+      `Permanently delete coach "${targetCoachName}"?\n\n` +
+        "This cannot be undone. Coaches with activated ClayKeeper accounts cannot be permanently deleted.",
+    )
+
+    if (!confirmed) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+
+    try {
+      await deleteCoachPortalCoach(
+        targetCoachId,
+      )
+
+      const result =
+        await loadCoachManagementData()
+
+      setManagementTeams(result.teams)
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(
+        result.assignments,
+      )
+
+      setCoachIdToAssign((current) =>
+        current === targetCoachId
+          ? result.coaches[0]?.id || ""
+          : current,
+      )
+
+      setManagementMessage(
+        "Coach permanently deleted.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to permanently delete coach.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
   async function assignCoach() {
     if (!teamId || !coachIdToAssign) return
 
@@ -680,6 +869,7 @@ export function CoachPortalPage() {
       })
 
       const result = await loadCoachManagementData()
+      setManagementTeams(result.teams)
       setManagementCoaches(result.coaches)
       setManagementAssignments(result.assignments)
       setManagementMessage("Coach assigned to team.")
@@ -703,6 +893,7 @@ export function CoachPortalPage() {
       await endCoachTeamAssignment(assignmentId)
 
       const result = await loadCoachManagementData()
+      setManagementTeams(result.teams)
       setManagementCoaches(result.coaches)
       setManagementAssignments(result.assignments)
       setManagementMessage("Coach assignment ended.")
@@ -1285,6 +1476,179 @@ export function CoachPortalPage() {
                     </div>
                   </section>
 
+                  <section className="grid gap-5 xl:grid-cols-2">
+                    <div className="rounded-2xl border bg-white shadow-sm">
+                      <div className="border-b p-5">
+                        <h2 className="text-lg font-bold">
+                          Manage Teams
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Archive teams to preserve their history. Permanent deletion is only available when no participants or registration history are attached.
+                        </p>
+                      </div>
+
+                      <div className="divide-y">
+                        {managementTeams.map((team) => (
+                          <div
+                            key={team.id}
+                            className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-semibold">
+                                  {team.name}
+                                </p>
+
+                                <span
+                                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                    team.active === false
+                                      ? "bg-slate-200 text-slate-700"
+                                      : "bg-emerald-100 text-emerald-800"
+                                  }`}
+                                >
+                                  {team.active === false
+                                    ? "Archived"
+                                    : "Active"}
+                                </span>
+                              </div>
+
+                              <p className="mt-1 text-sm text-slate-500">
+                                {team.school_club_name ||
+                                  "No school / club name"}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                disabled={managementBusy}
+                                onClick={() =>
+                                  void changeTeamActive(
+                                    team.id,
+                                    team.active === false,
+                                  )
+                                }
+                              >
+                                {team.active === false
+                                  ? "Restore"
+                                  : "Archive"}
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                disabled={managementBusy}
+                                className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                                onClick={() =>
+                                  void permanentlyDeleteTeam(
+                                    team.id,
+                                    team.name,
+                                  )
+                                }
+                              >
+                                Permanent Delete
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {managementLoaded &&
+                        managementTeams.length === 0 ? (
+                          <p className="p-5 text-sm text-slate-500">
+                            No teams have been created.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border bg-white shadow-sm">
+                      <div className="border-b p-5">
+                        <h2 className="text-lg font-bold">
+                          Manage Coaches
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Archive coaches when they should no longer appear in normal workflows. Activated coach accounts are protected from permanent deletion.
+                        </p>
+                      </div>
+
+                      <div className="divide-y">
+                        {managementCoaches.map((coach) => {
+                          const coachName =
+                            `${coach.preferred_name?.trim() || coach.first_name} ${coach.last_name}`.trim()
+
+                          return (
+                            <div
+                              key={coach.id}
+                              className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold">
+                                    {coachName}
+                                  </p>
+
+                                  <span
+                                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                      coach.active === false
+                                        ? "bg-slate-200 text-slate-700"
+                                        : "bg-emerald-100 text-emerald-800"
+                                    }`}
+                                  >
+                                    {coach.active === false
+                                      ? "Archived"
+                                      : "Active"}
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {coach.email ||
+                                    "No email on file"}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  variant="outline"
+                                  disabled={managementBusy}
+                                  onClick={() =>
+                                    void changeCoachActive(
+                                      coach.id,
+                                      coach.active === false,
+                                    )
+                                  }
+                                >
+                                  {coach.active === false
+                                    ? "Restore"
+                                    : "Archive"}
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  disabled={managementBusy}
+                                  className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                                  onClick={() =>
+                                    void permanentlyDeleteCoach(
+                                      coach.id,
+                                      coachName,
+                                    )
+                                  }
+                                >
+                                  Permanent Delete
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {managementLoaded &&
+                        managementCoaches.length === 0 ? (
+                          <p className="p-5 text-sm text-slate-500">
+                            No coaches have been created.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </section>
+
                   {managementMessage ? (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
                       {managementMessage}
@@ -1439,11 +1803,19 @@ export function CoachPortalPage() {
                           className="mt-1 w-full rounded-lg border px-3 py-2"
                         >
                           <option value="">Select coach</option>
-                          {managementCoaches.map((coach) => (
-                            <option key={coach.id} value={coach.id}>
-                              {`${coach.preferred_name?.trim() || coach.first_name} ${coach.last_name}`.trim()}
-                            </option>
-                          ))}
+                          {managementCoaches
+                            .filter(
+                              (coach) =>
+                                coach.active !== false,
+                            )
+                            .map((coach) => (
+                              <option
+                                key={coach.id}
+                                value={coach.id}
+                              >
+                                {`${coach.preferred_name?.trim() || coach.first_name} ${coach.last_name}`.trim()}
+                              </option>
+                            ))}
                         </select>
                       </label>
 
