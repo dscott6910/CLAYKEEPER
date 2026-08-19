@@ -404,3 +404,128 @@ export async function createCoachPortalCoach(input: {
 
   return data as CoachManagementRecord
 }
+
+async function sha256Hex(value: string) {
+  const encoded = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest("SHA-256", encoded)
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+function createActivationToken() {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+export async function createCoachActivationLink(
+  coachId: string,
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can create coach activation links.",
+    )
+  }
+
+  const { data: coach, error: coachError } = await supabase
+    .from("coaches")
+    .select("id,email,user_id")
+    .eq("organization_id", context.organizationId)
+    .eq("id", coachId)
+    .single()
+
+  assert(coachError)
+
+  if (!coach) {
+    throw new Error("Coach not found.")
+  }
+
+  if (!coach.email?.trim()) {
+    throw new Error(
+      "Add an email address to this coach before creating an activation link.",
+    )
+  }
+
+  if (coach.user_id) {
+    throw new Error(
+      "This coach already has a ClayKeeper account.",
+    )
+  }
+
+  const token = createActivationToken()
+  const tokenHash = await sha256Hex(token)
+
+  const { data: expiresAt, error } = await supabase.rpc(
+    "create_coach_account_invitation",
+    {
+      p_coach_id: coachId,
+      p_token_hash: tokenHash,
+    },
+  )
+
+  assert(error)
+
+  const url = new URL(
+    `/coach-activate/${encodeURIComponent(token)}`,
+    window.location.origin,
+  )
+
+  return {
+    activationUrl: url.toString(),
+    expiresAt: String(expiresAt || ""),
+    email: coach.email.trim(),
+  }
+}
+
+export async function updateCoachPortalCoach(
+  coachId: string,
+  input: {
+    firstName: string
+    lastName: string
+    preferredName?: string | null
+    email?: string | null
+    phone?: string | null
+  },
+) {
+  const context = await getCurrentOrganizationContext()
+
+  if (!["owner", "admin"].includes(context.role)) {
+    throw new Error(
+      "Only an owner or administrator can edit coaches.",
+    )
+  }
+
+  const firstName = input.firstName.trim()
+  const lastName = input.lastName.trim()
+
+  if (!firstName) {
+    throw new Error("Coach first name is required.")
+  }
+
+  if (!lastName) {
+    throw new Error("Coach last name is required.")
+  }
+
+  const { error } = await supabase
+    .from("coaches")
+    .update({
+      first_name: firstName,
+      last_name: lastName,
+      preferred_name: cleanOptional(
+        input.preferredName,
+      ),
+      email: cleanOptional(input.email),
+      phone: cleanOptional(input.phone),
+    })
+    .eq("organization_id", context.organizationId)
+    .eq("id", coachId)
+
+  assert(error)
+}

@@ -19,11 +19,13 @@ import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
   assignCoachToTeam,
+  createCoachActivationLink,
   createCoachPortalCoach,
   createCoachPortalTeam,
   endCoachTeamAssignment,
   loadCoachManagementData,
   loadCoachPortalData,
+  updateCoachPortalCoach,
   updateCoachPortalTeam,
   type CoachManagementRecord,
   type TeamCoachAssignment,
@@ -92,6 +94,22 @@ export function CoachPortalPage() {
     useState("")
   const [newCoachEmail, setNewCoachEmail] = useState("")
   const [newCoachPhone, setNewCoachPhone] = useState("")
+
+  const [coachActivationLink, setCoachActivationLink] =
+    useState("")
+  const [coachActivationEmail, setCoachActivationEmail] =
+    useState("")
+
+  const [editCoachFirstName, setEditCoachFirstName] =
+    useState("")
+  const [editCoachLastName, setEditCoachLastName] =
+    useState("")
+  const [editCoachPreferredName, setEditCoachPreferredName] =
+    useState("")
+  const [editCoachEmail, setEditCoachEmail] =
+    useState("")
+  const [editCoachPhone, setEditCoachPhone] =
+    useState("")
 
   async function refresh() {
     setLoading(true)
@@ -450,6 +468,29 @@ export function CoachPortalPage() {
     }
   }, [tab, data?.isManager, managementLoaded])
 
+  useEffect(() => {
+    const coach = managementCoaches.find(
+      (item) => item.id === coachIdToAssign,
+    )
+
+    if (!coach) {
+      setEditCoachFirstName("")
+      setEditCoachLastName("")
+      setEditCoachPreferredName("")
+      setEditCoachEmail("")
+      setEditCoachPhone("")
+      return
+    }
+
+    setEditCoachFirstName(coach.first_name)
+    setEditCoachLastName(coach.last_name)
+    setEditCoachPreferredName(
+      coach.preferred_name ?? "",
+    )
+    setEditCoachEmail(coach.email ?? "")
+    setEditCoachPhone(coach.phone ?? "")
+  }, [coachIdToAssign, managementCoaches])
+
   async function createTeam() {
     setManagementBusy(true)
     setManagementError("")
@@ -542,6 +583,81 @@ export function CoachPortalPage() {
         nextError instanceof Error
           ? nextError.message
           : "Unable to save team details.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function saveCoachDetails() {
+    if (!coachIdToAssign) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+    setCoachActivationLink("")
+    setCoachActivationEmail("")
+
+    try {
+      await updateCoachPortalCoach(
+        coachIdToAssign,
+        {
+          firstName: editCoachFirstName,
+          lastName: editCoachLastName,
+          preferredName: editCoachPreferredName,
+          email: editCoachEmail,
+          phone: editCoachPhone,
+        },
+      )
+
+      const result =
+        await loadCoachManagementData()
+
+      setManagementCoaches(result.coaches)
+      setManagementAssignments(
+        result.assignments,
+      )
+      setManagementMessage(
+        "Coach details saved.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to save coach details.",
+      )
+    } finally {
+      setManagementBusy(false)
+    }
+  }
+
+  async function generateCoachActivationLink() {
+    if (!coachIdToAssign) return
+
+    setManagementBusy(true)
+    setManagementError("")
+    setManagementMessage("")
+    setCoachActivationLink("")
+    setCoachActivationEmail("")
+
+    try {
+      const result =
+        await createCoachActivationLink(
+          coachIdToAssign,
+        )
+
+      setCoachActivationLink(
+        result.activationUrl,
+      )
+      setCoachActivationEmail(result.email)
+      setManagementMessage(
+        "Coach activation link created.",
+      )
+    } catch (nextError) {
+      setManagementError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to create coach activation link.",
       )
     } finally {
       setManagementBusy(false)
@@ -1175,6 +1291,46 @@ export function CoachPortalPage() {
                     </div>
                   ) : null}
 
+                  {coachActivationLink ? (
+                    <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                      <p className="font-semibold text-blue-900">
+                        Coach activation link
+                      </p>
+
+                      <p className="mt-1 text-sm text-blue-800">
+                        Send this private link to{" "}
+                        <strong>
+                          {coachActivationEmail}
+                        </strong>
+                        .
+                      </p>
+
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          readOnly
+                          value={coachActivationLink}
+                          className="min-w-0 flex-1 rounded-lg border bg-white px-3 py-2 text-sm"
+                        />
+
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            void navigator.clipboard.writeText(
+                              coachActivationLink,
+                            )
+                          }
+                        >
+                          Copy Link
+                        </Button>
+                      </div>
+
+                      <p className="mt-2 text-xs text-blue-700">
+                        The link expires after 7 days. Creating
+                        another link invalidates the previous one.
+                      </p>
+                    </section>
+                  ) : null}
+
                   {managementError ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
                       {managementError}
@@ -1310,12 +1466,128 @@ export function CoachPortalPage() {
                       </label>
 
                       <div className="flex items-end">
-                        <Button
-                          onClick={() => void assignCoach()}
-                          disabled={managementBusy || !teamId || !coachIdToAssign}
-                        >
-                          Assign coach
-                        </Button>
+                        {coachIdToAssign ? (
+                          <div className="rounded-xl border bg-slate-50 p-4">
+                            <p className="font-semibold">
+                              Coach Account Details
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              Add the coach&apos;s email here before
+                              generating account access.
+                            </p>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <label className="text-sm font-medium">
+                                First Name
+                                <input
+                                  value={editCoachFirstName}
+                                  onChange={(event) =>
+                                    setEditCoachFirstName(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                                />
+                              </label>
+
+                              <label className="text-sm font-medium">
+                                Last Name
+                                <input
+                                  value={editCoachLastName}
+                                  onChange={(event) =>
+                                    setEditCoachLastName(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                                />
+                              </label>
+
+                              <label className="text-sm font-medium">
+                                Preferred Name
+                                <input
+                                  value={editCoachPreferredName}
+                                  onChange={(event) =>
+                                    setEditCoachPreferredName(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                                />
+                              </label>
+
+                              <label className="text-sm font-medium">
+                                Email
+                                <input
+                                  type="email"
+                                  value={editCoachEmail}
+                                  onChange={(event) =>
+                                    setEditCoachEmail(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                                />
+                              </label>
+
+                              <label className="text-sm font-medium sm:col-span-2">
+                                Phone
+                                <input
+                                  type="tel"
+                                  value={editCoachPhone}
+                                  onChange={(event) =>
+                                    setEditCoachPhone(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="mt-1 w-full rounded-lg border bg-white px-3 py-2"
+                                />
+                              </label>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              className="mt-3"
+                              onClick={() =>
+                                void saveCoachDetails()
+                              }
+                              disabled={
+                                managementBusy ||
+                                !editCoachFirstName.trim() ||
+                                !editCoachLastName.trim()
+                              }
+                            >
+                              Save Coach Details
+                            </Button>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => void assignCoach()}
+                            disabled={
+                              managementBusy ||
+                              !teamId ||
+                              !coachIdToAssign
+                            }
+                          >
+                            Assign coach
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              void generateCoachActivationLink()
+                            }
+                            disabled={
+                              managementBusy ||
+                              !coachIdToAssign
+                            }
+                          >
+                            Generate Activation Link
+                          </Button>
+                        </div>
                       </div>
                     </div>
 

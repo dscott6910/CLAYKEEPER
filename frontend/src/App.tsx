@@ -17,6 +17,12 @@ const SignupDirectoryPage = lazy(() =>
     default: module.SignupDirectoryPage,
   })),
 )
+
+const CoachActivationPage = lazy(() =>
+  import("@/features/auth/CoachActivationPage").then((module) => ({
+    default: module.CoachActivationPage,
+  })),
+)
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
 import { OrganizationHomeRoute } from "@/features/auth/OrganizationHomeRoute"
@@ -323,6 +329,15 @@ function App() {
               element={
                 <LazyRoute>
                   <SignupDirectoryPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/coach-activate/:token"
+              element={
+                <LazyRoute>
+                  <CoachActivationPage />
                 </LazyRoute>
               }
             />
