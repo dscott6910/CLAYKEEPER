@@ -110,13 +110,17 @@ export function DashboardPage() {
 
   const dashboardTitle = canManagePayments
     ? "Executive Dashboard"
-    : canScore
+    : role === "coach"
+      ? "Coach Dashboard"
+      : canScore
       ? "Scoring Dashboard"
       : "Dashboard"
 
   const dashboardDescription = canManagePayments
     ? "Organization performance, financial health, and tournament readiness"
-    : canScore
+    : role === "coach"
+      ? "Team operations, scoring readiness, and competition reporting"
+      : canScore
       ? "Tournament scoring readiness and live competition tools"
       : "Your organization activity and available tools"
 
