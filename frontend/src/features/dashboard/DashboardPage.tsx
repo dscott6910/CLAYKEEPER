@@ -215,6 +215,48 @@ export function DashboardPage() {
     } => action !== null,
   )
 
+  const activityItems = canViewCompetitionReports
+    ? [
+        {
+          label: "Latest import activity",
+          detail: `${analytics?.totalRegistrations ?? 0} registrations currently available`,
+          icon: Upload,
+          color: "bg-emerald-50 text-emerald-700",
+        },
+        {
+          label: "Participant roster updated",
+          detail: `${analytics?.activeParticipants ?? 0} active participants`,
+          icon: UserPlus,
+          color: "bg-blue-50 text-blue-700",
+        },
+        {
+          label: "Awards center ready",
+          detail: "Review current event results and standings",
+          icon: Trophy,
+          color: "bg-violet-50 text-violet-700",
+        },
+      ]
+    : [
+        {
+          label: "Score entry ready",
+          detail: "Open Digital Scoring when a shoot is available",
+          icon: Trophy,
+          color: "bg-emerald-50 text-emerald-700",
+        },
+        {
+          label: "Check-in progress",
+          detail: `${operations?.checkedIn ?? 0} of ${operations?.registrations ?? 0} checked in`,
+          icon: ClipboardList,
+          color: "bg-blue-50 text-blue-700",
+        },
+        {
+          label: "Squadding progress",
+          detail: `${operations?.assignedParticipants ?? 0} of ${operations?.enrolledParticipants ?? 0} assigned`,
+          icon: Target,
+          color: "bg-violet-50 text-violet-700",
+        },
+      ]
+
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
@@ -339,27 +381,17 @@ export function DashboardPage() {
               ) : null}
             </div>
             <div className="divide-y divide-slate-100">
-              <div className="flex items-center gap-3 px-5 py-4">
-                <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><Upload className="h-5 w-5" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">Latest import activity</p>
-                  <p className="text-xs text-slate-500">{analytics?.totalRegistrations ?? 0} registrations currently available</p>
+              {activityItems.map(({ label, detail, icon: Icon, color }) => (
+                <div key={label} className="flex items-center gap-3 px-5 py-4">
+                  <div className={`rounded-lg p-2 ${color}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{label}</p>
+                    <p className="text-xs text-slate-500">{detail}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 px-5 py-4">
-                <div className="rounded-lg bg-blue-50 p-2 text-blue-700"><UserPlus className="h-5 w-5" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">Participant roster updated</p>
-                  <p className="text-xs text-slate-500">{analytics?.activeParticipants ?? 0} active participants</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 px-5 py-4">
-                <div className="rounded-lg bg-violet-50 p-2 text-violet-700"><Trophy className="h-5 w-5" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">Awards center ready</p>
-                  <p className="text-xs text-slate-500">Review current event results and standings</p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
