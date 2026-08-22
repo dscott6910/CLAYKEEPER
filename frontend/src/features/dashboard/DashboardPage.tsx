@@ -20,6 +20,10 @@ import { useOrganization } from "@/features/organization/OrganizationProvider"
 import { DashboardSkeleton } from "@/features/analytics/components/DashboardSkeleton"
 import { loadExecutiveAnalytics, type ExecutiveAnalytics } from "@/lib/services/analytics"
 import { loadDashboardSnapshot, type DashboardSnapshot } from "@/lib/services/dashboard"
+import {
+  hasCapability,
+  type OrganizationCapability,
+} from "@/lib/permissions"
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -43,7 +47,7 @@ function percent(part: number, total: number) {
 }
 
 export function DashboardPage() {
-  const { organizationId, memberships } = useOrganization()
+  const { organizationId, memberships, role } = useOrganization()
 
   const currentOrganizationName =
     memberships.find(
@@ -94,12 +98,30 @@ export function DashboardPage() {
     ]
   }, [operations])
 
+  const canManageEvents = hasCapability(role, "manageEvents")
+  const canManageImports = hasCapability(role, "manageImports")
+  const canManagePayments = hasCapability(role, "managePayments")
+  const canManageRegistration = hasCapability(role, "manageRegistration")
+  const canScore = hasCapability(role, "score")
+
+  const dashboardTitle = canManagePayments
+    ? "Executive Dashboard"
+    : canScore
+      ? "Scoring Dashboard"
+      : "Dashboard"
+
+  const dashboardDescription = canManagePayments
+    ? "Organization performance, financial health, and tournament readiness"
+    : canScore
+      ? "Tournament scoring readiness and live competition tools"
+      : "Your organization activity and available tools"
+
   if (loading && !analytics) {
     return (
       <div className="min-h-screen">
         <AppHeader
-          title="Executive Dashboard"
-          description="Organization performance, financial health, and tournament readiness"
+          title={dashboardTitle}
+          description={dashboardDescription}
           seasonLabel="Active Season"
         />
         <DashboardSkeleton />
@@ -114,6 +136,7 @@ export function DashboardPage() {
       detail: "Organization-wide roster",
       icon: Users,
       href: "/participants",
+      capability: "manageParticipants",
     },
     {
       label: "Active Teams",
@@ -121,6 +144,7 @@ export function DashboardPage() {
       detail: "Current competitive teams",
       icon: School,
       href: "/teams",
+      capability: "manageParticipants",
     },
     {
       label: "Events Scheduled",
@@ -128,6 +152,7 @@ export function DashboardPage() {
       detail: `${analytics?.liveEvents ?? 0} currently active`,
       icon: CalendarDays,
       href: "/events",
+      capability: "manageEvents",
     },
     {
       label: "Revenue Collected",
@@ -135,6 +160,7 @@ export function DashboardPage() {
       detail: "Total collected this season",
       icon: CreditCard,
       href: "/treasurer",
+      capability: "managePayments",
     },
     {
       label: "Outstanding",
@@ -142,6 +168,7 @@ export function DashboardPage() {
       detail: "Outstanding balances",
       icon: ClipboardList,
       href: "/registration-payments",
+      capability: "managePayments",
     },
     {
       label: "Event Registrations",
@@ -149,14 +176,46 @@ export function DashboardPage() {
       detail: "Registrations for selected event",
       icon: ClipboardList,
       href: "/reports",
+      capability: "manageRegistration",
     },
-  ]
+  ].filter((metric) =>
+    hasCapability(role, metric.capability as OrganizationCapability),
+  )
+
+  const quickActions = [
+    canManageEvents
+      ? { label: "Add Event", href: "/events", icon: CalendarDays }
+      : null,
+    canManageImports
+      ? { label: "Import Shooters", href: "/operations", icon: Upload }
+      : null,
+    canManageEvents
+      ? { label: "Create Shoot", href: "/events", icon: Target }
+      : null,
+    canManageRegistration
+      ? { label: "View Reports", href: "/reports", icon: BarChart3 }
+      : null,
+    canScore
+      ? { label: "Digital Scoring", href: "/scoring", icon: Trophy }
+      : null,
+    canScore
+      ? { label: "Awards & Results", href: "/awards", icon: Medal }
+      : null,
+  ].filter(
+    (
+      action,
+    ): action is {
+      label: string
+      href: string
+      icon: typeof CalendarDays
+    } => action !== null,
+  )
 
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
-        title="Executive Dashboard"
-        description="Organization performance, financial health, and tournament readiness"
+        title={dashboardTitle}
+        description={dashboardDescription}
         seasonLabel="Active Season"
       />
 
@@ -239,26 +298,28 @@ export function DashboardPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {metrics.map(({ label, value, detail, icon: Icon, href }) => (
-            <Link
-              key={label}
-              to={href}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500">{label}</p>
-                  <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{value}</p>
-                  <p className="mt-1 text-sm text-slate-500">{detail}</p>
+        {metrics.length > 0 ? (
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {metrics.map(({ label, value, detail, icon: Icon, href }) => (
+              <Link
+                key={label}
+                to={href}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-500">{label}</p>
+                    <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{value}</p>
+                    <p className="mt-1 text-sm text-slate-500">{detail}</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700">
+                    <Icon className="h-5 w-5" />
+                  </div>
                 </div>
-                <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700">
-                  <Icon className="h-5 w-5" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </section>
+              </Link>
+            ))}
+          </section>
+        ) : null}
 
         <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -267,9 +328,11 @@ export function DashboardPage() {
                 <BarChart3 className="h-5 w-5 text-emerald-600" />
                 <h3 className="font-semibold text-slate-950">Recent Activity</h3>
               </div>
-              <Link to="/reports" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                View All
-              </Link>
+              {canManageRegistration ? (
+                <Link to="/reports" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                  View All
+                </Link>
+              ) : null}
             </div>
             <div className="divide-y divide-slate-100">
               <div className="flex items-center gap-3 px-5 py-4">
@@ -302,14 +365,7 @@ export function DashboardPage() {
               <h3 className="font-semibold text-slate-950">Quick Actions</h3>
             </div>
             <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-              {[
-                { label: "Add Event", href: "/events", icon: CalendarDays },
-                { label: "Import Shooters", href: "/operations", icon: Upload },
-                { label: "Create Shoot", href: "/events", icon: Target },
-                { label: "View Reports", href: "/reports", icon: BarChart3 },
-                { label: "Digital Scoring", href: "/scoring", icon: Trophy },
-                { label: "Awards & Results", href: "/awards", icon: Medal },
-              ].map(({ label, href, icon: Icon }) => (
+              {quickActions.map(({ label, href, icon: Icon }) => (
                 <Link
                   key={label}
                   to={href}
