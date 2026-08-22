@@ -99,6 +99,32 @@ if ! command -v npx >/dev/null 2>&1; then
   fail "npx was not found. Run this on the ClayKeeper server where Supabase CLI is available."
 fi
 
+if ! command -v docker >/dev/null 2>&1; then
+  fail "Docker was not found. Supabase CLI database dumps require Docker on this server."
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  cat >&2 <<HELP
+[backup] ERROR: Docker is installed, but this user cannot access it.
+
+Supabase CLI uses Docker for database dumps. Fix Docker access for this server user,
+then log out and back in before rerunning the backup.
+
+Suggested server commands:
+  sudo usermod -aG docker $(whoami)
+  exit
+
+After reconnecting:
+  docker ps
+  cd ~/apps/CLAYKEEPER
+  ./backup-production.sh
+
+Do not run the whole backup script with sudo unless you intentionally want root-owned
+backup files and root-owned Supabase credentials.
+HELP
+  exit 1
+fi
+
 cd "$PROJECT_ROOT"
 
 printf '\n============================================================\n'
