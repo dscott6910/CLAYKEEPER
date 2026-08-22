@@ -103,6 +103,10 @@ export function DashboardPage() {
   const canManagePayments = hasCapability(role, "managePayments")
   const canManageRegistration = hasCapability(role, "manageRegistration")
   const canScore = hasCapability(role, "score")
+  const canViewCompetitionReports = hasCapability(
+    role,
+    "viewCompetitionReports",
+  )
 
   const dashboardTitle = canManagePayments
     ? "Executive Dashboard"
@@ -198,7 +202,7 @@ export function DashboardPage() {
     canScore
       ? { label: "Digital Scoring", href: "/scoring", icon: Trophy }
       : null,
-    canScore
+    canViewCompetitionReports
       ? { label: "Awards & Results", href: "/awards", icon: Medal }
       : null,
   ].filter(

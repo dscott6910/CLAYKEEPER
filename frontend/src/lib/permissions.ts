@@ -15,6 +15,7 @@ export type OrganizationCapability =
   | "manageImports"
   | "manageCoachPortal"
   | "operateEvents"
+  | "viewCompetitionReports"
   | "score"
   | "deleteScores"
   | "managePublicPortal"
@@ -74,6 +75,7 @@ export function hasCapability(
     case "manageCoachPortal":
     case "operateEvents":
     case "managePublicPortal":
+    case "viewCompetitionReports":
       return COACH_ROLES.includes(normalizedRole)
 
     default:

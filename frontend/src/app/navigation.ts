@@ -127,16 +127,19 @@ export const navigationSections: NavigationSection[] = [
         label: "Reports",
         path: "/reports",
         icon: BarChart3,
+        capability: "viewCompetitionReports",
       },
       {
         label: "Analytics",
         path: "/analytics",
         icon: BarChart3,
+        capability: "viewCompetitionReports",
       },
       {
         label: "Awards & Results",
         path: "/awards",
         icon: Medal,
+        capability: "viewCompetitionReports",
       },
       {
         label: "Treasurer Center",
@@ -154,6 +157,7 @@ export const navigationSections: NavigationSection[] = [
         label: "Live Leaderboard",
         path: "/leaderboard",
         icon: Tv,
+        capability: "viewCompetitionReports",
       },
       {
         label: "Season Management",

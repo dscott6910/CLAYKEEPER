@@ -629,7 +629,7 @@ function App() {
                    }
                 />
                 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="events/:eventId/reports"
                   element={
@@ -640,7 +640,7 @@ function App() {
                 />
                 </Route>
 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="reports"
                   element={
@@ -651,7 +651,7 @@ function App() {
                 />
                 </Route>
 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="analytics"
                   element={
@@ -662,7 +662,7 @@ function App() {
                 />
                 </Route>
 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="events/:eventId/awards"
                   element={
@@ -673,7 +673,7 @@ function App() {
                 />
                 </Route>
 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="awards"
                   element={
@@ -706,7 +706,7 @@ function App() {
                   />
                 </Route>
 
-                <Route element={<NonMemberRoute />}>
+                <Route element={<CapabilityRoute capability="viewCompetitionReports" />}>
                   <Route
                   path="leaderboard"
                   element={
