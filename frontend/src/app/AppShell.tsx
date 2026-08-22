@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Menu } from "lucide-react"
 import { Outlet } from "react-router-dom"
 
+import { AccountMenu } from "@/app/AccountMenu"
 import { AppSidebar } from "@/app/AppSidebar"
 import {
   MobileNavigationContext,
@@ -92,13 +93,15 @@ export function AppShell() {
               ClayKeeper
             </span>
 
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
               <GlobalSearch />
+              <AccountMenu />
             </div>
           </div>
 
-          <div className="hidden min-h-14 items-center justify-end border-b border-slate-200 bg-slate-50 px-6 md:flex">
+          <div className="hidden min-h-14 items-center justify-end gap-3 border-b border-slate-200 bg-slate-50 px-6 md:flex">
             <GlobalSearch />
+            <AccountMenu />
           </div>
 
           <main className="min-w-0">
