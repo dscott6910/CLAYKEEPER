@@ -19,50 +19,10 @@ import {
   loadParticipantSignupOrganization,
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
-
-type SignupSession = {
-  id: string
-  name: string
-  description: string
-  dates: string
-  location: string
-  price: number
-}
-
-const DEFAULT_SESSIONS: SignupSession[] = [
-  {
-    id: "bunker",
-    name: "2026 - 2027: Bunker",
-    description: "Olympic bunker trap season registration.",
-    dates: "08/01/2026 - 06/13/2027",
-    location: "California Youth Shooting Sports Association",
-    price: 35,
-  },
-  {
-    id: "skeet",
-    name: "2026 - 2027: Skeet",
-    description: "Youth skeet season registration.",
-    dates: "08/01/2026 - 06/13/2027",
-    location: "California Youth Shooting Sports Association",
-    price: 35,
-  },
-  {
-    id: "sporting-clays",
-    name: "2026 - 2027: Sporting Clays",
-    description: "Sporting clays season registration.",
-    dates: "08/01/2026 - 06/13/2027",
-    location: "California Youth Shooting Sports Association",
-    price: 35,
-  },
-  {
-    id: "trap",
-    name: "2026 - 2027: Trap",
-    description: "American trap season registration.",
-    dates: "08/01/2026 - 06/13/2027",
-    location: "California Youth Shooting Sports Association",
-    price: 35,
-  },
-]
+import {
+  YOUTH_REGISTRATION_SESSIONS,
+  youthRegistrationSessionsByIds,
+} from "@/lib/services/youthRegistrationSessions"
 
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message
@@ -124,10 +84,7 @@ export function YouthSessionSelectionPage() {
   }, [organizationSlug])
 
   const selectedSessions = useMemo(
-    () =>
-      DEFAULT_SESSIONS.filter((session) =>
-        selectedIds.includes(session.id),
-      ),
+    () => youthRegistrationSessionsByIds(selectedIds),
     [selectedIds],
   )
 
@@ -183,9 +140,9 @@ export function YouthSessionSelectionPage() {
     )
   }
 
-  const profilePath = `/signup/${encodeURIComponent(
+  const registrationInfoPath = `/signup/${encodeURIComponent(
     organization.organizationSlug,
-  )}/youth/profile`
+  )}/youth/registration?session=${encodeURIComponent(selectedIds.join(","))}`
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -274,7 +231,7 @@ export function YouthSessionSelectionPage() {
             </div>
 
             <div className="mt-5 space-y-4">
-              {DEFAULT_SESSIONS.map((session) => {
+              {YOUTH_REGISTRATION_SESSIONS.map((session) => {
                 const selected = selectedIds.includes(session.id)
 
                 return (
@@ -396,7 +353,7 @@ export function YouthSessionSelectionPage() {
                 )}
 
                 <Link
-                  to={selectedSessions.length ? profilePath : "#"}
+                  to={selectedSessions.length ? registrationInfoPath : "#"}
                   aria-disabled={!selectedSessions.length}
                   onClick={(event) => {
                     if (!selectedSessions.length) {

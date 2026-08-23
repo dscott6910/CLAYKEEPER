@@ -24,6 +24,12 @@ const YouthSessionSelectionPage = lazy(() =>
   })),
 )
 
+const YouthRegistrationInformationPage = lazy(() =>
+  import("@/features/auth/YouthRegistrationInformationPage").then((module) => ({
+    default: module.YouthRegistrationInformationPage,
+  })),
+)
+
 const StaffSignupPage = lazy(() =>
   import("@/features/auth/StaffSignupPage").then((module) => ({
     default: module.StaffSignupPage,
@@ -383,6 +389,15 @@ function App() {
               element={
                 <LazyRoute>
                   <ParticipantSignupPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/signup/:organizationSlug/youth/registration"
+              element={
+                <LazyRoute>
+                  <YouthRegistrationInformationPage />
                 </LazyRoute>
               }
             />
