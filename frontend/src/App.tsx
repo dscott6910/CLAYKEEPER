@@ -47,6 +47,18 @@ const CoachActivationPage = lazy(() =>
     default: module.CoachActivationPage,
   })),
 )
+
+const TermsPage = lazy(() =>
+  import("@/features/legal/TermsPage").then((module) => ({
+    default: module.TermsPage,
+  })),
+)
+
+const PrivacyPage = lazy(() =>
+  import("@/features/legal/TermsPage").then((module) => ({
+    default: module.PrivacyPage,
+  })),
+)
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute"
 import { CapabilityRoute } from "@/features/auth/CapabilityRoute"
 import { OrganizationHomeRoute } from "@/features/auth/OrganizationHomeRoute"
@@ -347,6 +359,24 @@ function App() {
           <OrganizationProvider>
             <Routes>
             <Route path="/login" element={<LoginPage />} />
+
+            <Route
+              path="/terms"
+              element={
+                <LazyRoute>
+                  <TermsPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/privacy"
+              element={
+                <LazyRoute>
+                  <PrivacyPage />
+                </LazyRoute>
+              }
+            />
 
             <Route
               path="/signup"
