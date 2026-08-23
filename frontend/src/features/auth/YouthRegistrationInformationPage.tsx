@@ -47,6 +47,9 @@ export function YouthRegistrationInformationPage() {
   const [error, setError] = useState("")
   const [email, setEmail] = useState("")
   const [emailConfirmed, setEmailConfirmed] = useState(false)
+  const [consentModalOpen, setConsentModalOpen] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
 
   const selectedIds = useMemo(
     () =>
@@ -159,6 +162,12 @@ export function YouthRegistrationInformationPage() {
 
   function handleEmailNext() {
     if (!email.trim()) return
+    setConsentModalOpen(true)
+  }
+
+  function handleConsentNext() {
+    if (!termsAccepted || !privacyAccepted) return
+    setConsentModalOpen(false)
     setEmailConfirmed(true)
   }
 
@@ -388,6 +397,102 @@ export function YouthRegistrationInformationPage() {
           </div>
         </section>
       </div>
+
+      {consentModalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="signup-consent-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="signup-consent-title"
+                  className="text-xl font-bold tracking-tight text-slate-950"
+                >
+                  Terms and privacy
+                </h2>
+
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  You must accept ClayKeeper&apos;s Terms of Use
+                  and acknowledge the Privacy Policy before
+                  continuing with online registration.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setConsentModalOpen(false)}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close terms and privacy dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <label className="flex items-start gap-3 text-sm leading-6 text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(event) =>
+                    setTermsAccepted(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+
+                <span>
+                  I have read and agree to ClayKeeper&apos;s{" "}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                  >
+                    Terms of Use
+                  </a>
+                  .
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 text-sm leading-6 text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={privacyAccepted}
+                  onChange={(event) =>
+                    setPrivacyAccepted(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+
+                <span>
+                  I have read and am aware of ClayKeeper&apos;s{" "}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                  >
+                    Privacy Policy
+                  </a>
+                  .
+                </span>
+              </label>
+            </div>
+
+            <Button
+              type="button"
+              className="mt-6 h-11 w-full"
+              disabled={!termsAccepted || !privacyAccepted}
+              onClick={handleConsentNext}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
