@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react"
-import type { FormEvent, HTMLAttributes } from "react"
+import { useEffect, useRef, useState } from "react"
+import type {
+  FormEvent,
+  HTMLAttributes,
+  PointerEvent,
+} from "react"
 import {
   Link,
   useParams,
@@ -232,7 +236,11 @@ export function ParticipantSignupPage() {
     useState(false)
   const [signatureMode, setSignatureMode] =
     useState<"write" | "type">("write")
-  const [signature, setSignature] = useState("")
+  const [drawnSignature, setDrawnSignature] = useState("")
+  const [typedSignature, setTypedSignature] = useState("")
+  const signatureCanvasRef =
+    useRef<HTMLCanvasElement | null>(null)
+  const signatureDrawingRef = useRef(false)
   const [activeWaiver, setActiveWaiver] =
     useState<WaiverKey | null>(null)
   const [waiversRead, setWaiversRead] = useState<
@@ -390,7 +398,12 @@ export function ParticipantSignupPage() {
       return
     }
 
-    if (!signature.trim()) {
+    const submittedSignature =
+      signatureMode === "write"
+        ? drawnSignature
+        : typedSignature.trim()
+
+    if (!submittedSignature) {
       setError(
         "Please complete the digital signature before continuing.",
       )
@@ -446,7 +459,9 @@ export function ParticipantSignupPage() {
           ? `Guardian business phone: ${guardianBusinessPhone.trim()} ext. ${guardianBusinessPhoneExt.trim()}`.trim()
           : "",
         `Waivers accepted: Parents/Guardians and Athletes Waiver, Medical Consent, Sportsmanship Contract, ClayKeeper Agreement and Waiver`,
-        `Digital signature (${signatureMode}): ${signature.trim()}`,
+        signatureMode === "write"
+          ? "Digital signature: handwritten signature captured"
+          : `Digital signature (typed): ${submittedSignature}`,
       ]
         .filter(Boolean)
         .join("\n")
@@ -509,6 +524,70 @@ export function ParticipantSignupPage() {
       [waiver]: true,
     }))
     setActiveWaiver(null)
+  }
+
+  function getSignaturePoint(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current
+    if (!canvas) return null
+
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+    }
+  }
+
+  function beginSignature(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current
+    const point = getSignaturePoint(event)
+    if (!canvas || !point) return
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    signatureDrawingRef.current = true
+
+    const context = canvas.getContext("2d")
+    if (!context) return
+
+    context.lineWidth = 3
+    context.lineCap = "round"
+    context.lineJoin = "round"
+    context.strokeStyle = "#0f172a"
+    context.beginPath()
+    context.moveTo(point.x, point.y)
+  }
+
+  function drawSignature(event: PointerEvent<HTMLCanvasElement>) {
+    if (!signatureDrawingRef.current) return
+
+    const canvas = signatureCanvasRef.current
+    const point = getSignaturePoint(event)
+    if (!canvas || !point) return
+
+    const context = canvas.getContext("2d")
+    if (!context) return
+
+    context.lineTo(point.x, point.y)
+    context.stroke()
+    setDrawnSignature(canvas.toDataURL("image/png"))
+  }
+
+  function endSignature(event: PointerEvent<HTMLCanvasElement>) {
+    if (!signatureDrawingRef.current) return
+
+    signatureDrawingRef.current = false
+    event.currentTarget.releasePointerCapture(event.pointerId)
+
+    const canvas = signatureCanvasRef.current
+    if (canvas) setDrawnSignature(canvas.toDataURL("image/png"))
+  }
+
+  function clearDrawnSignature() {
+    const canvas = signatureCanvasRef.current
+    if (!canvas) return
+
+    const context = canvas.getContext("2d")
+    context?.clearRect(0, 0, canvas.width, canvas.height)
+    setDrawnSignature("")
   }
 
   if (loadingOrganization) {
@@ -1242,16 +1321,36 @@ export function ParticipantSignupPage() {
                     Write your signature
                   </label>
 
-                  <textarea
-                    value={signature}
-                    onChange={(event) =>
-                      setSignature(event.target.value)
-                    }
-                    rows={4}
-                    required
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                    placeholder="Type or write your legal signature"
-                  />
+                  {signatureMode === "write" ? (
+                    <div>
+                      <canvas
+                        ref={signatureCanvasRef}
+                        width={900}
+                        height={240}
+                        onPointerDown={beginSignature}
+                        onPointerMove={drawSignature}
+                        onPointerUp={endSignature}
+                        onPointerCancel={endSignature}
+                        className="h-36 w-full touch-none rounded-lg border border-slate-300 bg-white"
+                        aria-label="Draw your signature"
+                      />
+
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <p className="text-xs text-slate-500">
+                          Use your mouse, trackpad, or finger to
+                          sign inside the box.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={clearDrawnSignature}
+                          className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <label className="flex items-center gap-2 text-sm text-slate-700">
                     <input
@@ -1262,6 +1361,19 @@ export function ParticipantSignupPage() {
                     />
                     Type your signature
                   </label>
+
+                  {signatureMode === "type" ? (
+                    <input
+                      type="text"
+                      value={typedSignature}
+                      onChange={(event) =>
+                        setTypedSignature(event.target.value)
+                      }
+                      required
+                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                      placeholder="Type your legal signature"
+                    />
+                  ) : null}
                 </div>
               </div>
 
