@@ -160,6 +160,21 @@ export function YouthRegistrationInformationPage() {
     organization.organizationSlug,
   )}/youth`
 
+  const currentRegistrationPath =
+    typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : `/signup/${encodeURIComponent(
+          organization.organizationSlug,
+        )}/youth/registration?session=${encodeURIComponent(selectedSessionParam)}`
+
+  const termsPath = `/terms?returnTo=${encodeURIComponent(
+    currentRegistrationPath,
+  )}`
+
+  const privacyPath = `/privacy?returnTo=${encodeURIComponent(
+    currentRegistrationPath,
+  )}`
+
   function handleEmailNext() {
     if (!email.trim()) return
     setConsentModalOpen(true)
@@ -446,9 +461,7 @@ export function YouthRegistrationInformationPage() {
                 <span>
                   I have read and agree to ClayKeeper&apos;s{" "}
                   <a
-                    href="/terms"
-                    target="_blank"
-                    rel="noreferrer"
+                    href={termsPath}
                     className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                   >
                     Terms of Use
@@ -470,9 +483,7 @@ export function YouthRegistrationInformationPage() {
                 <span>
                   I have read and am aware of ClayKeeper&apos;s{" "}
                   <a
-                    href="/privacy"
-                    target="_blank"
-                    rel="noreferrer"
+                    href={privacyPath}
                     className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                   >
                     Privacy Policy

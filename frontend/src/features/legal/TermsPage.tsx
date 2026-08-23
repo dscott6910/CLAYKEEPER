@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import type { ReactNode } from "react"
 
 import {
@@ -525,6 +525,14 @@ function LegalPageShell({
   effectiveDate: string
   children: ReactNode
 }) {
+  const [searchParams] = useSearchParams()
+
+  const requestedReturnTo = searchParams.get("returnTo") || ""
+
+  const returnTo = requestedReturnTo.startsWith("/")
+    ? requestedReturnTo
+    : "/login"
+
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6 lg:px-8">
       <article className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl sm:p-10">
@@ -538,7 +546,7 @@ function LegalPageShell({
           </Link>
 
           <Link
-            to="/login"
+            to={returnTo}
             className="text-sm font-semibold text-slate-600 hover:text-emerald-700"
           >
             Back to ClayKeeper
