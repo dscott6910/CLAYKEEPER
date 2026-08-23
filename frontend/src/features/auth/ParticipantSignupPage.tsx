@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react"
 import type { FormEvent, HTMLAttributes } from "react"
-import { Link, useParams } from "react-router-dom"
+import {
+  Link,
+  useParams,
+  useSearchParams,
+} from "react-router-dom"
 import {
   CalendarDays,
   LockKeyhole,
@@ -41,6 +45,7 @@ function errorMessage(error: unknown) {
 
 export function ParticipantSignupPage() {
   const { organizationSlug = "" } = useParams()
+  const [searchParams] = useSearchParams()
   const { session } = useAuth()
 
   const [organization, setOrganization] =
@@ -62,13 +67,62 @@ export function ParticipantSignupPage() {
   const [ataNumber, setAtaNumber] = useState("")
   const [nssaNumber, setNssaNumber] = useState("")
   const [phone, setPhone] = useState("")
-  const [emergencyContactName, setEmergencyContactName] = useState("")
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("")
   const [notes, setNotes] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] =
     useState("")
+  const [country, setCountry] = useState("United States")
+  const [address, setAddress] = useState("")
+  const [addressLine2, setAddressLine2] = useState("")
+  const [city, setCity] = useState("")
+  const [stateProvince, setStateProvince] = useState("")
+  const [zip, setZip] = useState("")
+  const [physicalSameAsMailing, setPhysicalSameAsMailing] =
+    useState("")
+  const [priorShootingExperience, setPriorShootingExperience] =
+    useState("")
+  const [teamAffiliated, setTeamAffiliated] = useState("")
+  const [teamName, setTeamName] = useState("")
+  const [homeRange, setHomeRange] = useState("")
+  const [coachName, setCoachName] = useState("")
+  const [secondaryEmergencyContact, setSecondaryEmergencyContact] =
+    useState("")
+  const [emergencyContactMethods, setEmergencyContactMethods] =
+    useState<string[]>([])
+  const [guardianFirstName, setGuardianFirstName] = useState("")
+  const [guardianLastName, setGuardianLastName] = useState("")
+  const [guardianGender, setGuardianGender] = useState("")
+  const [guardianBirthDate, setGuardianBirthDate] = useState("")
+  const [guardianEmail, setGuardianEmail] = useState("")
+  const [guardianPhone, setGuardianPhone] = useState("")
+  const [guardianCellPhone, setGuardianCellPhone] = useState("")
+  const [guardianCountry, setGuardianCountry] =
+    useState("United States")
+  const [guardianAddress, setGuardianAddress] = useState("")
+  const [guardianAddressLine2, setGuardianAddressLine2] =
+    useState("")
+  const [guardianCity, setGuardianCity] = useState("")
+  const [guardianStateProvince, setGuardianStateProvince] =
+    useState("")
+  const [guardianZip, setGuardianZip] = useState("")
+  const [guardianBusinessPhone, setGuardianBusinessPhone] =
+    useState("")
+  const [guardianBusinessPhoneExt, setGuardianBusinessPhoneExt] =
+    useState("")
+  const [guardianRelationship, setGuardianRelationship] =
+    useState("")
+  const [waiverParentAthlete, setWaiverParentAthlete] =
+    useState(false)
+  const [waiverMedicalConsent, setWaiverMedicalConsent] =
+    useState(false)
+  const [waiverSportsmanship, setWaiverSportsmanship] =
+    useState(false)
+  const [waiverClayKeeperAgreement, setWaiverClayKeeperAgreement] =
+    useState(false)
+  const [signatureMode, setSignatureMode] =
+    useState<"write" | "type">("write")
+  const [signature, setSignature] = useState("")
 
   const [submitting, setSubmitting] = useState(false)
   const [finishing, setFinishing] = useState(false)
@@ -78,6 +132,15 @@ export function ParticipantSignupPage() {
 
   const [confirmationRequired, setConfirmationRequired] =
     useState(false)
+
+  useEffect(() => {
+    setFirstName(searchParams.get("firstName") || "")
+    setLastName(searchParams.get("lastName") || "")
+    setBirthDate(searchParams.get("birthDate") || "")
+    setGender(searchParams.get("gender") || "")
+    setEmail(searchParams.get("email") || "")
+    setGuardianEmail(searchParams.get("email") || "")
+  }, [searchParams])
 
   useEffect(() => {
     let mounted = true
@@ -195,9 +258,79 @@ export function ParticipantSignupPage() {
       return
     }
 
+    if (
+      !waiverParentAthlete ||
+      !waiverMedicalConsent ||
+      !waiverSportsmanship ||
+      !waiverClayKeeperAgreement
+    ) {
+      setError(
+        "Please review and accept all waivers and agreements.",
+      )
+      return
+    }
+
+    if (!signature.trim()) {
+      setError(
+        "Please complete the digital signature before continuing.",
+      )
+      return
+    }
+
     setSubmitting(true)
 
     try {
+      const registrationNotes = [
+        notes.trim()
+          ? `Organization notes: ${notes.trim()}`
+          : "",
+        `Shooter mailing address: ${address.trim()} ${addressLine2.trim()} ${city.trim()}, ${stateProvince.trim()} ${zip.trim()} ${country.trim()}`.trim(),
+        physicalSameAsMailing
+          ? `Physical address same as mailing: ${physicalSameAsMailing}`
+          : "",
+        priorShootingExperience
+          ? `Prior shooting experience: ${priorShootingExperience}`
+          : "",
+        teamAffiliated
+          ? `Affiliated with high school team: ${teamAffiliated}`
+          : "",
+        teamName ? `Team name: ${teamName}` : "",
+        homeRange
+          ? `Home range / club / training facility: ${homeRange}`
+          : "",
+        coachName ? `Coach name: ${coachName}` : "",
+        secondaryEmergencyContact
+          ? `Secondary emergency contact: ${secondaryEmergencyContact}`
+          : "",
+        emergencyContactMethods.length
+          ? `Emergency contact methods: ${emergencyContactMethods.join(", ")}`
+          : "",
+        `Primary parent/guardian: ${guardianFirstName.trim()} ${guardianLastName.trim()} (${guardianRelationship.trim()})`.trim(),
+        guardianGender
+          ? `Guardian gender: ${guardianGender}`
+          : "",
+        guardianBirthDate
+          ? `Guardian date of birth: ${guardianBirthDate}`
+          : "",
+        guardianEmail
+          ? `Guardian email: ${guardianEmail.trim()}`
+          : "",
+        guardianPhone
+          ? `Guardian home phone: ${guardianPhone.trim()}`
+          : "",
+        guardianCellPhone
+          ? `Guardian cell phone: ${guardianCellPhone.trim()}`
+          : "",
+        `Guardian address: ${guardianAddress.trim()} ${guardianAddressLine2.trim()} ${guardianCity.trim()}, ${guardianStateProvince.trim()} ${guardianZip.trim()} ${guardianCountry.trim()}`.trim(),
+        guardianBusinessPhone
+          ? `Guardian business phone: ${guardianBusinessPhone.trim()} ext. ${guardianBusinessPhoneExt.trim()}`.trim()
+          : "",
+        `Waivers accepted: Parents/Guardians and Athletes Waiver, Medical Consent, Sportsmanship Contract, ClayKeeper Agreement and Waiver`,
+        `Digital signature (${signatureMode}): ${signature.trim()}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+
       const result = await createParticipantAccount(
         email,
         password,
@@ -214,9 +347,12 @@ export function ParticipantSignupPage() {
           ataNumber,
           nssaNumber,
           phone,
-          emergencyContactName,
-          emergencyContactPhone,
-          notes,
+          emergencyContactName:
+            `${guardianFirstName} ${guardianLastName}`.trim(),
+          emergencyContactPhone:
+            guardianCellPhone ||
+            guardianPhone,
+          notes: registrationNotes,
         },
       )
 
@@ -237,6 +373,14 @@ export function ParticipantSignupPage() {
     clearPendingParticipantSignup()
     setConfirmationRequired(false)
     setError("")
+  }
+
+  function toggleEmergencyContactMethod(method: string) {
+    setEmergencyContactMethods((current) =>
+      current.includes(method)
+        ? current.filter((item) => item !== method)
+        : [...current, method],
+    )
   }
 
   if (loadingOrganization) {
@@ -485,7 +629,7 @@ export function ParticipantSignupPage() {
                 />
 
                 <SignupInput
-                  label="Graduation year"
+                  label="Grade as of 2026-2027 school year"
                   type="number"
                   value={graduationYear}
                   onChange={setGraduationYear}
@@ -500,11 +644,12 @@ export function ParticipantSignupPage() {
                   htmlFor="gender"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Gender
+                  Gender <span className="text-red-500">*</span>
                 </label>
 
                 <select
                   id="gender"
+                  required
                   value={gender}
                   onChange={(event) =>
                     setGender(event.target.value)
@@ -520,36 +665,476 @@ export function ParticipantSignupPage() {
               </div>
 
               <SignupSection
-                title="Contact and emergency contact"
-                description="Used by organization staff for season communication and safety follow-up."
+                title="Shooter contact and address"
+                description="Used by organization staff for season communication, rosters, and safety follow-up."
               />
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <SignupInput
-                  label="Shooter phone"
+                  label="Email address"
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                  icon={Mail}
+                  autoComplete="email"
+                  required
+                />
+
+                <SignupInput
+                  label="Home phone number"
                   type="tel"
                   value={phone}
                   onChange={setPhone}
                   icon={Phone}
                   autoComplete="tel"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SignupInput
+                  label="Country"
+                  value={country}
+                  onChange={setCountry}
+                  icon={User}
+                  autoComplete="country-name"
+                  required
                 />
 
                 <SignupInput
-                  label="Emergency contact name"
-                  value={emergencyContactName}
-                  onChange={setEmergencyContactName}
+                  label="Address"
+                  value={address}
+                  onChange={setAddress}
                   icon={User}
-                  autoComplete="name"
+                  autoComplete="street-address"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SignupInput
+                  label="Address line 2"
+                  value={addressLine2}
+                  onChange={setAddressLine2}
+                  icon={User}
+                  autoComplete="address-line2"
+                />
+
+                <SignupInput
+                  label="City"
+                  value={city}
+                  onChange={setCity}
+                  icon={User}
+                  autoComplete="address-level2"
+                  required
+                />
+
+                <SignupInput
+                  label="State"
+                  value={stateProvince}
+                  onChange={setStateProvince}
+                  icon={User}
+                  autoComplete="address-level1"
+                  required
                 />
               </div>
 
               <SignupInput
-                label="Emergency contact phone"
-                type="tel"
-                value={emergencyContactPhone}
-                onChange={setEmergencyContactPhone}
-                icon={Phone}
-                autoComplete="tel"
+                label="ZIP"
+                value={zip}
+                onChange={setZip}
+                icon={User}
+                autoComplete="postal-code"
+                required
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormSelect
+                  label="Is your physical address the same as your mailing address?"
+                  value={physicalSameAsMailing}
+                  onChange={setPhysicalSameAsMailing}
+                  required
+                />
+
+                <FormSelect
+                  label="Has the registrant participated in shooting sports before this year?"
+                  value={priorShootingExperience}
+                  onChange={setPriorShootingExperience}
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormSelect
+                  label="Is your team affiliated with a high school?"
+                  value={teamAffiliated}
+                  onChange={setTeamAffiliated}
+                  required
+                />
+
+                <FormSelect
+                  label="What is the name of your team?"
+                  value={teamName}
+                  onChange={setTeamName}
+                  options={["", "I do not know yet", "Other"]}
+                  required
+                />
+              </div>
+
+              <SignupInput
+                label="Home range, gun club, or training facility"
+                value={homeRange}
+                onChange={setHomeRange}
+                icon={User}
+                autoComplete="off"
+              />
+
+              <div>
+                <label
+                  htmlFor="coach-name"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  What is the coach&apos;s name?
+                </label>
+
+                <textarea
+                  id="coach-name"
+                  value={coachName}
+                  onChange={(event) =>
+                    setCoachName(event.target.value)
+                  }
+                  rows={3}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  placeholder="Leave blank if you do not know"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="secondary-emergency-contact"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Name of secondary emergency contact different from
+                  parent/legal guardian details already provided
+                </label>
+
+                <textarea
+                  id="secondary-emergency-contact"
+                  value={secondaryEmergencyContact}
+                  onChange={(event) =>
+                    setSecondaryEmergencyContact(
+                      event.target.value,
+                    )
+                  }
+                  rows={3}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  Emergency contact methods to reach by
+                </p>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {[
+                    "Cell Phone",
+                    "Email",
+                    "Text",
+                    "Physical Address",
+                  ].map((method) => (
+                    <label
+                      key={method}
+                      className="flex items-center gap-2 text-sm text-slate-600"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={emergencyContactMethods.includes(
+                          method,
+                        )}
+                        onChange={() =>
+                          toggleEmergencyContactMethod(method)
+                        }
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      {method}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <SignupSection
+                title="Primary parent / guardian"
+                description="Parent or legal guardian information required for youth shooter registration."
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SignupInput
+                  label="Parent / guardian first name"
+                  value={guardianFirstName}
+                  onChange={setGuardianFirstName}
+                  icon={User}
+                  autoComplete="given-name"
+                  required
+                />
+
+                <SignupInput
+                  label="Parent / guardian last name"
+                  value={guardianLastName}
+                  onChange={setGuardianLastName}
+                  icon={User}
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormSelect
+                  label="Parent / guardian gender"
+                  value={guardianGender}
+                  onChange={setGuardianGender}
+                  options={[
+                    "",
+                    "Female",
+                    "Male",
+                    "Prefer not to answer",
+                  ]}
+                />
+
+                <SignupInput
+                  label="Parent / guardian date of birth"
+                  type="date"
+                  value={guardianBirthDate}
+                  onChange={setGuardianBirthDate}
+                  icon={CalendarDays}
+                  autoComplete="bday"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SignupInput
+                  label="Parent / guardian email address"
+                  type="email"
+                  value={guardianEmail}
+                  onChange={setGuardianEmail}
+                  icon={Mail}
+                  autoComplete="email"
+                  required
+                />
+
+                <SignupInput
+                  label="Parent / guardian home phone number"
+                  type="tel"
+                  value={guardianPhone}
+                  onChange={setGuardianPhone}
+                  icon={Phone}
+                  autoComplete="tel"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SignupInput
+                  label="Parent / guardian cell phone number"
+                  type="tel"
+                  value={guardianCellPhone}
+                  onChange={setGuardianCellPhone}
+                  icon={Phone}
+                  autoComplete="tel"
+                />
+
+                <SignupInput
+                  label="Parent / guardian country"
+                  value={guardianCountry}
+                  onChange={setGuardianCountry}
+                  icon={User}
+                  autoComplete="country-name"
+                  required
+                />
+              </div>
+
+              <SignupInput
+                label="Parent / guardian address"
+                value={guardianAddress}
+                onChange={setGuardianAddress}
+                icon={User}
+                autoComplete="street-address"
+                required
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SignupInput
+                  label="Parent / guardian address line 2"
+                  value={guardianAddressLine2}
+                  onChange={setGuardianAddressLine2}
+                  icon={User}
+                  autoComplete="address-line2"
+                />
+
+                <SignupInput
+                  label="Parent / guardian city"
+                  value={guardianCity}
+                  onChange={setGuardianCity}
+                  icon={User}
+                  autoComplete="address-level2"
+                  required
+                />
+
+                <SignupInput
+                  label="Parent / guardian state"
+                  value={guardianStateProvince}
+                  onChange={setGuardianStateProvince}
+                  icon={User}
+                  autoComplete="address-level1"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SignupInput
+                  label="Parent / guardian ZIP"
+                  value={guardianZip}
+                  onChange={setGuardianZip}
+                  icon={User}
+                  autoComplete="postal-code"
+                  required
+                />
+
+                <SignupInput
+                  label="Business phone number"
+                  type="tel"
+                  value={guardianBusinessPhone}
+                  onChange={setGuardianBusinessPhone}
+                  icon={Phone}
+                  autoComplete="tel"
+                />
+
+                <SignupInput
+                  label="Ext."
+                  value={guardianBusinessPhoneExt}
+                  onChange={setGuardianBusinessPhoneExt}
+                  icon={Phone}
+                  autoComplete="off"
+                />
+              </div>
+
+              <FormSelect
+                label="Relationship to registrant"
+                value={guardianRelationship}
+                onChange={setGuardianRelationship}
+                options={[
+                  "",
+                  "Mother",
+                  "Father",
+                  "Legal guardian",
+                  "Grandparent",
+                  "Other",
+                ]}
+                required
+              />
+
+              <SignupSection
+                title="Waivers and agreements"
+                description="Please read the following waivers and agreements carefully. By agreeing electronically, you acknowledge that you have read and understood each selected agreement."
+              />
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="font-semibold text-slate-800">
+                  {firstName || lastName
+                    ? `${firstName} ${lastName}`.trim()
+                    : "Youth shooter"}
+                </p>
+
+                <div className="mt-4 space-y-3">
+                  <AgreementCheckbox
+                    checked={waiverParentAthlete}
+                    onChange={setWaiverParentAthlete}
+                    label="I agree to the Parents/Guardians and Athletes Waiver Form"
+                  />
+
+                  <AgreementCheckbox
+                    checked={waiverMedicalConsent}
+                    onChange={setWaiverMedicalConsent}
+                    label="I agree to the Medical Consent"
+                  />
+
+                  <AgreementCheckbox
+                    checked={waiverSportsmanship}
+                    onChange={setWaiverSportsmanship}
+                    label="I agree to the Sportsmanship Contract"
+                  />
+
+                  <AgreementCheckbox
+                    checked={waiverClayKeeperAgreement}
+                    onChange={setWaiverClayKeeperAgreement}
+                    label="I agree to the ClayKeeper Agreement and Waiver"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-800">
+                  Digital signature
+                </p>
+
+                <div className="mt-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      checked={signatureMode === "write"}
+                      onChange={() => setSignatureMode("write")}
+                      className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Write your signature
+                  </label>
+
+                  <textarea
+                    value={signature}
+                    onChange={(event) =>
+                      setSignature(event.target.value)
+                    }
+                    rows={4}
+                    required
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="Type or write your legal signature"
+                  />
+
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      checked={signatureMode === "type"}
+                      onChange={() => setSignatureMode("type")}
+                      className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Type your signature
+                  </label>
+                </div>
+              </div>
+
+              <SignupSection
+                title="ClayKeeper login"
+                description="Create the login the shooter or parent will use to access ClayKeeper after registration."
+              />
+
+              <SignupInput
+                label="Password"
+                type="password"
+                value={password}
+                onChange={setPassword}
+                icon={LockKeyhole}
+                autoComplete="new-password"
+                required
+              />
+
+              <SignupInput
+                label="Confirm password"
+                type="password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                icon={LockKeyhole}
+                autoComplete="new-password"
+                required
               />
 
               <SignupSection
@@ -583,41 +1168,6 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <SignupSection
-                title="Login and payment"
-                description="Payment collection will be connected to the organization's season and ClayKeeper subscription settings."
-              />
-
-              <SignupInput
-                label="Email address"
-                type="email"
-                value={email}
-                onChange={setEmail}
-                icon={Mail}
-                autoComplete="email"
-                required
-              />
-
-              <SignupInput
-                label="Password"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                icon={LockKeyhole}
-                autoComplete="new-password"
-                required
-              />
-
-              <SignupInput
-                label="Confirm password"
-                type="password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                icon={LockKeyhole}
-                autoComplete="new-password"
-                required
-              />
-
               <div>
                 <label
                   htmlFor="registration-notes"
@@ -636,13 +1186,6 @@ export function ParticipantSignupPage() {
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                   placeholder="Optional medical, team, or registration notes"
                 />
-              </div>
-
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                <strong>Payment step:</strong> this form is ready
-                for season and ClayKeeper subscription checkout.
-                The payment screen will appear here once pricing
-                is configured for this organization.
               </div>
 
               <p className="text-xs leading-5 text-slate-500">
@@ -665,8 +1208,8 @@ export function ParticipantSignupPage() {
                 disabled={submitting || finishing}
               >
                 {submitting
-                  ? "Creating account..."
-                  : "Create Account"}
+                  ? "Saving registration..."
+                  : "Continue to cart"}
               </Button>
             </form>
 
@@ -735,6 +1278,83 @@ function SignupInput({
         />
       </div>
     </div>
+  )
+}
+
+function FormSelect({
+  label,
+  value,
+  onChange,
+  options = ["", "Yes", "No"],
+  required = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options?: string[]
+  required?: boolean
+}) {
+  const id = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="text-sm font-medium text-slate-700"
+      >
+        {label}{" "}
+        {required ? (
+          <span className="text-red-500">*</span>
+        ) : null}
+      </label>
+
+      <select
+        id={id}
+        required={required}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+      >
+        {options.map((option) => (
+          <option key={option || "empty"} value={option}>
+            {option || "Select one"}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function AgreementCheckbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+}) {
+  return (
+    <label className="flex items-start gap-3 text-sm leading-6 text-slate-700">
+      <input
+        type="checkbox"
+        checked={checked}
+        required
+        onChange={(event) =>
+          onChange(event.target.checked)
+        }
+        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+      />
+
+      <span>
+        {label}
+        <span className="text-red-500">*</span>
+      </span>
+    </label>
   )
 }
 

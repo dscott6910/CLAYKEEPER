@@ -156,9 +156,42 @@ export function YouthRegistrationInformationPage() {
     )
   }
 
+  const profileSearchParams = new URLSearchParams({
+    session: selectedSessionParam,
+  })
+
+  if (email.trim()) {
+    profileSearchParams.set("email", email.trim())
+  }
+
+  if (participantFirstName.trim()) {
+    profileSearchParams.set(
+      "firstName",
+      participantFirstName.trim(),
+    )
+  }
+
+  if (participantLastName.trim()) {
+    profileSearchParams.set(
+      "lastName",
+      participantLastName.trim(),
+    )
+  }
+
+  if (participantDateOfBirth) {
+    profileSearchParams.set(
+      "birthDate",
+      participantDateOfBirth,
+    )
+  }
+
+  if (participantGender) {
+    profileSearchParams.set("gender", participantGender)
+  }
+
   const profilePath = `/signup/${encodeURIComponent(
     organization.organizationSlug,
-  )}/youth/profile?session=${encodeURIComponent(selectedSessionParam)}`
+  )}/youth/profile?${profileSearchParams.toString()}`
 
   const sessionSelectionPath = `/signup/${encodeURIComponent(
     organization.organizationSlug,
