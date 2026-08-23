@@ -858,7 +858,7 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
                 <SignupInput
                   label="Address line 2"
                   value={addressLine2}
@@ -1108,7 +1108,7 @@ export function ParticipantSignupPage() {
                 required
               />
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
                 <SignupInput
                   label="Parent / guardian address line 2"
                   value={guardianAddressLine2}
