@@ -1110,7 +1110,7 @@ export function ParticipantSignupPage() {
 
               <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
                 <SignupInput
-                  label="Parent / guardian address line 2"
+                  label="Address line 2"
                   value={guardianAddressLine2}
                   onChange={setGuardianAddressLine2}
                   icon={User}
@@ -1118,7 +1118,7 @@ export function ParticipantSignupPage() {
                 />
 
                 <SignupInput
-                  label="Parent / guardian city"
+                  label="City"
                   value={guardianCity}
                   onChange={setGuardianCity}
                   icon={User}
@@ -1127,7 +1127,7 @@ export function ParticipantSignupPage() {
                 />
 
                 <SignupInput
-                  label="Parent / guardian state"
+                  label="State"
                   value={guardianStateProvince}
                   onChange={setGuardianStateProvince}
                   icon={User}
