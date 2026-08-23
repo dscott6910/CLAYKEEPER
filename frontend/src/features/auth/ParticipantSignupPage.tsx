@@ -177,11 +177,7 @@ export function ParticipantSignupPage() {
   const [birthDate, setBirthDate] = useState("")
   const [gender, setGender] = useState("")
   const [graduationYear, setGraduationYear] = useState("")
-  const [cyssaNumber, setCyssaNumber] = useState("")
-  const [ataNumber, setAtaNumber] = useState("")
-  const [nssaNumber, setNssaNumber] = useState("")
   const [phone, setPhone] = useState("")
-  const [notes, setNotes] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] =
@@ -419,9 +415,6 @@ export function ParticipantSignupPage() {
 
     try {
       const registrationNotes = [
-        notes.trim()
-          ? `Organization notes: ${notes.trim()}`
-          : "",
         `Shooter mailing address: ${address.trim()} ${addressLine2.trim()} ${city.trim()}, ${stateProvince.trim()} ${zip.trim()} ${country.trim()}`.trim(),
         physicalSameAsMailing
           ? `Physical address same as mailing: ${physicalSameAsMailing}`
@@ -483,9 +476,6 @@ export function ParticipantSignupPage() {
           birthDate,
           gender,
           graduationYear,
-          cyssaNumber,
-          ataNumber,
-          nssaNumber,
           phone,
           emergencyContactName:
             `${guardianFirstName} ${guardianLastName}`.trim(),
@@ -1416,62 +1406,6 @@ export function ParticipantSignupPage() {
                 autoComplete="new-password"
                 required
               />
-
-              <SignupSection
-                title="Membership numbers"
-                description="Optional association numbers used for reporting and matching existing records."
-              />
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <SignupInput
-                  label="CYSSA number"
-                  value={cyssaNumber}
-                  onChange={setCyssaNumber}
-                  icon={User}
-                  autoComplete="off"
-                />
-
-                <SignupInput
-                  label="ATA number"
-                  value={ataNumber}
-                  onChange={setAtaNumber}
-                  icon={User}
-                  autoComplete="off"
-                />
-
-                <SignupInput
-                  label="NSSA number"
-                  value={nssaNumber}
-                  onChange={setNssaNumber}
-                  icon={User}
-                  autoComplete="off"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="registration-notes"
-                  className="text-sm font-medium text-slate-700"
-                >
-                  Notes for the organization
-                </label>
-
-                <textarea
-                  id="registration-notes"
-                  value={notes}
-                  onChange={(event) =>
-                    setNotes(event.target.value)
-                  }
-                  rows={3}
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                  placeholder="Optional medical, team, or registration notes"
-                />
-              </div>
-
-              <p className="text-xs leading-5 text-slate-500">
-                Passwords must contain at least 8 characters.
-                Your Participant Number is assigned automatically.
-              </p>
 
               {error ? (
                 <div
