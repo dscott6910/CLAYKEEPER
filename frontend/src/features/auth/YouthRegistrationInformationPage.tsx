@@ -19,6 +19,7 @@ import {
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
 import {
+  YOUTH_SEASON_REGISTRATION_FEE,
   YOUTH_REGISTRATION_SESSIONS,
   youthRegistrationSessionsByIds,
 } from "@/lib/services/youthRegistrationSessions"
@@ -68,10 +69,9 @@ export function YouthRegistrationInformationPage() {
     .map((session) => session.id)
     .join(",")
 
-  const total = selectedSessions.reduce(
-    (sum, session) => sum + session.price,
-    0,
-  )
+  const total = selectedSessions.length
+    ? YOUTH_SEASON_REGISTRATION_FEE
+    : 0
 
   useEffect(() => {
     let mounted = true
@@ -243,45 +243,51 @@ export function YouthRegistrationInformationPage() {
                   }
                 >
                   <div className="space-y-4">
-                    {selectedSessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="font-bold text-slate-950">
-                              {session.name}
-                            </p>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-bold text-slate-950">
+                            2026 - 2027 Youth Season Registration
+                          </p>
 
-                            <p className="mt-1 text-sm text-slate-600">
-                              {session.dates}
-                            </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {selectedSessions[0]?.dates}
+                          </p>
 
-                            <p className="mt-1 text-sm text-slate-600">
-                              {organization.organizationName}
-                            </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {organization.organizationName}
+                          </p>
 
-                            <p className="mt-1 text-sm text-slate-600">
-                              Child
-                            </p>
-                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Child
+                          </p>
 
-                          <div className="text-right">
-                            <Link
-                              to={sessionSelectionPath}
-                              className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
-                            >
-                              Remove
-                            </Link>
-
-                            <p className="mt-8 font-bold text-slate-950">
-                              ${session.price.toFixed(2)}
-                            </p>
+                          <div className="mt-3 space-y-1 border-t border-slate-200 pt-3">
+                            {selectedSessions.map((session) => (
+                              <p
+                                key={session.id}
+                                className="text-xs font-medium text-slate-600"
+                              >
+                                • {session.name.replace("2026 - 2027: ", "")}
+                              </p>
+                            ))}
                           </div>
                         </div>
+
+                        <div className="text-right">
+                          <Link
+                            to={sessionSelectionPath}
+                            className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+                          >
+                            Change
+                          </Link>
+
+                          <p className="mt-8 font-bold text-slate-950">
+                            ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                    ))}
+                    </div>
 
                     <div className="flex items-center justify-between border-t border-slate-200 pt-4">
                       <span className="font-semibold text-slate-700">

@@ -20,6 +20,7 @@ import {
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
 import {
+  YOUTH_SEASON_REGISTRATION_FEE,
   YOUTH_REGISTRATION_SESSIONS,
   youthRegistrationSessionsByIds,
 } from "@/lib/services/youthRegistrationSessions"
@@ -45,6 +46,7 @@ export function YouthSessionSelectionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [cartAdded, setCartAdded] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -88,17 +90,28 @@ export function YouthSessionSelectionPage() {
     [selectedIds],
   )
 
-  const total = selectedSessions.reduce(
-    (sum, session) => sum + session.price,
-    0,
-  )
+  const total =
+    cartAdded && selectedSessions.length
+      ? YOUTH_SEASON_REGISTRATION_FEE
+      : 0
 
   function toggleSession(sessionId: string) {
-    setSelectedIds((current) =>
-      current.includes(sessionId)
+    setSelectedIds((current) => {
+      const next = current.includes(sessionId)
         ? current.filter((id) => id !== sessionId)
-        : [...current, sessionId],
-    )
+        : [...current, sessionId]
+
+      if (next.length === 0) {
+        setCartAdded(false)
+      }
+
+      return next
+    })
+  }
+
+  function addRegistrationToCart() {
+    if (!selectedSessions.length) return
+    setCartAdded(true)
   }
 
   if (loading) {
@@ -168,7 +181,7 @@ export function YouthSessionSelectionPage() {
             </p>
 
             <p className="mt-1 text-sm text-slate-300">
-              Select the season sessions before entering
+              Select at least one discipline before entering
               participant information.
             </p>
           </div>
@@ -218,7 +231,8 @@ export function YouthSessionSelectionPage() {
 
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   Choose one or more season sessions. You can
-                  review your cart before continuing.
+                  choose multiple disciplines for one $35 season
+                  registration.
                 </p>
               </div>
 
@@ -277,16 +291,18 @@ export function YouthSessionSelectionPage() {
                       <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 sm:w-48">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-semibold text-slate-700">
-                            Child
+                            Discipline
                           </span>
 
                           <span className="font-bold text-slate-950">
-                            ${session.price.toFixed(2)}
+                            Included
                           </span>
                         </div>
 
                         <p className="mt-3 text-xs leading-5 text-slate-500">
-                          Price may vary based on selections.
+                          Select at least one discipline before
+                          adding the season registration to your
+                          cart.
                         </p>
 
                         <Button
@@ -297,7 +313,7 @@ export function YouthSessionSelectionPage() {
                             toggleSession(session.id)
                           }
                         >
-                          {selected ? "Remove" : "Add to cart"}
+                          {selected ? "Remove discipline" : "Select discipline"}
                         </Button>
                       </div>
                     </div>
@@ -318,27 +334,34 @@ export function YouthSessionSelectionPage() {
               </div>
 
               <div className="p-5">
-                {selectedSessions.length === 0 ? (
+                {!cartAdded ? (
                   <p className="text-sm leading-6 text-slate-600">
-                    You have no sessions selected. Get started
-                    by adding a session on the left.
+                    Choose at least one discipline on the left,
+                    then add the $35 season registration to your
+                    cart.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {selectedSessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-                      >
-                        <p className="font-semibold text-slate-950">
-                          {session.name}
-                        </p>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="font-semibold text-slate-950">
+                        2026 - 2027 Youth Season Registration
+                      </p>
 
-                        <p className="mt-1 text-sm text-slate-600">
-                          Child — ${session.price.toFixed(2)}
-                        </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Child — ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                      </p>
+
+                      <div className="mt-3 space-y-1 border-t border-slate-200 pt-3">
+                        {selectedSessions.map((session) => (
+                          <p
+                            key={session.id}
+                            className="text-xs font-medium text-slate-600"
+                          >
+                            • {session.name.replace("2026 - 2027: ", "")}
+                          </p>
+                        ))}
                       </div>
-                    ))}
+                    </div>
 
                     <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-sm">
                       <span className="font-semibold text-slate-700">
@@ -352,16 +375,27 @@ export function YouthSessionSelectionPage() {
                   </div>
                 )}
 
+                {!cartAdded ? (
+                  <Button
+                    type="button"
+                    className="mt-5 h-11 w-full"
+                    disabled={!selectedSessions.length}
+                    onClick={addRegistrationToCart}
+                  >
+                    Add registration to cart
+                  </Button>
+                ) : null}
+
                 <Link
-                  to={selectedSessions.length ? registrationInfoPath : "#"}
-                  aria-disabled={!selectedSessions.length}
+                  to={cartAdded && selectedSessions.length ? registrationInfoPath : "#"}
+                  aria-disabled={!cartAdded || !selectedSessions.length}
                   onClick={(event) => {
-                    if (!selectedSessions.length) {
+                    if (!cartAdded || !selectedSessions.length) {
                       event.preventDefault()
                     }
                   }}
                   className={`mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-lg px-5 text-sm font-semibold transition ${
-                    selectedSessions.length
+                    cartAdded && selectedSessions.length
                       ? "bg-emerald-600 text-white hover:bg-emerald-700"
                       : "cursor-not-allowed bg-slate-200 text-slate-400"
                   }`}

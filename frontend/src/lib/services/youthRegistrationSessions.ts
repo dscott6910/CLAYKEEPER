@@ -4,8 +4,9 @@ export type YouthRegistrationSession = {
   description: string
   dates: string
   location: string
-  price: number
 }
+
+export const YOUTH_SEASON_REGISTRATION_FEE = 35
 
 export const YOUTH_REGISTRATION_SESSIONS: YouthRegistrationSession[] = [
   {
@@ -14,7 +15,6 @@ export const YOUTH_REGISTRATION_SESSIONS: YouthRegistrationSession[] = [
     description: "Olympic bunker trap season registration.",
     dates: "08/01/2026 - 06/13/2027",
     location: "California Youth Shooting Sports Association",
-    price: 35,
   },
   {
     id: "skeet",
@@ -22,7 +22,6 @@ export const YOUTH_REGISTRATION_SESSIONS: YouthRegistrationSession[] = [
     description: "Youth skeet season registration.",
     dates: "08/01/2026 - 06/13/2027",
     location: "California Youth Shooting Sports Association",
-    price: 35,
   },
   {
     id: "sporting-clays",
@@ -30,7 +29,6 @@ export const YOUTH_REGISTRATION_SESSIONS: YouthRegistrationSession[] = [
     description: "Sporting clays season registration.",
     dates: "08/01/2026 - 06/13/2027",
     location: "California Youth Shooting Sports Association",
-    price: 35,
   },
   {
     id: "trap",
@@ -38,7 +36,6 @@ export const YOUTH_REGISTRATION_SESSIONS: YouthRegistrationSession[] = [
     description: "American trap season registration.",
     dates: "08/01/2026 - 06/13/2027",
     location: "California Youth Shooting Sports Association",
-    price: 35,
   },
 ]
 
