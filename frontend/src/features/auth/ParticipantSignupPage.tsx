@@ -6,6 +6,7 @@ import {
   useSearchParams,
 } from "react-router-dom"
 import {
+  ArrowLeft,
   CalendarDays,
   LockKeyhole,
   Mail,
@@ -169,7 +170,6 @@ export function ParticipantSignupPage() {
 
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
-  const [preferredName, setPreferredName] = useState("")
   const [birthDate, setBirthDate] = useState("")
   const [gender, setGender] = useState("")
   const [graduationYear, setGraduationYear] = useState("")
@@ -459,7 +459,7 @@ export function ParticipantSignupPage() {
           organizationSlug: organization.organizationSlug,
           firstName,
           lastName,
-          preferredName,
+          preferredName: "",
           birthDate,
           gender,
           graduationYear,
@@ -650,6 +650,15 @@ export function ParticipantSignupPage() {
     )
   }
 
+  const sessionParam = searchParams.get("session") || ""
+  const backToRegistrationPath = `/signup/${encodeURIComponent(
+    organization.organizationSlug,
+  )}/youth/registration${
+    sessionParam
+      ? `?session=${encodeURIComponent(sessionParam)}`
+      : ""
+  }`
+
   return (
     <main className="grid min-h-screen bg-slate-950 lg:grid-cols-2">
       <section className="hidden flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-12 text-white lg:flex">
@@ -696,6 +705,14 @@ export function ParticipantSignupPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
+            <Link
+              to={backToRegistrationPath}
+              className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Link>
+
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">
               {organization.organizationName}
             </p>
@@ -738,15 +755,7 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
-                <SignupInput
-                  label="Preferred name"
-                  value={preferredName}
-                  onChange={setPreferredName}
-                  icon={User}
-                  autoComplete="nickname"
-                />
-
+              <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
                 <SignupInput
                   label="Birth date"
                   type="date"
@@ -902,12 +911,11 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
                 <FormSelect
                   label="Is your team affiliated with a high school?"
                   value={teamAffiliated}
                   onChange={setTeamAffiliated}
-                  required
                 />
 
                 <FormSelect
@@ -915,7 +923,6 @@ export function ParticipantSignupPage() {
                   value={teamName}
                   onChange={setTeamName}
                   options={["", "I do not know yet", "Other"]}
-                  required
                 />
               </div>
 
