@@ -43,6 +43,116 @@ function errorMessage(error: unknown) {
   return "Unable to create the account. Please try again."
 }
 
+type WaiverKey =
+  | "parentAthlete"
+  | "medicalConsent"
+  | "sportsmanship"
+  | "clayKeeperAgreement"
+
+const WAIVER_FORMS: Record<
+  WaiverKey,
+  {
+    title: string
+    checkboxLabel: string
+    body: string
+  }
+> = {
+  parentAthlete: {
+    title: "Parents/Guardians and Athletes Waiver Form",
+    checkboxLabel:
+      "I agree to the Parents/Guardians and Athletes Waiver Form",
+    body: `Parents/Guardians Athletes — Please Read Carefully
+
+In exchange for and as a condition of being allowed to participate in the California Youth Shooting Sports Association (hereafter "CYSSA") clay target program, Athlete and Athlete's parent or legal guardian, if Athlete is a minor child(ren), agree to the following:
+
+The parties acknowledge that the CYSSA clay target program is a team-based program that provides team and individual competitions in clay target sports involving the use of firearms. Failure to adhere to safe handling and use of firearms at all venues and locations may be grounds for removal from the CYSSA program.
+
+The parties request to participate knowing and understanding that there are risks and dangers associated with the use of firearms, including property damage, serious bodily injury, and death. The parties agree to assume all known and unknown risks, inherent or otherwise, connected with participation in the CYSSA program, including risks connected with other competitors, instructors, coaches, staff, volunteers, organizations, venues, equipment, ammunition, mechanical devices, machinery, and clay target shooting facilities.
+
+To the fullest extent allowed by law, the parties agree to defend, indemnify and hold harmless CYSSA and all involved or affiliated organizations and individuals, and each of their respective directors, officers, employees, agents, and volunteers, from and against claims, demands, actions, suits, proceedings, liabilities, damages, losses, judgments and expenses arising out of participation or conduct in CYSSA.
+
+The parties grant CYSSA and involved or affiliated organizations and individuals a royalty-free license to reproduce, publish, distribute, sell, or otherwise use the participant's name, photograph, likeness, and statements in connection with promotion of the CYSSA program.
+
+The parties acknowledge this waiver is binding upon the parties, their agents, heirs, assigns, and next of kin. The parties understand and voluntarily accept all risks associated with participation in CYSSA and agree that CYSSA will not be liable for injury, property damage, mental or economic loss, or other damage resulting from participation.
+
+Special Waiver of Claim for Ammunition, Safety Equipment, and Loaned Firearms
+
+For athletes under 18 years of age, the parent or legal guardian understands that a minor is prohibited by law from purchasing and owning a firearm and ammunition. The parent or legal guardian agrees to legally purchase, directly provide, and furnish all appropriate firearms, ammunition, ear and eye protection, and safety equipment to the minor child for participation in CYSSA.
+
+The parent or legal guardian further consents and authorizes CYSSA adult coaches who have legally procured appropriate ammunition, eye and ear protection, and safety equipment to provide those items to the minor child from time to time for participation in CYSSA.
+
+From time to time, the minor child may be temporarily provided a loaned firearm, ear protection, eye protection, or safety equipment. The parent or legal guardian releases and agrees to indemnify CYSSA and all involved or affiliated organizations and individuals from liability for actions that may result while the loaned firearm or equipment is in the parent, guardian, or minor child's possession or use.
+
+By accepting this waiver electronically, the parent or legal guardian confirms that they have read and understood this waiver and assumption of risk, and expressly waive and release CYSSA and all respective officers, employees, agents, volunteers, and representatives from liability arising from participation in CYSSA activities.`,
+  },
+  medicalConsent: {
+    title: "Medical Consent",
+    checkboxLabel: "I agree to the Medical Consent",
+    body: `In the event that the Athlete may require emergency medical care, or in the event the Athlete may become ill while participating in a California Youth Shooting Sports Association event, Athlete and Athlete's parent/legal guardian if Athlete is a minor hereby gives advanced consent to the CYSSA program, CYSSA Sponsors, and involved or affiliated organizations including their respective volunteers, to provide, through a medical staff of their choice, necessary or advisable medical care and treatment to Athlete.
+
+Athlete and Athlete's parent/legal guardian if Athlete is a minor further agree to pay any and all medical costs, expenses, and charges and to release, waive, discharge, and hold harmless the California Youth Shooting Sports Association program, CYSSA Sponsors, and involved or affiliated organizations including their respective volunteers, officers, employees, or agents, from and against any liability or any claim or demand arising from or connected with such medical care and treatment.`,
+  },
+  sportsmanship: {
+    title: "Sportsmanship Contract",
+    checkboxLabel: "I agree to the Sportsmanship Contract",
+    body: `The California Youth Shooting Sports Association Clay Target Program places a strong emphasis on sportsmanship and safety. As part of this effort, parents/guardians are asked to read and discuss this contract with their child/athlete. This is a contract among the CYSSA, the parent/guardian, and his/her child. The signatures on this form signify an agreement to comply with the provisions of this contract.
+
+Parents:
+
+I understand the California Youth Shooting Sports Association program's first and foremost priority is safety. I will enforce the CYSSA safety standards with my child at all times. I will encourage my child and other team members to have fun. I will behave as a positive role model, respect the goals of the CYSSA, and reinforce the character values of good sportsmanship, teamwork, and self-discipline.
+
+I agree to stay off the shooting field. Any problems or criticisms will be presented in a positive way to the coaches or a designated assistant. I will refrain from criticizing other shooters or coaches, using abusive language, or consuming alcohol or drugs before or during all CYSSA program activities that I attend.
+
+I understand that unsportsmanlike behavior on my part may result in my being asked to leave the area. Such actions on my part could also result in my child being disqualified or removed from the CYSSA program. By signing this form, I affirm that I have read and understand the behavioral standards for parents and for my child, and agree to abide by them.
+
+Athlete:
+
+I understand shooting on a California Youth Shooting Sports Association team is a privilege. I agree to act responsibly and obey all rules as specified in the CYSSA Handbook while participating in CYSSA activities. I will encourage and support my teammates, cooperate and show respect to my coaches, and represent the team in a positive manner both at practices and in competition.
+
+I will set specific attainable goals, attend practices with a positive attitude, practice good sportsmanship at all times, and conduct myself as a lady or gentleman at all times.
+
+I understand that unsportsmanlike behavior, use of illegal drugs or alcohol, or acts of violence on my part may result in my disqualification and even expulsion from the CYSSA program. I will not lie, cheat, or steal nor tolerate those who do. By signing this form, I affirm that I am academically eligible to participate in extracurricular activities as set forth by my school, that I have read and understand the behavioral standards for athletes, and that I agree to abide by them.`,
+  },
+  clayKeeperAgreement: {
+    title: "ClayKeeper Agreement and Liability Waiver",
+    checkboxLabel:
+      "I agree to the ClayKeeper Agreement and Waiver",
+    body: `Please read the following agreement and waiver carefully, as it affects your future legal rights. By proceeding with registration, you acknowledge and agree that you have carefully read this agreement and waiver and agree to the terms set forth below.
+
+The activity for which you are registering may be physically challenging and may pose a risk of discomfort, illness, injury, and even death. It is your responsibility to ensure that each participant is in sufficient physical condition to participate without risk to health or life.
+
+Some events may pose risks to participants and observers. Risks cannot be removed completely, and participants and observers attend at their own risk. If you are registering or accompanying anyone under the age of 18, you agree to this Agreement and Waiver on behalf of that person.
+
+Authority to Register and Act as Agent:
+
+You represent and warrant that you have full legal authority and capacity to complete registration for the event on behalf of yourself and, where applicable, any party for whom you are registering, including authority to make use of the credit or debit card to which registration fees may be charged.
+
+If you are registering a child under the age of 18 or an incapacitated adult, you represent and warrant that you are the parent or legal guardian of that party and have the legal authority and capacity to enter into this Agreement and Waiver on their behalf.
+
+Assumption of Risk:
+
+In consideration of acceptance of registration and participation in the event, you assume full and complete risk and responsibility for any discomfort, illness, injury, or accident which may occur while preparing for the event, during the event, while on the premises of the event, or while traveling to or from the event. Participation may carry inherent risks and dangers that cannot be eliminated completely.
+
+Representations:
+
+You represent and warrant that each participant is in sufficient physical condition to safely participate and has no medical condition that would make participation more hazardous. You consent to medical care and transportation to obtain treatment in the event of injury and understand that this waiver extends to liability arising out of medical treatment and transportation provided in an emergency.
+
+You agree to observe and obey all posted rules and warnings, follow instructions or directions provided by ClayKeeper or the event organizer, and abide by decisions of event officials regarding safe participation or attendance. Event officials may dismiss a participant without refund if behavior endangers safety or negatively affects the event.
+
+Release and Waiver of Liability:
+
+You waive, release, covenant not to sue, and forever discharge ClayKeeper and all other persons associated with the event for liabilities, claims, actions, or damages arising out of or connected with registration or participation in the event, including claims caused by negligence of the released parties to the maximum extent permitted by law.
+
+Indemnity:
+
+You agree to indemnify, defend, and hold harmless ClayKeeper and all other persons associated with the event from liabilities arising out of or connected with participation in the event, use of ClayKeeper, or violation of this Agreement and Waiver.
+
+Acceptance:
+
+By indicating acceptance of this Agreement and Waiver, you affirm that you have read this Agreement and Waiver and fully understand its terms. You understand that you and all registered parties are giving up substantial rights, including the right to sue. You acknowledge that you are agreeing freely and voluntarily and intend acceptance to be a complete and unconditional release of liability to the greatest extent allowed by law.`,
+  },
+}
+
 export function ParticipantSignupPage() {
   const { organizationSlug = "" } = useParams()
   const [searchParams] = useSearchParams()
@@ -123,6 +233,16 @@ export function ParticipantSignupPage() {
   const [signatureMode, setSignatureMode] =
     useState<"write" | "type">("write")
   const [signature, setSignature] = useState("")
+  const [activeWaiver, setActiveWaiver] =
+    useState<WaiverKey | null>(null)
+  const [waiversRead, setWaiversRead] = useState<
+    Record<WaiverKey, boolean>
+  >({
+    parentAthlete: false,
+    medicalConsent: false,
+    sportsmanship: false,
+    clayKeeperAgreement: false,
+  })
 
   const [submitting, setSubmitting] = useState(false)
   const [finishing, setFinishing] = useState(false)
@@ -381,6 +501,14 @@ export function ParticipantSignupPage() {
         ? current.filter((item) => item !== method)
         : [...current, method],
     )
+  }
+
+  function markWaiverRead(waiver: WaiverKey) {
+    setWaiversRead((current) => ({
+      ...current,
+      [waiver]: true,
+    }))
+    setActiveWaiver(null)
   }
 
   if (loadingOrganization) {
@@ -1058,27 +1186,35 @@ export function ParticipantSignupPage() {
 
                 <div className="mt-4 space-y-3">
                   <AgreementCheckbox
+                    waiverKey="parentAthlete"
                     checked={waiverParentAthlete}
                     onChange={setWaiverParentAthlete}
-                    label="I agree to the Parents/Guardians and Athletes Waiver Form"
+                    read={waiversRead.parentAthlete}
+                    onOpen={setActiveWaiver}
                   />
 
                   <AgreementCheckbox
+                    waiverKey="medicalConsent"
                     checked={waiverMedicalConsent}
                     onChange={setWaiverMedicalConsent}
-                    label="I agree to the Medical Consent"
+                    read={waiversRead.medicalConsent}
+                    onOpen={setActiveWaiver}
                   />
 
                   <AgreementCheckbox
+                    waiverKey="sportsmanship"
                     checked={waiverSportsmanship}
                     onChange={setWaiverSportsmanship}
-                    label="I agree to the Sportsmanship Contract"
+                    read={waiversRead.sportsmanship}
+                    onOpen={setActiveWaiver}
                   />
 
                   <AgreementCheckbox
+                    waiverKey="clayKeeperAgreement"
                     checked={waiverClayKeeperAgreement}
                     onChange={setWaiverClayKeeperAgreement}
-                    label="I agree to the ClayKeeper Agreement and Waiver"
+                    read={waiversRead.clayKeeperAgreement}
+                    onOpen={setActiveWaiver}
                   />
                 </div>
               </div>
@@ -1235,6 +1371,14 @@ export function ParticipantSignupPage() {
           </div>
         </div>
       </section>
+
+      {activeWaiver ? (
+        <WaiverModal
+          waiver={activeWaiver}
+          onClose={() => setActiveWaiver(null)}
+          onRead={() => markWaiverRead(activeWaiver)}
+        />
+      ) : null}
     </main>
   )
 }
@@ -1340,31 +1484,122 @@ function FormSelect({
 }
 
 function AgreementCheckbox({
+  waiverKey,
   checked,
   onChange,
-  label,
+  read,
+  onOpen,
 }: {
+  waiverKey: WaiverKey
   checked: boolean
   onChange: (checked: boolean) => void
-  label: string
+  read: boolean
+  onOpen: (waiver: WaiverKey) => void
 }) {
+  const waiver = WAIVER_FORMS[waiverKey]
+
   return (
     <label className="flex items-start gap-3 text-sm leading-6 text-slate-700">
       <input
         type="checkbox"
         checked={checked}
+        disabled={!read}
         required
         onChange={(event) =>
           onChange(event.target.checked)
         }
-        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-200"
       />
 
       <span>
-        {label}
+        I agree to the{" "}
+        <button
+          type="button"
+          onClick={() => onOpen(waiverKey)}
+          className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+        >
+          {waiver.title}
+        </button>
         <span className="text-red-500">*</span>
+        {!read ? (
+          <span className="ml-2 text-xs font-medium text-slate-500">
+            Read first
+          </span>
+        ) : (
+          <span className="ml-2 text-xs font-medium text-emerald-700">
+            Read
+          </span>
+        )}
       </span>
     </label>
+  )
+}
+
+function WaiverModal({
+  waiver,
+  onClose,
+  onRead,
+}: {
+  waiver: WaiverKey
+  onClose: () => void
+  onRead: () => void
+}) {
+  const form = WAIVER_FORMS[waiver]
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="waiver-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+    >
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">
+              Waiver and agreement
+            </p>
+
+            <h2
+              id="waiver-modal-title"
+              className="mt-1 text-2xl font-bold tracking-tight text-slate-950"
+            >
+              {form.title}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close waiver"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5">
+          <div className="whitespace-pre-line text-sm leading-7 text-slate-700">
+            {form.body}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-5 text-slate-500">
+            Please review the full form before agreeing to it on
+            the registration page.
+          </p>
+
+          <Button
+            type="button"
+            className="min-h-11 px-6"
+            onClick={onRead}
+          >
+            I have read this form
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
