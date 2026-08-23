@@ -23,6 +23,10 @@ export type ParticipantSignupProfile = {
   emergencyContactPhone?: string
   notes?: string
   accountEmail?: string
+  selectedDisciplines?: string[]
+  waiversAccepted?: Record<string, boolean>
+  signatureType?: "drawn" | "typed"
+  signatureValue?: string
 }
 
 export type ParticipantSignupResult = {
@@ -175,10 +179,7 @@ export async function completeParticipantSignup(
         profile.birthDate?.trim() || null,
       p_gender:
         profile.gender?.trim() || null,
-      p_graduation_year:
-        profile.graduationYear?.trim()
-          ? Number(profile.graduationYear)
-          : null,
+      p_graduation_year: null,
       p_cyssa_number:
         profile.cyssaNumber?.trim() || null,
       p_ata_number:
@@ -192,7 +193,14 @@ export async function completeParticipantSignup(
       p_emergency_contact_phone:
         profile.emergencyContactPhone?.trim() || null,
       p_notes:
-        profile.notes?.trim() || null,
+        [
+          profile.graduationYear?.trim()
+            ? `Grade as of 2026-2027 school year: ${profile.graduationYear.trim()}`
+            : "",
+          profile.notes?.trim() || "",
+        ]
+          .filter(Boolean)
+          .join("\n") || null,
     },
   )
 
@@ -206,6 +214,31 @@ export async function completeParticipantSignup(
     throw new Error(
       "Your account was created, but the Participant Number could not be confirmed.",
     )
+  }
+
+  if (profile.signatureType && profile.signatureValue) {
+    const { error: seasonRegistrationError } =
+      await supabase.rpc(
+        "complete_participant_season_registration",
+        {
+          p_organization_id: profile.organizationId,
+          p_selected_disciplines:
+            profile.selectedDisciplines ?? [],
+          p_waivers_accepted:
+            profile.waiversAccepted ?? {},
+          p_signature_type: profile.signatureType,
+          p_signature_value: profile.signatureValue,
+        },
+      )
+
+    if (
+      seasonRegistrationError &&
+      !seasonRegistrationError.message.includes(
+        "No active season",
+      )
+    ) {
+      throw seasonRegistrationError
+    }
   }
 
   clearPendingParticipantSignup()

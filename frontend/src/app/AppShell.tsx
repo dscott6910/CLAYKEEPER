@@ -8,6 +8,7 @@ import {
   MobileNavigationContext,
 } from "@/app/MobileNavigationContext"
 import { Button } from "@/components/ui/button"
+import { SeasonRegistrationGate } from "@/features/auth/SeasonRegistrationGate"
 import { GlobalSearch } from "@/components/system/GlobalSearch"
 
 export function AppShell() {
@@ -105,7 +106,9 @@ export function AppShell() {
           </div>
 
           <main className="min-w-0">
-            <Outlet />
+            <SeasonRegistrationGate>
+              <Outlet />
+            </SeasonRegistrationGate>
           </main>
         </div>
       </div>

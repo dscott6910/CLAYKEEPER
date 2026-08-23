@@ -12,6 +12,14 @@ const ParticipantSignupPage = lazy(() =>
   })),
 )
 
+const SeasonRegistrationRequiredPage = lazy(() =>
+  import("@/features/auth/SeasonRegistrationRequiredPage").then(
+    (module) => ({
+      default: module.SeasonRegistrationRequiredPage,
+    }),
+  ),
+)
+
 const OrganizationSignupLandingPage = lazy(() =>
   import("@/features/auth/OrganizationSignupLandingPage").then((module) => ({
     default: module.OrganizationSignupLandingPage,
@@ -497,6 +505,15 @@ function App() {
                   element={
                     <LazyRoute>
                       <ParticipantHomePage />
+                    </LazyRoute>
+                  }
+                />
+
+                <Route
+                  path="season-registration"
+                  element={
+                    <LazyRoute>
+                      <SeasonRegistrationRequiredPage />
                     </LazyRoute>
                   }
                 />

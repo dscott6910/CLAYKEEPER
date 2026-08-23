@@ -48,13 +48,13 @@ function errorMessage(error: unknown) {
   return "Unable to create the account. Please try again."
 }
 
-type WaiverKey =
+export type WaiverKey =
   | "parentAthlete"
   | "medicalConsent"
   | "sportsmanship"
   | "clayKeeperAgreement"
 
-const WAIVER_FORMS: Record<
+export const WAIVER_FORMS: Record<
   WaiverKey,
   {
     title: string
@@ -260,6 +260,11 @@ export function ParticipantSignupPage() {
 
   const [confirmationRequired, setConfirmationRequired] =
     useState(false)
+
+  const selectedDisciplineIds = (searchParams.get("session") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
 
   useEffect(() => {
     setFirstName(searchParams.get("firstName") || "")
@@ -488,6 +493,16 @@ export function ParticipantSignupPage() {
             guardianCellPhone ||
             guardianPhone,
           notes: registrationNotes,
+          selectedDisciplines: selectedDisciplineIds,
+          waiversAccepted: {
+            parentAthlete: waiverParentAthlete,
+            medicalConsent: waiverMedicalConsent,
+            sportsmanship: waiverSportsmanship,
+            clayKeeperAgreement: waiverClayKeeperAgreement,
+          },
+          signatureType:
+            signatureMode === "write" ? "drawn" : "typed",
+          signatureValue: submittedSignature,
         },
       )
 
