@@ -143,73 +143,372 @@ export function PrivacyPage() {
       <div className="mt-8 space-y-8">
         <section>
           <h2 className="text-xl font-bold text-slate-950">
-            Information we collect
+            Overview
           </h2>
 
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            ClayKeeper may collect account information,
-            participant information, parent or guardian contact
-            information, emergency contact information, role
-            requests, team and organization information,
-            registration selections, payment records, scoring
-            and event operations data, support communications,
-            and technical information needed to operate and
-            secure the service.
+            ClayKeeper provides registration, participant
+            management, event operations, scoring, reporting,
+            payment tracking, and organization administration
+            tools for shooting sports organizations. This
+            Privacy Policy explains how ClayKeeper may collect,
+            use, disclose, store, and protect personal
+            information when you use the ClayKeeper website,
+            application, registration pages, scoring tools, or
+            related services.
+          </p>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            If you register through an organization that uses
+            ClayKeeper, that organization may also receive and
+            use your information for its own registration,
+            eligibility, safety, event, payment, communication,
+            and recordkeeping purposes. You should contact the
+            organization directly with questions about its
+            independent privacy practices.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-bold text-slate-950">
-            How we use information
+            Personal information we may collect
+          </h2>
+
+          <div className="mt-3 space-y-3 text-sm leading-7 text-slate-600">
+            <p>
+              Depending on how you use ClayKeeper, we may collect:
+            </p>
+
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                Account information, such as name, email address,
+                password credentials, organization membership, and
+                role.
+              </li>
+              <li>
+                Youth shooter or participant information, such as
+                name, date of birth, graduation year, gender,
+                phone number, membership numbers, emergency
+                contact information, team, class, registration
+                selections, and notes submitted during
+                registration.
+              </li>
+              <li>
+                Parent, guardian, coach, scorekeeper,
+                administrator, or volunteer information, such as
+                name, email address, phone number, requested
+                access role, approval status, and messages sent to
+                the organization.
+              </li>
+              <li>
+                Event and competition information, such as
+                registrations, check-in status, squadding, scores,
+                awards, results, leaderboard entries, reports, and
+                related operational records.
+              </li>
+              <li>
+                Payment and commercial information, such as
+                selected sessions or disciplines, fees, payment
+                status, transaction records, refunds, adjustments,
+                receipt email, and payment provider references.
+              </li>
+              <li>
+                Technical information, such as browser, device,
+                IP address, log data, usage activity, security
+                events, and information collected through cookies
+                or similar technologies.
+              </li>
+              <li>
+                Support and communication information, such as
+                messages, questions, feedback, and information you
+                provide when requesting help.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            How we use personal information
+          </h2>
+
+          <div className="mt-3 space-y-3 text-sm leading-7 text-slate-600">
+            <p>
+              ClayKeeper may use personal information to:
+            </p>
+
+            <ul className="list-disc space-y-2 pl-5">
+              <li>Create and manage user accounts.</li>
+              <li>
+                Process youth shooter registrations, season
+                discipline selections, subscriptions, and event
+                participation.
+              </li>
+              <li>
+                Maintain organization rosters, teams, classes,
+                participant numbers, registrations, squadding,
+                scoring, results, awards, leaderboards, and
+                reports.
+              </li>
+              <li>
+                Process payments, refunds, adjustments, receipts,
+                and payment reconciliation.
+              </li>
+              <li>
+                Review and manage coach, scorekeeper, admin, and
+                volunteer access requests.
+              </li>
+              <li>
+                Communicate with users about accounts,
+                registrations, payments, events, operations,
+                support, and security.
+              </li>
+              <li>
+                Operate, improve, troubleshoot, secure, and
+                monitor ClayKeeper.
+              </li>
+              <li>
+                Detect, prevent, investigate, and respond to
+                fraud, misuse, unauthorized access, technical
+                problems, safety issues, or legal obligations.
+              </li>
+              <li>
+                Create aggregated or de-identified information
+                for reporting, analytics, reliability, and product
+                improvement.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Sensitive personal information
           </h2>
 
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            We use information to create and manage accounts,
-            process registrations, support organizations,
-            maintain rosters, manage events, support scoring and
-            reporting, process payments, communicate with users,
-            improve ClayKeeper, and protect the service from
-            misuse or unauthorized access.
+            Some information used by ClayKeeper may be considered
+            sensitive under applicable privacy laws, including
+            login credentials, payment-related information,
+            youth participant information, emergency contact
+            information, and information connected to safety or
+            eligibility. ClayKeeper uses sensitive information
+            only as needed to provide and secure the service,
+            support organizations and users, process
+            registrations and payments, comply with law, and
+            protect the safety and integrity of the platform.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-bold text-slate-950">
-            Sharing information
+            Information organizations collect through ClayKeeper
           </h2>
 
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            ClayKeeper may share information with the
-            organization connected to a registration or account,
-            authorized organization staff, service providers
-            that help operate ClayKeeper, payment processors,
-            and others when required by law or needed to protect
-            users, organizations, or the service.
+            When you register for a season, event, discipline, or
+            activity, you may provide information that is needed
+            by the organization offering that registration.
+            Authorized organization users may access participant
+            records, rosters, emergency contact details,
+            registration history, payment status, scoring records,
+            reports, and other information needed to operate the
+            organization and its events. Organizations may also
+            ask for additional information, waivers, acknowledgments,
+            or consents according to their own rules.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-bold text-slate-950">
-            Youth participant information
+            How we disclose information
+          </h2>
+
+          <div className="mt-3 space-y-3 text-sm leading-7 text-slate-600">
+            <p>
+              ClayKeeper may disclose personal information to:
+            </p>
+
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                The organization connected to your account,
+                registration, role request, or event activity.
+              </li>
+              <li>
+                Authorized organization owners, administrators,
+                coaches, scorekeepers, and volunteers according
+                to their permissions.
+              </li>
+              <li>
+                Service providers that help us operate, host,
+                secure, support, analyze, or improve ClayKeeper.
+              </li>
+              <li>
+                Payment processors and financial service
+                providers needed to complete transactions,
+                refunds, receipts, fraud checks, and related
+                payment operations.
+              </li>
+              <li>
+                Legal, regulatory, safety, or law enforcement
+                authorities when required by law or when we
+                believe disclosure is reasonably necessary to
+                protect rights, safety, users, organizations, or
+                the service.
+              </li>
+              <li>
+                Successors or parties involved in a business
+                transaction, such as a merger, acquisition,
+                financing, reorganization, or sale of assets,
+                subject to appropriate protections.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Public event information and results
           </h2>
 
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            Because ClayKeeper supports youth shooting sports,
-            parent or guardian involvement may be required for
-            minors. Organizations are responsible for their own
-            eligibility, consent, safety, and retention
+            Organizations may choose to publish event information,
+            schedules, leaderboards, scores, awards, or results
+            through ClayKeeper. Published results may include
+            participant names, teams, classes, scores, standings,
+            and awards. If you believe published information is
+            inaccurate or should be removed, contact the
+            organization responsible for the event.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Cookies and similar technologies
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            ClayKeeper may use cookies, local storage, log files,
+            and similar technologies to keep you signed in,
+            remember registration progress, preserve shopping cart
+            selections, improve performance, understand usage,
+            and protect the service. If you disable cookies or
+            local storage, some ClayKeeper features may not work
+            correctly.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Third-party links and services
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            ClayKeeper may link to or integrate with third-party
+            websites or services, including payment processors,
+            authentication providers, email providers, hosting
+            providers, database providers, analytics providers,
+            and organization websites. Their privacy practices are
+            governed by their own policies, not this Privacy
+            Policy.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            How we protect and store information
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            ClayKeeper uses technical and organizational measures
+            designed to protect personal information from
+            accidental loss, unauthorized access, disclosure,
+            alteration, or misuse. No system can be guaranteed
+            completely secure. You are responsible for protecting
+            your account credentials, using a secure device, and
+            signing out when using shared devices.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Retention
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            We retain personal information for as long as needed
+            to provide ClayKeeper, support organizations,
+            maintain registration and scoring records, comply
+            with legal and accounting obligations, resolve
+            disputes, enforce agreements, secure the service, and
+            preserve backup and disaster recovery records.
+            Organizations may have their own record retention
             requirements.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-bold text-slate-950">
-            Questions
+            Children and minors
           </h2>
 
           <p className="mt-3 text-sm leading-7 text-slate-600">
-            For privacy questions, contact ClayKeeper support or
-            your organization administrator.
+            ClayKeeper supports youth shooting sports and may
+            process information about minors when a parent,
+            guardian, organization, coach, or authorized user
+            provides that information for registration, team,
+            event, safety, scoring, or reporting purposes.
+            Parents or legal guardians should complete youth
+            shooter registration when required and should contact
+            the organization with questions about participation,
+            eligibility, safety rules, or organization-specific
+            consent requirements.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Your choices and rights
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Depending on where you live, you may have rights to
+            access, correct, delete, restrict, object to, or
+            receive a copy of certain personal information. You
+            may also be able to update some account information
+            directly in ClayKeeper. Because organizations control
+            many registration and event records, some requests may
+            need to be handled by the organization connected to
+            the record.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Changes to this Privacy Policy
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            We may update this Privacy Policy from time to time.
+            When we make material changes, we will make
+            reasonable efforts to provide notice through the
+            service or another appropriate method. The effective
+            date above shows when this draft was last updated.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-slate-950">
+            Contact us
+          </h2>
+
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            For privacy questions about ClayKeeper, contact
+            ClayKeeper support. For organization-specific
+            questions about registration, eligibility, events,
+            safety rules, refunds, published results, or removal
+            of organization records, contact the organization
+            administrator.
           </p>
         </section>
       </div>
