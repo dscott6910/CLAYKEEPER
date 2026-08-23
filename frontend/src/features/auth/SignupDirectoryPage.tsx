@@ -107,13 +107,13 @@ export function SignupDirectoryPage() {
             </div>
 
             <h1 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
-              Create your ClayKeeper account
+              Find your organization
             </h1>
 
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Select the organization you participate with.
-              Your account and Participant Number will be
-              created for that organization.
+              Select your organization to sign in, register a
+              youth shooter, or request coach, scorekeeper,
+              admin, or volunteer access.
             </p>
           </div>
 
@@ -193,7 +193,7 @@ export function SignupDirectoryPage() {
                           {organization.organizationName}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-500">
-                          Create participant account
+                          Open registration page
                         </p>
                       </div>
 

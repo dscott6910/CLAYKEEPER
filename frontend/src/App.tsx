@@ -12,6 +12,18 @@ const ParticipantSignupPage = lazy(() =>
   })),
 )
 
+const OrganizationSignupLandingPage = lazy(() =>
+  import("@/features/auth/OrganizationSignupLandingPage").then((module) => ({
+    default: module.OrganizationSignupLandingPage,
+  })),
+)
+
+const StaffSignupPage = lazy(() =>
+  import("@/features/auth/StaffSignupPage").then((module) => ({
+    default: module.StaffSignupPage,
+  })),
+)
+
 const SignupDirectoryPage = lazy(() =>
   import("@/features/auth/SignupDirectoryPage").then((module) => ({
     default: module.SignupDirectoryPage,
@@ -346,7 +358,25 @@ function App() {
               path="/signup/:organizationSlug"
               element={
                 <LazyRoute>
+                  <OrganizationSignupLandingPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/signup/:organizationSlug/youth"
+              element={
+                <LazyRoute>
                   <ParticipantSignupPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/signup/:organizationSlug/staff"
+              element={
+                <LazyRoute>
+                  <StaffSignupPage />
                 </LazyRoute>
               }
             />

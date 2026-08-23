@@ -1,7 +1,12 @@
 import { useState } from "react"
 import type { FormEvent } from "react"
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
-import { LockKeyhole, Mail } from "lucide-react"
+import {
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  UserRoundPlus,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/useAuth"
@@ -159,15 +164,47 @@ export function LoginPage() {
             </form>
 
             <div className="mt-6 border-t border-slate-200 pt-6 text-center">
-              <p className="text-sm text-slate-600">
-                Don&apos;t have an account?{" "}
+              <p className="text-sm font-semibold text-slate-700">
+                Need to register?
+              </p>
+
+              <div className="mt-4 grid gap-3 text-left">
                 <Link
                   to="/signup"
-                  className="font-semibold text-emerald-700 hover:text-emerald-800"
+                  className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition hover:border-emerald-400 hover:bg-emerald-100"
                 >
-                  Create an account
+                  <UserRoundPlus className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+
+                  <span>
+                    <span className="block text-sm font-bold text-slate-950">
+                      Sign up as a youth shooter
+                    </span>
+
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      Choose your organization, create the shooter
+                      profile, and continue toward season payment.
+                    </span>
+                  </span>
                 </Link>
-              </p>
+
+                <Link
+                  to="/signup"
+                  className="flex gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-emerald-300 hover:bg-slate-50"
+                >
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+
+                  <span>
+                    <span className="block text-sm font-bold text-slate-950">
+                      Sign up as coach, scorekeeper, admin, or volunteer
+                    </span>
+
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      Choose your organization and request
+                      role-based access for approval.
+                    </span>
+                  </span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>

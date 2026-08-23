@@ -13,7 +13,15 @@ export type ParticipantSignupProfile = {
   lastName: string
   preferredName?: string
   birthDate?: string
+  gender?: string
+  graduationYear?: string
+  cyssaNumber?: string
+  ataNumber?: string
+  nssaNumber?: string
   phone?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
+  notes?: string
   accountEmail?: string
 }
 
@@ -165,8 +173,26 @@ export async function completeParticipantSignup(
         profile.preferredName?.trim() || null,
       p_birth_date:
         profile.birthDate?.trim() || null,
+      p_gender:
+        profile.gender?.trim() || null,
+      p_graduation_year:
+        profile.graduationYear?.trim()
+          ? Number(profile.graduationYear)
+          : null,
+      p_cyssa_number:
+        profile.cyssaNumber?.trim() || null,
+      p_ata_number:
+        profile.ataNumber?.trim() || null,
+      p_nssa_number:
+        profile.nssaNumber?.trim() || null,
       p_phone:
         profile.phone?.trim() || null,
+      p_emergency_contact_name:
+        profile.emergencyContactName?.trim() || null,
+      p_emergency_contact_phone:
+        profile.emergencyContactPhone?.trim() || null,
+      p_notes:
+        profile.notes?.trim() || null,
     },
   )
 
@@ -236,7 +262,7 @@ export async function createParticipantAccount(
     typeof window !== "undefined"
       ? `${window.location.origin}/signup/${encodeURIComponent(
           profile.organizationSlug,
-        )}`
+        )}/youth`
       : undefined
 
   const { data, error } = await supabase.auth.signUp({

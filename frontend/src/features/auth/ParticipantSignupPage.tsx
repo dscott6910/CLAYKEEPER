@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { FormEvent } from "react"
+import type { FormEvent, HTMLAttributes } from "react"
 import { Link, useParams } from "react-router-dom"
 import {
   CalendarDays,
@@ -56,7 +56,15 @@ export function ParticipantSignupPage() {
   const [lastName, setLastName] = useState("")
   const [preferredName, setPreferredName] = useState("")
   const [birthDate, setBirthDate] = useState("")
+  const [gender, setGender] = useState("")
+  const [graduationYear, setGraduationYear] = useState("")
+  const [cyssaNumber, setCyssaNumber] = useState("")
+  const [ataNumber, setAtaNumber] = useState("")
+  const [nssaNumber, setNssaNumber] = useState("")
   const [phone, setPhone] = useState("")
+  const [emergencyContactName, setEmergencyContactName] = useState("")
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("")
+  const [notes, setNotes] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] =
@@ -200,7 +208,15 @@ export function ParticipantSignupPage() {
           lastName,
           preferredName,
           birthDate,
+          gender,
+          graduationYear,
+          cyssaNumber,
+          ataNumber,
+          nssaNumber,
           phone,
+          emergencyContactName,
+          emergencyContactPhone,
+          notes,
         },
       )
 
@@ -413,17 +429,23 @@ export function ParticipantSignupPage() {
             </p>
 
             <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-              Create Account
+              Youth shooter registration
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Create your participant login and profile.
+              Create the shooter login, profile, emergency
+              contact, and season registration record.
             </p>
 
             <form
               className="mt-7 space-y-5"
               onSubmit={handleSubmit}
             >
+              <SignupSection
+                title="Shooter information"
+                description="Basic participant details used for rosters, squadding, scoring, and reports."
+              />
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <SignupInput
                   label="First name"
@@ -444,15 +466,15 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <SignupInput
-                label="Preferred name"
-                value={preferredName}
-                onChange={setPreferredName}
-                icon={User}
-                autoComplete="nickname"
-              />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SignupInput
+                  label="Preferred name"
+                  value={preferredName}
+                  onChange={setPreferredName}
+                  icon={User}
+                  autoComplete="nickname"
+                />
 
-              <div className="grid gap-4 sm:grid-cols-2">
                 <SignupInput
                   label="Birth date"
                   type="date"
@@ -463,14 +485,108 @@ export function ParticipantSignupPage() {
                 />
 
                 <SignupInput
-                  label="Phone"
+                  label="Graduation year"
+                  type="number"
+                  value={graduationYear}
+                  onChange={setGraduationYear}
+                  icon={CalendarDays}
+                  autoComplete="off"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="gender"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Gender
+                </label>
+
+                <select
+                  id="gender"
+                  value={gender}
+                  onChange={(event) =>
+                    setGender(event.target.value)
+                  }
+                  className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="nonbinary">Non-binary</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <SignupSection
+                title="Contact and emergency contact"
+                description="Used by organization staff for season communication and safety follow-up."
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SignupInput
+                  label="Shooter phone"
                   type="tel"
                   value={phone}
                   onChange={setPhone}
                   icon={Phone}
                   autoComplete="tel"
                 />
+
+                <SignupInput
+                  label="Emergency contact name"
+                  value={emergencyContactName}
+                  onChange={setEmergencyContactName}
+                  icon={User}
+                  autoComplete="name"
+                />
               </div>
+
+              <SignupInput
+                label="Emergency contact phone"
+                type="tel"
+                value={emergencyContactPhone}
+                onChange={setEmergencyContactPhone}
+                icon={Phone}
+                autoComplete="tel"
+              />
+
+              <SignupSection
+                title="Membership numbers"
+                description="Optional association numbers used for reporting and matching existing records."
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SignupInput
+                  label="CYSSA number"
+                  value={cyssaNumber}
+                  onChange={setCyssaNumber}
+                  icon={User}
+                  autoComplete="off"
+                />
+
+                <SignupInput
+                  label="ATA number"
+                  value={ataNumber}
+                  onChange={setAtaNumber}
+                  icon={User}
+                  autoComplete="off"
+                />
+
+                <SignupInput
+                  label="NSSA number"
+                  value={nssaNumber}
+                  onChange={setNssaNumber}
+                  icon={User}
+                  autoComplete="off"
+                />
+              </div>
+
+              <SignupSection
+                title="Login and payment"
+                description="Payment collection will be connected to the organization's season and ClayKeeper subscription settings."
+              />
 
               <SignupInput
                 label="Email address"
@@ -501,6 +617,33 @@ export function ParticipantSignupPage() {
                 autoComplete="new-password"
                 required
               />
+
+              <div>
+                <label
+                  htmlFor="registration-notes"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Notes for the organization
+                </label>
+
+                <textarea
+                  id="registration-notes"
+                  value={notes}
+                  onChange={(event) =>
+                    setNotes(event.target.value)
+                  }
+                  rows={3}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  placeholder="Optional medical, team, or registration notes"
+                />
+              </div>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                <strong>Payment step:</strong> this form is ready
+                for season and ClayKeeper subscription checkout.
+                The payment screen will appear here once pricing
+                is configured for this organization.
+              </div>
 
               <p className="text-xs leading-5 text-slate-500">
                 Passwords must contain at least 8 characters.
@@ -551,6 +694,7 @@ function SignupInput({
   type = "text",
   autoComplete,
   required = false,
+  inputMode,
 }: {
   label: string
   value: string
@@ -559,6 +703,7 @@ function SignupInput({
   type?: string
   autoComplete?: string
   required?: boolean
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"]
 }) {
   const id = label
     .toLowerCase()
@@ -581,6 +726,7 @@ function SignupInput({
           type={type}
           autoComplete={autoComplete}
           required={required}
+          inputMode={inputMode}
           value={value}
           onChange={(event) =>
             onChange(event.target.value)
@@ -588,6 +734,26 @@ function SignupInput({
           className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
         />
       </div>
+    </div>
+  )
+}
+
+function SignupSection({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div className="border-t border-slate-200 pt-5 first:border-t-0 first:pt-0">
+      <h3 className="text-base font-bold text-slate-950">
+        {title}
+      </h3>
+
+      <p className="mt-1 text-sm leading-6 text-slate-500">
+        {description}
+      </p>
     </div>
   )
 }
