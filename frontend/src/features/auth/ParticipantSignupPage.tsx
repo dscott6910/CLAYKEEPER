@@ -610,7 +610,7 @@ export function ParticipantSignupPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-3 sm:items-end">
                 <SignupInput
                   label="Preferred name"
                   value={preferredName}
