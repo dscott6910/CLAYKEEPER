@@ -19,7 +19,6 @@ import {
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
 import {
-  YOUTH_SEASON_REGISTRATION_FEE,
   YOUTH_REGISTRATION_SESSIONS,
   youthRegistrationSessionsByIds,
 } from "@/lib/services/youthRegistrationSessions"
@@ -50,6 +49,15 @@ export function YouthRegistrationInformationPage() {
   const [consentModalOpen, setConsentModalOpen] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
+  const [participantFirstName, setParticipantFirstName] =
+    useState("")
+  const [participantLastName, setParticipantLastName] =
+    useState("")
+  const [participantDateOfBirth, setParticipantDateOfBirth] =
+    useState("")
+  const [participantGender, setParticipantGender] = useState("")
+  const [participantConfirmed, setParticipantConfirmed] =
+    useState(false)
 
   const selectedIds = useMemo(
     () =>
@@ -71,10 +79,6 @@ export function YouthRegistrationInformationPage() {
   const selectedSessionParam = selectedSessions
     .map((session) => session.id)
     .join(",")
-
-  const total = selectedSessions.length
-    ? YOUTH_SEASON_REGISTRATION_FEE
-    : 0
 
   useEffect(() => {
     let mounted = true
@@ -186,6 +190,17 @@ export function YouthRegistrationInformationPage() {
     setEmailConfirmed(true)
   }
 
+  const participantReady =
+    participantFirstName.trim() &&
+    participantLastName.trim() &&
+    participantDateOfBirth &&
+    participantGender
+
+  function handleParticipantContinue() {
+    if (!participantReady) return
+    setParticipantConfirmed(true)
+  }
+
   return (
     <main className="min-h-screen bg-slate-100">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -219,37 +234,62 @@ export function YouthRegistrationInformationPage() {
                   active={!emailConfirmed}
                   complete={emailConfirmed}
                 >
-                  <label
-                    htmlFor="registration-email"
-                    className="text-sm font-medium text-slate-700"
-                  >
-                    Email address{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
+                  {emailConfirmed ? (
+                    <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 font-bold text-slate-600">
+                          ✓
+                        </span>
 
-                  <div className="relative mt-2">
-                    <Mail className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                        <span>{email}</span>
+                      </div>
 
-                    <input
-                      id="registration-email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(event) =>
-                        setEmail(event.target.value)
-                      }
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                    />
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmailConfirmed(false)
+                          setParticipantConfirmed(false)
+                        }}
+                        className="text-left text-sm font-semibold text-emerald-700 hover:text-emerald-800 hover:underline sm:text-right"
+                      >
+                        Change email address
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <label
+                        htmlFor="registration-email"
+                        className="text-sm font-medium text-slate-700"
+                      >
+                        Email address{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
 
-                  <Button
-                    type="button"
-                    className="mt-4 h-11 w-full"
-                    onClick={handleEmailNext}
-                    disabled={!email.trim()}
-                  >
-                    Next
-                  </Button>
+                      <div className="relative mt-2">
+                        <Mail className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400" />
+
+                        <input
+                          id="registration-email"
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(event) =>
+                            setEmail(event.target.value)
+                          }
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                        />
+                      </div>
+
+                      <Button
+                        type="button"
+                        className="mt-4 h-11 w-full"
+                        onClick={handleEmailNext}
+                        disabled={!email.trim()}
+                      >
+                        Next
+                      </Button>
+                    </>
+                  )}
                 </RegistrationPanel>
 
                 <RegistrationPanel
@@ -305,22 +345,109 @@ export function YouthRegistrationInformationPage() {
                           >
                             Change
                           </Link>
-
-                          <p className="mt-8 font-bold text-slate-950">
-                            ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
-                          </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-200 pt-4">
-                      <span className="font-semibold text-slate-700">
-                        Subtotal
-                      </span>
+                    <div className="border-t border-slate-200 pt-5">
+                      <h3 className="font-bold text-slate-800">
+                        Who is attending?
+                      </h3>
 
-                      <span className="text-xl font-bold text-slate-950">
-                        ${total.toFixed(2)}
-                      </span>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          <span>
+                            Participant first name{" "}
+                            <span className="text-amber-500">*</span>
+                          </span>
+
+                          <input
+                            type="text"
+                            value={participantFirstName}
+                            onChange={(event) => {
+                              setParticipantFirstName(
+                                event.target.value,
+                              )
+                              setParticipantConfirmed(false)
+                            }}
+                            className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium text-slate-700">
+                          <span>
+                            Participant last name{" "}
+                            <span className="text-amber-500">*</span>
+                          </span>
+
+                          <input
+                            type="text"
+                            value={participantLastName}
+                            onChange={(event) => {
+                              setParticipantLastName(
+                                event.target.value,
+                              )
+                              setParticipantConfirmed(false)
+                            }}
+                            className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium text-slate-700">
+                          <span>
+                            Date of birth{" "}
+                            <span className="text-amber-500">*</span>
+                          </span>
+
+                          <input
+                            type="date"
+                            value={participantDateOfBirth}
+                            onChange={(event) => {
+                              setParticipantDateOfBirth(
+                                event.target.value,
+                              )
+                              setParticipantConfirmed(false)
+                            }}
+                            className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                          />
+                        </label>
+
+                        <label className="text-sm font-medium text-slate-700">
+                          <span>
+                            Gender{" "}
+                            <span className="text-amber-500">*</span>
+                          </span>
+
+                          <select
+                            value={participantGender}
+                            onChange={(event) => {
+                              setParticipantGender(
+                                event.target.value,
+                              )
+                              setParticipantConfirmed(false)
+                            }}
+                            className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                          >
+                            <option value="">Select one</option>
+                            <option value="female">Female</option>
+                            <option value="male">Male</option>
+                            <option value="prefer-not-to-answer">
+                              Prefer not to answer
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="mt-5 flex justify-end">
+                        <Button
+                          type="button"
+                          className="min-h-11 px-8"
+                          disabled={!participantReady}
+                          onClick={handleParticipantContinue}
+                        >
+                          Continue
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </RegistrationPanel>
@@ -328,7 +455,7 @@ export function YouthRegistrationInformationPage() {
                 <RegistrationPanel
                   step="3"
                   title="Registration forms"
-                  active={emailConfirmed}
+                  active={participantConfirmed}
                 >
                   <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex gap-3">
@@ -349,12 +476,13 @@ export function YouthRegistrationInformationPage() {
                     </div>
 
                     <Link
-                      to={emailConfirmed ? profilePath : "#"}
+                      to={participantConfirmed ? profilePath : "#"}
                       onClick={(event) => {
-                        if (!emailConfirmed) event.preventDefault()
+                        if (!participantConfirmed)
+                          event.preventDefault()
                       }}
                       className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold ${
-                        emailConfirmed
+                        participantConfirmed
                           ? "bg-emerald-600 text-white hover:bg-emerald-700"
                           : "cursor-not-allowed bg-slate-200 text-slate-400"
                       }`}
