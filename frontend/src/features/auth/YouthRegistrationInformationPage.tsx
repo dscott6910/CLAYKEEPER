@@ -364,19 +364,6 @@ export function YouthRegistrationInformationPage() {
                     </Link>
                   </div>
 
-                  <Link
-                    to={emailConfirmed ? profilePath : "#"}
-                    onClick={(event) => {
-                      if (!emailConfirmed) event.preventDefault()
-                    }}
-                    className={`mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-lg px-5 text-sm font-semibold transition ${
-                      emailConfirmed
-                        ? "bg-slate-950 text-white hover:bg-slate-800"
-                        : "cursor-not-allowed bg-slate-200 text-slate-400"
-                    }`}
-                  >
-                    Continue to registration form
-                  </Link>
                 </RegistrationPanel>
               </div>
             </div>
