@@ -18,6 +18,12 @@ const OrganizationSignupLandingPage = lazy(() =>
   })),
 )
 
+const YouthSessionSelectionPage = lazy(() =>
+  import("@/features/auth/YouthSessionSelectionPage").then((module) => ({
+    default: module.YouthSessionSelectionPage,
+  })),
+)
+
 const StaffSignupPage = lazy(() =>
   import("@/features/auth/StaffSignupPage").then((module) => ({
     default: module.StaffSignupPage,
@@ -365,6 +371,15 @@ function App() {
 
             <Route
               path="/signup/:organizationSlug/youth"
+              element={
+                <LazyRoute>
+                  <YouthSessionSelectionPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/signup/:organizationSlug/youth/profile"
               element={
                 <LazyRoute>
                   <ParticipantSignupPage />

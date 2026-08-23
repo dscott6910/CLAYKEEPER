@@ -262,7 +262,7 @@ export async function createParticipantAccount(
     typeof window !== "undefined"
       ? `${window.location.origin}/signup/${encodeURIComponent(
           profile.organizationSlug,
-        )}/youth`
+        )}/youth/profile`
       : undefined
 
   const { data, error } = await supabase.auth.signUp({
