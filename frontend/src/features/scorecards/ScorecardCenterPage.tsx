@@ -792,7 +792,7 @@ async function drawScorecard(
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8.4)
   pdf.text(
-    "INSTRUCTIONS: HIT = BUBBLE FILL - MISS = BUBBLE EMPTY",
+    "INSTRUCTIONS: DEAD = BUBBLE FILL - LOSS = BUBBLE EMPTY",
     x + margin,
     y + 1.00,
     { maxWidth: 4.7 },
@@ -855,13 +855,16 @@ async function drawScorecard(
   pdf.text("STN", tableX + stationW / 2, tableY + 0.22, {
     align: "center",
   })
-  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
+  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 2) {
+    const pairBirds = Math.min(2, SCORECARD_BIRD_COLUMNS - bird + 1)
     pdf.rect(
       tableX + stationW + (bird - 1) * birdW,
       tableY,
-      birdW,
+      birdW * pairBirds,
       rowH,
     )
+  }
+  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
     pdf.text(
       String(bird),
       tableX + stationW + (bird - 1) * birdW + birdW / 2,
@@ -893,9 +896,18 @@ async function drawScorecard(
       align: "center",
     })
 
+    for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 2) {
+      const pairBirds = Math.min(2, SCORECARD_BIRD_COLUMNS - bird + 1)
+      pdf.rect(
+        tableX + stationW + (bird - 1) * birdW,
+        rowY,
+        birdW * pairBirds,
+        rowH,
+      )
+    }
+
     for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
-      pdf.rect(cellX, rowY, birdW, rowH)
       if (bird <= birdCount) {
         pdf.circle(cellX + birdW / 2, rowY + rowH / 2, 0.08)
       }
