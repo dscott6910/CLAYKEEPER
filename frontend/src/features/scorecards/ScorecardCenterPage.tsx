@@ -270,6 +270,7 @@ export function ScorecardCenterPage() {
       for (let index = 0; index < totalCards; index += 1) {
         const slot = index % 2
         if (index > 0 && slot === 0) pdf.addPage("letter", "landscape")
+        if (slot === 0) drawCutLine(pdf)
 
         await drawScorecard(
           pdf,
@@ -725,6 +726,21 @@ function StepGenerate(props: {
   )
 }
 
+function drawCutLine(pdf: jsPDF) {
+  const centerX = 5.5
+
+  pdf.setDrawColor(120)
+  pdf.setLineWidth(0.006)
+  pdf.setLineDashPattern([0.08, 0.06], 0)
+  pdf.line(centerX, 0.18, centerX, 8.32)
+  pdf.setLineDashPattern([], 0)
+
+  pdf.setFont("helvetica", "normal")
+  pdf.setFontSize(12)
+  pdf.text("✂", centerX, 0.13, { align: "center" })
+  pdf.text("✂", centerX, 8.46, { align: "center" })
+}
+
 async function drawScorecard(
   pdf: jsPDF,
   x: number,
@@ -736,12 +752,10 @@ async function drawScorecard(
   shootName: string,
 ) {
   const width = 5.5
-  const height = 8.5
   const margin = 0.16
 
   pdf.setDrawColor(20)
   pdf.setLineWidth(0.012)
-  pdf.rect(x + 0.04, y + 0.04, width - 0.08, height - 0.08)
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(9.4)
@@ -887,10 +901,12 @@ async function drawScorecard(
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 0.95 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
+  const grandTotalX = stationTotalX + totalW
   pdf.text(
     "GRAND TOTAL: __________",
-    x + width - 1.72,
+    grandTotalX,
     footerY,
+    { maxWidth: runningW + 0.65 },
   )
 
   pdf.setFont("helvetica", "normal")
