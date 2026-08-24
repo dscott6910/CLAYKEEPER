@@ -41,7 +41,7 @@ const EMPTY_TEMPLATE: ScorecardTemplatePayload = {
   show_malfunctions: true,
   show_verification_fields: true,
   bubble_diameter: 0.19,
-  grid_columns: 10,
+  grid_columns: 14,
   station_limit: 15,
   primary_color: "#111827",
   title_text: "CYSSA SCORECARD",
@@ -313,7 +313,7 @@ export function ScorecardTemplateDesignerPage() {
                   <input
                     type="number"
                     min={1}
-                    max={10}
+                    max={14}
                     value={form.grid_columns}
                     onChange={(e) => update("grid_columns", Number(e.target.value))}
                     className="min-h-11 w-full rounded-lg border px-3"

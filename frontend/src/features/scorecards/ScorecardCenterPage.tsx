@@ -23,6 +23,7 @@ import {
 
 type PrintMode = "event" | "team" | "squad" | "athlete" | "generic"
 type WizardStep = 1 | 2 | 3 | 4 | 5
+const SCORECARD_BIRD_COLUMNS = 14
 
 type PrintableCard = {
   registration: ScorecardRegistration
@@ -834,20 +835,17 @@ async function drawScorecard(
   const tableY = y + 1.10
   const rowH = 0.34
   const stationW = 0.44
-  const birdW = 0.31
+  const birdW = 0.245
   const totalW = 0.48
   const runningW = 0.55
+  const tableW =
+    stationW + birdW * SCORECARD_BIRD_COLUMNS + totalW + runningW
 
   pdf.setFontSize(5.8)
   pdf.setFont("helvetica", "bold")
-  pdf.rect(
-    tableX,
-    tableY,
-    stationW + birdW * 10 + totalW + runningW,
-    rowH,
-  )
+  pdf.rect(tableX, tableY, tableW, rowH)
   pdf.text("STN", tableX + 0.11, tableY + 0.21)
-  for (let bird = 1; bird <= 10; bird += 1) {
+  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
     pdf.rect(
       tableX + stationW + (bird - 1) * birdW,
       tableY,
@@ -856,11 +854,12 @@ async function drawScorecard(
     )
     pdf.text(
       String(bird),
-      tableX + stationW + (bird - 1) * birdW + 0.12,
+      tableX + stationW + (bird - 1) * birdW + birdW / 2,
       tableY + 0.21,
+      { align: "center" },
     )
   }
-  const stationTotalX = tableX + stationW + birdW * 10
+  const stationTotalX = tableX + stationW + birdW * SCORECARD_BIRD_COLUMNS
   pdf.rect(stationTotalX, tableY, totalW, rowH)
   pdf.rect(stationTotalX + totalW, tableY, runningW, rowH)
   pdf.text("ST", stationTotalX + 0.16, tableY + 0.21)
@@ -874,19 +873,14 @@ async function drawScorecard(
     const birdCount = station?.bird_count ?? 0
     const rowY = tableY + rowH * (row + 1)
 
-    pdf.rect(
-      tableX,
-      rowY,
-      stationW + birdW * 10 + totalW + runningW,
-      rowH,
-    )
+    pdf.rect(tableX, rowY, tableW, rowH)
     pdf.text(String(stationNumber), tableX + 0.15, rowY + 0.21)
 
-    for (let bird = 1; bird <= 10; bird += 1) {
+    for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       pdf.rect(cellX, rowY, birdW, rowH)
       if (bird <= birdCount) {
-        pdf.circle(cellX + birdW / 2, rowY + rowH / 2, 0.095)
+        pdf.circle(cellX + birdW / 2, rowY + rowH / 2, 0.08)
       }
     }
 
