@@ -524,7 +524,7 @@ function StepCourse(props: {
           >
             <p className="font-bold">{course.name}</p>
             <p className="mt-1 text-sm opacity-75">
-              {course.course_side} · {course.discipline.replaceAll("_", " ")}
+              {course.discipline.replaceAll("_", " ")}
             </p>
           </button>
         ))}
@@ -784,7 +784,7 @@ async function drawScorecard(
     { maxWidth: 4.3 },
   )
   pdf.text(
-    `Course: ${course.name} (${course.course_side})`,
+    `Course: ${course.name}`,
     x + margin,
     y + 0.80,
     { maxWidth: 4.3 },
