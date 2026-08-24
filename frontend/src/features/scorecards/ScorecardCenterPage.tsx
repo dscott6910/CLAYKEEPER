@@ -789,6 +789,14 @@ async function drawScorecard(
     y + 0.80,
     { maxWidth: 4.3 },
   )
+  pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(8.4)
+  pdf.text(
+    "INSTRUCTIONS: HIT = BUBBLE FILL - MISS = BUBBLE EMPTY",
+    x + margin,
+    y + 1.00,
+    { maxWidth: 4.7 },
+  )
 
   if (card) {
     const scoringUrl = new URL(
@@ -832,7 +840,7 @@ async function drawScorecard(
   }
 
   const tableX = x + margin
-  const tableY = y + 1.10
+  const tableY = y + 1.22
   const rowH = 0.34
   const stationW = 0.44
   const birdW = 0.245
@@ -841,10 +849,12 @@ async function drawScorecard(
   const tableW =
     stationW + birdW * SCORECARD_BIRD_COLUMNS + totalW + runningW
 
-  pdf.setFontSize(5.8)
+  pdf.setFontSize(6.8)
   pdf.setFont("helvetica", "bold")
   pdf.rect(tableX, tableY, tableW, rowH)
-  pdf.text("STN", tableX + 0.11, tableY + 0.21)
+  pdf.text("STN", tableX + stationW / 2, tableY + 0.22, {
+    align: "center",
+  })
   for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
     pdf.rect(
       tableX + stationW + (bird - 1) * birdW,
@@ -862,8 +872,12 @@ async function drawScorecard(
   const stationTotalX = tableX + stationW + birdW * SCORECARD_BIRD_COLUMNS
   pdf.rect(stationTotalX, tableY, totalW, rowH)
   pdf.rect(stationTotalX + totalW, tableY, runningW, rowH)
-  pdf.text("ST", stationTotalX + 0.16, tableY + 0.21)
-  pdf.text("RUN", stationTotalX + totalW + 0.16, tableY + 0.21)
+  pdf.text("ST", stationTotalX + totalW / 2, tableY + 0.22, {
+    align: "center",
+  })
+  pdf.text("RUN", stationTotalX + totalW + runningW / 2, tableY + 0.22, {
+    align: "center",
+  })
 
   for (let row = 0; row < 15; row += 1) {
     const stationNumber = row + 1
@@ -874,7 +888,10 @@ async function drawScorecard(
     const rowY = tableY + rowH * (row + 1)
 
     pdf.rect(tableX, rowY, tableW, rowH)
-    pdf.text(String(stationNumber), tableX + 0.15, rowY + 0.21)
+    pdf.setFontSize(6.8)
+    pdf.text(String(stationNumber), tableX + stationW / 2, rowY + 0.22, {
+      align: "center",
+    })
 
     for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
