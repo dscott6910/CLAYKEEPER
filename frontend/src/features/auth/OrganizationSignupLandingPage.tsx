@@ -208,7 +208,7 @@ export function OrganizationSignupLandingPage() {
               <RegistrationChoice
                 to={returningShooterPath}
                 icon={RefreshCw}
-                title="Returning Shooter Needs Registration"
+                title="Returning Shooter Registration"
                 eyebrow="Returning player"
                 description="Verify your existing shooter account by email, then confirm your profile and complete the new season forms."
               />
