@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import {
   ClipboardCheck,
   LogIn,
+  RefreshCw,
   ShieldCheck,
   UserRoundPlus,
 } from "lucide-react"
@@ -121,6 +122,10 @@ export function OrganizationSignupLandingPage() {
     organization.organizationSlug,
   )}/staff`
 
+  const returningShooterPath = `/signup/${encodeURIComponent(
+    organization.organizationSlug,
+  )}/returning-shooter`
+
   return (
     <main className="grid min-h-screen bg-slate-950 lg:grid-cols-[0.95fr_1.05fr]">
       <section className="hidden flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-12 text-white lg:flex">
@@ -198,6 +203,14 @@ export function OrganizationSignupLandingPage() {
                 eyebrow="Player / participant"
                 description="Create the shooter profile, emergency contact, season registration, and payment record."
                 primary
+              />
+
+              <RegistrationChoice
+                to={returningShooterPath}
+                icon={RefreshCw}
+                title="Returning Shooter Needs Registration"
+                eyebrow="Returning player"
+                description="Verify your existing shooter account by email, then confirm your profile and complete the new season forms."
               />
 
               <RegistrationChoice

@@ -4,7 +4,11 @@ import {
   useState,
   type PointerEvent,
 } from "react"
-import { Navigate, useNavigate } from "react-router-dom"
+import {
+  Navigate,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -33,8 +37,14 @@ function errorMessage(error: unknown) {
 
 export function SeasonRegistrationRequiredPage() {
   const navigate = useNavigate()
-  const { organizationId, loading: organizationLoading } =
-    useOrganization()
+  const [searchParams] = useSearchParams()
+  const {
+    organizationId,
+    loading: organizationLoading,
+    memberships,
+    switching,
+    switchOrganization,
+  } = useOrganization()
 
   const [status, setStatus] =
     useState<ParticipantSeasonRegistrationStatus | null>(null)
@@ -68,11 +78,16 @@ export function SeasonRegistrationRequiredPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const drawingRef = useRef(false)
 
+  const requestedOrganizationSlug =
+    searchParams.get("organization") || ""
+  const verifiedReturningShooter =
+    Boolean(requestedOrganizationSlug)
+
   useEffect(() => {
     let mounted = true
 
     async function loadStatus() {
-      if (organizationLoading || !organizationId) return
+      if (organizationLoading || switching || !organizationId) return
 
       setLoading(true)
       setError("")
@@ -96,7 +111,41 @@ export function SeasonRegistrationRequiredPage() {
     return () => {
       mounted = false
     }
-  }, [organizationId, organizationLoading])
+  }, [organizationId, organizationLoading, switching])
+
+  useEffect(() => {
+    if (
+      organizationLoading ||
+      switching ||
+      !requestedOrganizationSlug
+    ) {
+      return
+    }
+
+    const requestedMembership = memberships.find(
+      (membership) =>
+        membership.organizationSlug ===
+        requestedOrganizationSlug,
+    )
+
+    if (
+      !requestedMembership ||
+      requestedMembership.organizationId === organizationId
+    ) {
+      return
+    }
+
+    void switchOrganization(
+      requestedMembership.organizationId,
+    )
+  }, [
+    memberships,
+    organizationId,
+    organizationLoading,
+    requestedOrganizationSlug,
+    switching,
+    switchOrganization,
+  ])
 
   function toggleDiscipline(id: string) {
     setSelectedDisciplines((current) =>
@@ -268,6 +317,14 @@ export function SeasonRegistrationRequiredPage() {
           <strong>{status?.seasonName || "the active season"}</strong>.
           Confirm your profile, read the waivers, sign, and continue.
         </p>
+
+        {verifiedReturningShooter ? (
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+            Email verified. Review the profile information on
+            file, then complete this season&apos;s discipline
+            selection, waivers, and signature.
+          </div>
+        ) : null}
 
         {status ? (
           <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
