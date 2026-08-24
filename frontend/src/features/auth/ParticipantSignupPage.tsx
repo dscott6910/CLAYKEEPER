@@ -6,13 +6,13 @@ import type {
 } from "react"
 import {
   Link,
+  useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom"
 import {
   ArrowLeft,
   CalendarDays,
-  LockKeyhole,
   Mail,
   Phone,
   User,
@@ -23,10 +23,10 @@ import { useAuth } from "@/features/auth/useAuth"
 import {
   clearPendingParticipantSignup,
   completeParticipantSignup,
-  createParticipantAccount,
   loadParticipantSignupOrganization,
   loadParticipantSignupFromUserMetadata,
   loadPendingParticipantSignup,
+  savePendingParticipantSignup,
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
 import {
@@ -161,6 +161,7 @@ By indicating acceptance of this Agreement and Waiver, you affirm that you have 
 export function ParticipantSignupPage() {
   const { organizationSlug = "" } = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { session } = useAuth()
 
   const [organization, setOrganization] =
@@ -179,9 +180,6 @@ export function ParticipantSignupPage() {
   const [graduationYear, setGraduationYear] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] =
-    useState("")
   const [country, setCountry] = useState("United States")
   const [address, setAddress] = useState("")
   const [addressLine2, setAddressLine2] = useState("")
@@ -375,18 +373,6 @@ export function ParticipantSignupPage() {
 
     setError("")
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.")
-      return
-    }
-
-    if (password.length < 8) {
-      setError(
-        "Password must contain at least 8 characters.",
-      )
-      return
-    }
-
     if (
       !waiverParentAthlete ||
       !waiverMedicalConsent ||
@@ -464,44 +450,43 @@ export function ParticipantSignupPage() {
         .filter(Boolean)
         .join("\n")
 
-      const result = await createParticipantAccount(
-        email,
-        password,
-        {
-          organizationId: organization.organizationId,
-          organizationSlug: organization.organizationSlug,
-          firstName,
-          lastName,
-          preferredName: "",
-          birthDate,
-          gender,
-          graduationYear,
-          phone,
-          emergencyContactName:
-            `${guardianFirstName} ${guardianLastName}`.trim(),
-          emergencyContactPhone:
-            guardianCellPhone ||
-            guardianPhone,
-          notes: registrationNotes,
-          selectedDisciplines: selectedDisciplineIds,
-          waiversAccepted: {
-            parentAthlete: waiverParentAthlete,
-            medicalConsent: waiverMedicalConsent,
-            sportsmanship: waiverSportsmanship,
-            clayKeeperAgreement: waiverClayKeeperAgreement,
-          },
-          signatureType:
-            signatureMode === "write" ? "drawn" : "typed",
-          signatureValue: submittedSignature,
+      savePendingParticipantSignup({
+        organizationId: organization.organizationId,
+        organizationSlug: organization.organizationSlug,
+        firstName,
+        lastName,
+        preferredName: "",
+        birthDate,
+        gender,
+        graduationYear,
+        phone,
+        emergencyContactName:
+          `${guardianFirstName} ${guardianLastName}`.trim(),
+        emergencyContactPhone:
+          guardianCellPhone || guardianPhone,
+        notes: registrationNotes,
+        accountEmail: email,
+        selectedDisciplines: selectedDisciplineIds,
+        waiversAccepted: {
+          parentAthlete: waiverParentAthlete,
+          medicalConsent: waiverMedicalConsent,
+          sportsmanship: waiverSportsmanship,
+          clayKeeperAgreement: waiverClayKeeperAgreement,
         },
+        signatureType:
+          signatureMode === "write" ? "drawn" : "typed",
+        signatureValue: submittedSignature,
+      })
+
+      navigate(
+        `/signup/${encodeURIComponent(
+          organization.organizationSlug,
+        )}/youth/cart${
+          sessionParam
+            ? `?session=${encodeURIComponent(sessionParam)}`
+            : ""
+        }`,
       )
-
-      if (result.emailConfirmationRequired) {
-        setConfirmationRequired(true)
-        return
-      }
-
-      setParticipantNumber(result.participantNumber)
     } catch (signupError) {
       setError(errorMessage(signupError))
     } finally {
@@ -1381,31 +1366,6 @@ export function ParticipantSignupPage() {
                   ) : null}
                 </div>
               </div>
-
-              <SignupSection
-                title="ClayKeeper login"
-                description="Create the login the shooter or parent will use to access ClayKeeper after registration."
-              />
-
-              <SignupInput
-                label="Password"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                icon={LockKeyhole}
-                autoComplete="new-password"
-                required
-              />
-
-              <SignupInput
-                label="Confirm password"
-                type="password"
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                icon={LockKeyhole}
-                autoComplete="new-password"
-                required
-              />
 
               {error ? (
                 <div

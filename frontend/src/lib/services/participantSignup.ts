@@ -75,6 +75,12 @@ function savePendingSignup(
   )
 }
 
+export function savePendingParticipantSignup(
+  profile: ParticipantSignupProfile,
+) {
+  savePendingSignup(profile)
+}
+
 export function loadPendingParticipantSignup():
   | ParticipantSignupProfile
   | null {
