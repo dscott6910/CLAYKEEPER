@@ -744,18 +744,19 @@ async function drawScorecard(
   pdf.rect(x + 0.04, y + 0.04, width - 0.08, height - 0.08)
 
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(10)
-  pdf.text("CLAYKEEPER SCORECARD", x + margin, y + 0.28)
-
-  pdf.setFontSize(7)
+  pdf.setFontSize(9.4)
+  pdf.text(data.event.name, x + margin, y + 0.30, {
+    maxWidth: 4.3,
+  })
+  pdf.setFontSize(7.8)
   pdf.setFont("helvetica", "normal")
-  pdf.text(data.event.name, x + margin, y + 0.46)
   pdf.text(
     `${formatDate(data.event.start_date)}  |  ${
       data.event.location_name ?? "Location not set"
     }`,
     x + margin,
-    y + 0.60,
+    y + 0.48,
+    { maxWidth: 4.3 },
   )
   pdf.text(
     `Host: ${
@@ -764,12 +765,14 @@ async function drawScorecard(
       "Not set"
     }`,
     x + margin,
-    y + 0.74,
+    y + 0.64,
+    { maxWidth: 4.3 },
   )
   pdf.text(
     `Course: ${course.name} (${course.course_side})`,
     x + margin,
-    y + 0.88,
+    y + 0.80,
+    { maxWidth: 4.3 },
   )
 
   if (card) {
@@ -813,25 +816,8 @@ async function drawScorecard(
     })
   }
 
-  pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(8)
-  pdf.text(
-    `Participant: ${card?.athleteName ?? "____________________________"}`,
-    x + margin,
-    y + 1.08,
-  )
-  pdf.text(`Team: ${card?.teamName ?? "________________"}`, x + margin, y + 1.24)
-  pdf.text(
-    `Squad: ${card?.squadNumber || "____"}   ${card?.postLabel || "Post ____"}`,
-    x + 3.25,
-    y + 1.24,
-  )
-  if (!card) {
-    pdf.text(`Shoot: ${shootName}`, x + 3.25, y + 1.08)
-  }
-
   const tableX = x + margin
-  const tableY = y + 1.42
+  const tableY = y + 1.10
   const rowH = 0.34
   const stationW = 0.44
   const birdW = 0.31
@@ -913,5 +899,32 @@ async function drawScorecard(
     "Verified by:  #1________________  #2________________    Entered by:________________",
     tableX,
     footerY + 0.34,
+  )
+
+  const identityY = footerY + 0.68
+  const participantLabel =
+    card?.athleteName ?? "____________________________"
+  const teamLabel = card?.teamName ?? "________________"
+  const shootLabel = card?.shootName ?? shootName
+  const squadLabel = card?.squadNumber || "____"
+  const postLabel = card?.postLabel || "Post ____"
+
+  pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(7.2)
+  pdf.text(`Participant: ${participantLabel}`, tableX, identityY, {
+    maxWidth: 2.55,
+  })
+  pdf.text(`Shoot: ${shootLabel}`, x + 2.85, identityY, {
+    maxWidth: 2.30,
+  })
+
+  pdf.text(`Team: ${teamLabel}`, tableX, identityY + 0.18, {
+    maxWidth: 2.55,
+  })
+  pdf.text(
+    `Squad: ${squadLabel}   ${postLabel}`,
+    x + 2.85,
+    identityY + 0.18,
+    { maxWidth: 2.30 },
   )
 }
