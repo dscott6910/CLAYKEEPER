@@ -901,30 +901,29 @@ async function drawScorecard(
     footerY + 0.34,
   )
 
-  const identityY = footerY + 0.68
+  const identityY = footerY + 0.86
   const participantLabel =
     card?.athleteName ?? "____________________________"
   const teamLabel = card?.teamName ?? "________________"
   const shootLabel = card?.shootName ?? shootName
   const squadLabel = card?.squadNumber || "____"
-  const postLabel = card?.postLabel || "Post ____"
+  const postLabel = card?.postLabel?.replace(/^Post\s*/i, "") || "____"
 
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(7.2)
-  pdf.text(`Participant: ${participantLabel}`, tableX, identityY, {
-    maxWidth: 2.55,
-  })
-  pdf.text(`Shoot: ${shootLabel}`, x + 2.85, identityY, {
-    maxWidth: 2.30,
+  pdf.setFontSize(8.4)
+  pdf.text(`Shoot: ${shootLabel}`, tableX, identityY, {
+    maxWidth: width - margin * 2,
   })
 
-  pdf.text(`Team: ${teamLabel}`, tableX, identityY + 0.18, {
-    maxWidth: 2.55,
+  pdf.setFontSize(8.8)
+  pdf.text(`Participant: ${participantLabel}`, tableX, identityY + 0.34, {
+    maxWidth: 3.0,
   })
-  pdf.text(
-    `Squad: ${squadLabel}   ${postLabel}`,
-    x + 2.85,
-    identityY + 0.18,
-    { maxWidth: 2.30 },
-  )
+
+  pdf.text(`Team: ${teamLabel}`, tableX, identityY + 0.62, {
+    maxWidth: 3.0,
+  })
+
+  pdf.text(`Squad: ${squadLabel}`, x + 3.45, identityY + 0.34)
+  pdf.text(`Post: ${postLabel}`, x + 3.45, identityY + 0.62)
 }
