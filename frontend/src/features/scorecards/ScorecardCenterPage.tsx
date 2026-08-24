@@ -901,12 +901,12 @@ async function drawScorecard(
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 0.95 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
-  const grandTotalX = stationTotalX + totalW
-  pdf.text(
-    "GRAND TOTAL: __________",
-    grandTotalX,
-    footerY,
-    { maxWidth: runningW + 0.65 },
+  pdf.text("GRAND TOTAL:", stationTotalX + 0.03, footerY)
+  pdf.line(
+    stationTotalX + totalW + 0.05,
+    footerY + 0.04,
+    stationTotalX + totalW + runningW - 0.05,
+    footerY + 0.04,
   )
 
   pdf.setFont("helvetica", "normal")
