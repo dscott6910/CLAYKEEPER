@@ -21,7 +21,7 @@ import {
   type ScorecardRegistration,
 } from "@/lib/services/scorecardCenter"
 
-type PrintMode = "event" | "team" | "squad" | "athlete"
+type PrintMode = "event" | "team" | "squad" | "athlete" | "generic"
 type WizardStep = 1 | 2 | 3 | 4 | 5
 
 type PrintableCard = {
@@ -73,6 +73,7 @@ export function ScorecardCenterPage() {
   const [teamFilter, setTeamFilter] = useState("")
   const [squadFilter, setSquadFilter] = useState("")
   const [athleteFilter, setAthleteFilter] = useState("")
+  const [genericCardCount, setGenericCardCount] = useState(2)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState("")
@@ -187,6 +188,8 @@ export function ScorecardCenterPage() {
 
   const cards = useMemo(() => {
     switch (printMode) {
+      case "generic":
+        return []
       case "team":
         return allCards.filter(
           (card) => card.registration.team_id === teamFilter,
@@ -216,8 +219,10 @@ export function ScorecardCenterPage() {
       if (printMode === "team") return Boolean(teamFilter)
       if (printMode === "squad") return Boolean(squadFilter)
       if (printMode === "athlete") return Boolean(athleteFilter)
+      if (printMode === "generic") return genericCardCount > 0
       return true
     }
+    if (printMode === "generic") return genericCardCount > 0
     return cards.length > 0
   }
 
@@ -240,7 +245,7 @@ export function ScorecardCenterPage() {
       setError("Select a course and shoot before generating scorecards.")
       return
     }
-    if (cards.length === 0) {
+    if (printMode !== "generic" && cards.length === 0) {
       setError("No eligible participants match the selected print mode.")
       return
     }
@@ -259,7 +264,10 @@ export function ScorecardCenterPage() {
         .filter((station) => station.course_id === selectedCourse.id)
         .sort((a, b) => a.station_number - b.station_number)
 
-      for (let index = 0; index < cards.length; index += 1) {
+      const totalCards =
+        printMode === "generic" ? genericCardCount : cards.length
+
+      for (let index = 0; index < totalCards; index += 1) {
         const slot = index % 2
         if (index > 0 && slot === 0) pdf.addPage("letter", "landscape")
 
@@ -270,7 +278,8 @@ export function ScorecardCenterPage() {
           data,
           selectedCourse,
           stations,
-          cards[index],
+          printMode === "generic" ? null : cards[index],
+          selectedShoot.name,
         )
       }
 
@@ -281,7 +290,9 @@ export function ScorecardCenterPage() {
             ? `team-${teamFilter}`
             : printMode === "squad"
               ? `squad-${squadFilter}`
-              : `athlete-${athleteFilter}`
+              : printMode === "athlete"
+                ? `athlete-${athleteFilter}`
+                : "generic"
 
       pdf.save(
         `${data.event.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${scope}-scorecards.pdf`,
@@ -391,12 +402,16 @@ export function ScorecardCenterPage() {
               cards={allCards}
               athleteFilter={athleteFilter}
               setAthleteFilter={setAthleteFilter}
+              genericCardCount={genericCardCount}
+              setGenericCardCount={setGenericCardCount}
             />
           ) : null}
 
           {step === 4 ? (
             <StepPreview
               cards={cards}
+              printMode={printMode}
+              genericCardCount={genericCardCount}
               course={selectedCourse}
               shootName={selectedShoot?.name ?? ""}
             />
@@ -404,7 +419,12 @@ export function ScorecardCenterPage() {
 
           {step === 5 ? (
             <StepGenerate
-              count={cards.length}
+              count={
+                printMode === "generic"
+                  ? genericCardCount
+                  : cards.length
+              }
+              generic={printMode === "generic"}
               courseName={selectedCourse?.name ?? ""}
               shootName={selectedShoot?.name ?? ""}
               generating={generating}
@@ -562,17 +582,20 @@ function StepPrintMode(props: {
   cards: PrintableCard[]
   athleteFilter: string
   setAthleteFilter: (value: string) => void
+  genericCardCount: number
+  setGenericCardCount: (value: number) => void
 }) {
   const options: Array<{ value: PrintMode; title: string; detail: string }> = [
     { value: "event", title: "Entire Shoot", detail: "Print every eligible participant" },
     { value: "team", title: "One Team", detail: "Print one selected team" },
     { value: "squad", title: "One Squad", detail: "Print one selected squad" },
     { value: "athlete", title: "One Participant", detail: "Print or reprint one card" },
+    { value: "generic", title: "Generic Blank Cards", detail: "Print cards without assigned shooters" },
   ]
   return (
     <div>
       <h2 className="text-xl font-bold">3. Choose Print Mode</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {options.map((option) => (
           <button
             key={option.value}
@@ -609,6 +632,30 @@ function StepPrintMode(props: {
             {props.cards.map((card) => <option key={card.registration.id} value={card.registration.athlete_id}>{card.athleteName} · {card.teamName}</option>)}
           </select>
         ) : null}
+        {props.mode === "generic" ? (
+          <label className="block text-sm font-medium text-slate-700">
+            Number of generic scorecards
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={props.genericCardCount}
+              onChange={(event) =>
+                props.setGenericCardCount(
+                  Math.max(
+                    1,
+                    Math.min(200, Number(event.target.value) || 1),
+                  ),
+                )
+              }
+              className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
+            />
+            <span className="mt-2 block text-xs leading-5 text-slate-500">
+              These cards use the selected course birds and stations,
+              but leave participant, team, squad, and post blank.
+            </span>
+          </label>
+        ) : null}
       </div>
     </div>
   )
@@ -616,17 +663,30 @@ function StepPrintMode(props: {
 
 function StepPreview(props: {
   cards: PrintableCard[]
+  printMode: PrintMode
+  genericCardCount: number
   course: ScorecardCourse | null
   shootName: string
 }) {
+  const generic = props.printMode === "generic"
+
   return (
     <div>
       <h2 className="text-xl font-bold">4. Preview Print Queue</h2>
       <p className="mt-1 text-sm text-slate-500">
-        {props.cards.length} scorecard{props.cards.length === 1 ? "" : "s"} · {props.course?.name ?? "No course"} · {props.shootName}
+        {generic ? props.genericCardCount : props.cards.length} scorecard{(generic ? props.genericCardCount : props.cards.length) === 1 ? "" : "s"} · {props.course?.name ?? "No course"} · {props.shootName}
       </p>
       <div className="mt-5 max-h-[520px] divide-y overflow-y-auto rounded-xl border">
-        {props.cards.slice(0, 200).map((card) => (
+        {generic ? (
+          <div className="grid gap-2 p-4 text-sm sm:grid-cols-5">
+            <span className="font-semibold">Generic scorecard</span>
+            <span>No shooter assigned</span>
+            <span>Team blank</span>
+            <span>Squad / post blank</span>
+            <span className="text-slate-500">{props.shootName}</span>
+          </div>
+        ) : null}
+        {!generic ? props.cards.slice(0, 200).map((card) => (
           <div key={card.registration.id} className="grid gap-2 p-4 text-sm sm:grid-cols-5">
             <span className="font-semibold">{card.athleteName}</span>
             <span>{card.teamName}</span>
@@ -634,8 +694,8 @@ function StepPreview(props: {
             <span>{card.postLabel || "No post"}</span>
             <span className="text-slate-500">{card.shootName}</span>
           </div>
-        ))}
-        {props.cards.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No scorecards are available for this selection.</p> : null}
+        )) : null}
+        {!generic && props.cards.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No scorecards are available for this selection.</p> : null}
       </div>
     </div>
   )
@@ -643,6 +703,7 @@ function StepPreview(props: {
 
 function StepGenerate(props: {
   count: number
+  generic: boolean
   courseName: string
   shootName: string
   generating: boolean
@@ -653,7 +714,7 @@ function StepGenerate(props: {
       <FileDown className="mx-auto h-12 w-12 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold">5. Generate Scorecards</h2>
       <p className="mt-2 text-slate-500">
-        {props.count} cards · {Math.ceil(props.count / 2)} landscape pages<br />
+        {props.count} {props.generic ? "generic " : ""}cards · {Math.ceil(props.count / 2)} landscape pages<br />
         {props.courseName} · {props.shootName}
       </p>
       <Button className="mt-6" onClick={() => void props.createPdf()} disabled={props.generating || props.count === 0}>
@@ -671,7 +732,8 @@ async function drawScorecard(
   data: ScorecardCenterData,
   course: ScorecardCourse,
   stations: ScorecardCenterData["stations"],
-  card: PrintableCard,
+  card: PrintableCard | null,
+  shootName: string,
 ) {
   const width = 5.5
   const height = 8.5
@@ -710,43 +772,63 @@ async function drawScorecard(
     y + 0.88,
   )
 
-  const scoringUrl = new URL(
-    `/events/${data.event.id}/digital-scoring`,
-    window.location.origin,
-  )
+  if (card) {
+    const scoringUrl = new URL(
+      `/events/${data.event.id}/digital-scoring`,
+      window.location.origin,
+    )
 
-  scoringUrl.searchParams.set("shootId", card.shootId)
-  scoringUrl.searchParams.set("memberId", card.memberId)
-  scoringUrl.searchParams.set("courseId", course.id)
+    scoringUrl.searchParams.set("shootId", card.shootId)
+    scoringUrl.searchParams.set("memberId", card.memberId)
+    scoringUrl.searchParams.set("courseId", course.id)
 
-  const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-    margin: 0,
-    width: 256,
-    errorCorrectionLevel: "M",
-  })
-  pdf.addImage(qr, "PNG", x + width - 0.95, y + 0.14, 0.74, 0.74)
+    const qr = await QRCode.toDataURL(scoringUrl.toString(), {
+      margin: 0,
+      width: 256,
+      errorCorrectionLevel: "M",
+    })
+    pdf.addImage(qr, "PNG", x + width - 0.95, y + 0.14, 0.74, 0.74)
 
-  pdf.setFont("helvetica", "normal")
-  pdf.setFontSize(4.8)
-  pdf.text(
-    "Scan to enter this participant's score",
-    x + width - 1.08,
-    y + 0.96,
-    {
-      maxWidth: 1.0,
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(4.8)
+    pdf.text(
+      "Scan to enter this participant's score",
+      x + width - 1.08,
+      y + 0.96,
+      {
+        maxWidth: 1.0,
+        align: "center",
+      },
+    )
+  } else {
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(8)
+    pdf.text("GENERIC", x + width - 0.82, y + 0.28, {
       align: "center",
-    },
-  )
+    })
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(5.4)
+    pdf.text("No assigned shooter", x + width - 0.82, y + 0.44, {
+      align: "center",
+    })
+  }
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8)
-  pdf.text(`Participant: ${card.athleteName}`, x + margin, y + 1.08)
-  pdf.text(`Team: ${card.teamName}`, x + margin, y + 1.24)
   pdf.text(
-    `Squad: ${card.squadNumber || "—"}   ${card.postLabel || ""}`,
+    `Participant: ${card?.athleteName ?? "____________________________"}`,
+    x + margin,
+    y + 1.08,
+  )
+  pdf.text(`Team: ${card?.teamName ?? "________________"}`, x + margin, y + 1.24)
+  pdf.text(
+    `Squad: ${card?.squadNumber || "____"}   ${card?.postLabel || "Post ____"}`,
     x + 3.25,
     y + 1.24,
   )
+  if (!card) {
+    pdf.text(`Shoot: ${shootName}`, x + 3.25, y + 1.08)
+  }
 
   const tableX = x + margin
   const tableY = y + 1.42
