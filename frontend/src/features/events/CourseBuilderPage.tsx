@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, Copy, Loader2, Plus, RefreshCw, Save, Trash2 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 
@@ -47,6 +47,7 @@ export function CourseBuilderPage() {
   const [stations, setStations] = useState<CourseStation[]>([])
   const [form, setForm] = useState<CourseForm>(() => blankForm())
   const [selectedCourseId, setSelectedCourseId] = useState("")
+  const selectedCourseIdRef = useRef("")
   const [applyBirdCount, setApplyBirdCount] = useState(MAX_BIRDS_PER_STATION)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -60,24 +61,27 @@ export function CourseBuilderPage() {
       const data = await loadCourseBuilderData(eventId)
       setOrganizationId(data.event.organization_id); setEventName(data.event.name); setEventDiscipline(data.event.discipline)
       setCourses(data.courses); setStations(data.stations)
-      const nextId = selectedCourseId && data.courses.some((course) => course.id === selectedCourseId) ? selectedCourseId : data.courses[0]?.id ?? ""
+      const currentCourseId = selectedCourseIdRef.current
+      const nextId = currentCourseId && data.courses.some((course) => course.id === currentCourseId) ? currentCourseId : data.courses[0]?.id ?? ""
+      selectedCourseIdRef.current = nextId
       setSelectedCourseId(nextId)
       const selected = data.courses.find((course) => course.id === nextId)
       setForm(selected ? courseToForm(selected, data.stations) : blankForm(data.event.discipline ?? "sporting_clays"))
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to load the course builder.") }
     finally { setLoading(false) }
-  }, [eventId, selectedCourseId])
+  }, [eventId])
 
   useEffect(() => { void load() }, [load])
   const totalBirds = useMemo(() => form.stations.reduce((total, station) => total + station.birdCount, 0), [form.stations])
 
   function chooseCourse(courseId: string) {
+    selectedCourseIdRef.current = courseId
     setSelectedCourseId(courseId)
     const course = courses.find((row) => row.id === courseId)
     if (course) setForm(courseToForm(course, stations))
   }
-  function newCourse() { setSelectedCourseId(""); setForm(blankForm(eventDiscipline ?? "sporting_clays")); setSuccess(""); setError("") }
-  function duplicateCourse() { setSelectedCourseId(""); setForm((current) => ({ ...current, id: null, name: `${current.name} Copy` })); setSuccess("") }
+  function newCourse() { selectedCourseIdRef.current = ""; setSelectedCourseId(""); setApplyBirdCount(MAX_BIRDS_PER_STATION); setForm(blankForm(eventDiscipline ?? "sporting_clays")); setSuccess(""); setError("") }
+  function duplicateCourse() { selectedCourseIdRef.current = ""; setSelectedCourseId(""); setForm((current) => ({ ...current, id: null, name: `${current.name} Copy` })); setSuccess("") }
   function updateStation(stationNumber: number, changes: Partial<StationForm>) { setForm((current) => ({ ...current, stations: current.stations.map((station) => station.stationNumber === stationNumber ? { ...station, ...changes } : station) })) }
   function applyToAllStations() { setForm((current) => ({ ...current, stations: current.stations.map((station) => ({ ...station, birdCount: applyBirdCount })) })) }
 
@@ -87,6 +91,7 @@ export function CourseBuilderPage() {
     setSaving(true); setError(""); setSuccess("")
     try {
       const courseId = await saveEventCourse({ organizationId, eventId, courseId: form.id, name: form.name, discipline: form.discipline, courseSide: form.courseSide, templateName: form.templateName || null, stations: form.stations })
+      selectedCourseIdRef.current = courseId
       setSelectedCourseId(courseId); setSuccess("Course saved successfully."); await load()
     } catch (caught) { setError(caught instanceof Error ? caught.message : "The course could not be saved.") }
     finally { setSaving(false) }
@@ -95,7 +100,7 @@ export function CourseBuilderPage() {
   async function remove() {
     if (!form.id || !organizationId || !window.confirm(`Delete "${form.name}" and all 15 station settings?`)) return
     setSaving(true); setError("")
-    try { await deleteEventCourse(organizationId, form.id); setSelectedCourseId(""); setSuccess("Course deleted."); await load() }
+    try { await deleteEventCourse(organizationId, form.id); selectedCourseIdRef.current = ""; setSelectedCourseId(""); setSuccess("Course deleted."); await load() }
     catch (caught) { setError(caught instanceof Error ? caught.message : "The course could not be deleted.") }
     finally { setSaving(false) }
   }
