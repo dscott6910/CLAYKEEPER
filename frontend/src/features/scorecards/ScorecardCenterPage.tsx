@@ -842,21 +842,26 @@ async function drawScorecard(
   const tableX = x + margin
   const tableY = y + 1.22
   const rowH = 0.34
-  const stationW = 0.44
-  const birdW = 0.245
-  const totalW = 0.48
-  const runningW = 0.55
-  const tableW =
-    stationW + birdW * SCORECARD_BIRD_COLUMNS + totalW + runningW
+  const stationW = 0.62
+  const totalW = 0.68
+  const runningW = 0.62
+  const activeStations = stations.filter((station) => station.bird_count > 0)
+  const printableStations = activeStations.length > 0 ? activeStations : stations.slice(0, 1)
+  const birdColumns = Math.min(
+    SCORECARD_BIRD_COLUMNS,
+    Math.max(1, ...printableStations.map((station) => station.bird_count)),
+  )
+  const birdW = (width - margin * 2 - stationW - totalW - runningW) / birdColumns
+  const tableW = stationW + birdW * birdColumns + totalW + runningW
 
-  pdf.setFontSize(6.8)
   pdf.setFont("helvetica", "bold")
   pdf.rect(tableX, tableY, tableW, rowH)
-  pdf.text("STN", tableX + stationW / 2, tableY + 0.22, {
+  pdf.setFontSize(5.9)
+  pdf.text("STATION", tableX + stationW / 2, tableY + 0.22, {
     align: "center",
   })
-  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 2) {
-    const pairBirds = Math.min(2, SCORECARD_BIRD_COLUMNS - bird + 1)
+  for (let bird = 1; bird <= birdColumns; bird += 2) {
+    const pairBirds = Math.min(2, birdColumns - bird + 1)
     pdf.rect(
       tableX + stationW + (bird - 1) * birdW,
       tableY,
@@ -864,7 +869,8 @@ async function drawScorecard(
       rowH,
     )
   }
-  for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
+  pdf.setFontSize(6.8)
+  for (let bird = 1; bird <= birdColumns; bird += 1) {
     pdf.text(
       String(bird),
       tableX + stationW + (bird - 1) * birdW + birdW / 2,
@@ -872,22 +878,26 @@ async function drawScorecard(
       { align: "center" },
     )
   }
-  const stationTotalX = tableX + stationW + birdW * SCORECARD_BIRD_COLUMNS
+  const stationTotalX = tableX + stationW + birdW * birdColumns
   pdf.rect(stationTotalX, tableY, totalW, rowH)
   pdf.rect(stationTotalX + totalW, tableY, runningW, rowH)
-  pdf.text("ST", stationTotalX + totalW / 2, tableY + 0.22, {
+  pdf.setFontSize(5.2)
+  pdf.text("STATION", stationTotalX + totalW / 2, tableY + 0.16, {
     align: "center",
   })
-  pdf.text("RUN", stationTotalX + totalW + runningW / 2, tableY + 0.22, {
+  pdf.text("SCORE", stationTotalX + totalW / 2, tableY + 0.27, {
+    align: "center",
+  })
+  pdf.text("RUN", stationTotalX + totalW + runningW / 2, tableY + 0.16, {
+    align: "center",
+  })
+  pdf.text("SCORE", stationTotalX + totalW + runningW / 2, tableY + 0.27, {
     align: "center",
   })
 
-  for (let row = 0; row < 15; row += 1) {
-    const stationNumber = row + 1
-    const station = stations.find(
-      (item) => item.station_number === stationNumber,
-    )
-    const birdCount = station?.bird_count ?? 0
+  for (const [row, station] of printableStations.entries()) {
+    const stationNumber = station.station_number
+    const birdCount = station.bird_count
     const rowY = tableY + rowH * (row + 1)
 
     pdf.rect(tableX, rowY, tableW, rowH)
@@ -896,8 +906,8 @@ async function drawScorecard(
       align: "center",
     })
 
-    for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 2) {
-      const pairBirds = Math.min(2, SCORECARD_BIRD_COLUMNS - bird + 1)
+    for (let bird = 1; bird <= birdColumns; bird += 2) {
+      const pairBirds = Math.min(2, birdColumns - bird + 1)
       pdf.rect(
         tableX + stationW + (bird - 1) * birdW,
         rowY,
@@ -906,7 +916,7 @@ async function drawScorecard(
       )
     }
 
-    for (let bird = 1; bird <= SCORECARD_BIRD_COLUMNS; bird += 1) {
+    for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
         pdf.circle(cellX + birdW / 2, rowY + rowH / 2, 0.08)
@@ -917,7 +927,7 @@ async function drawScorecard(
     pdf.rect(stationTotalX + totalW, rowY, runningW, rowH)
   }
 
-  const footerY = tableY + rowH * 16 + 0.18
+  const footerY = tableY + rowH * (printableStations.length + 1) + 0.18
   pdf.setFontSize(7)
   pdf.setFont("helvetica", "bold")
   pdf.text("MALFUNCTIONS", tableX, footerY)

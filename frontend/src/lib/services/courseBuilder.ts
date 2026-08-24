@@ -128,6 +128,24 @@ courseId = result.data.id as string
       station.id as string,
     ]),
   )
+  const submittedStationNumbers = new Set(
+    input.stations.map((station) => station.stationNumber),
+  )
+
+  const removedStationIds = (existingStationsResult.data ?? [])
+    .filter((station) => !submittedStationNumbers.has(station.station_number as number))
+    .map((station) => station.id as string)
+
+  if (removedStationIds.length > 0) {
+    const deleteResult = await supabase
+      .from("course_stations")
+      .delete()
+      .eq("organization_id", input.organizationId)
+      .eq("course_id", courseId)
+      .in("id", removedStationIds)
+
+    throwIfError(deleteResult.error)
+  }
 
   for (const [index, station] of input.stations.entries()) {
     const stationPayload = {
