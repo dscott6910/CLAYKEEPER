@@ -901,7 +901,12 @@ async function drawScorecard(
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 0.95 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
-  pdf.text("GRAND TOTAL:", stationTotalX + 0.03, footerY)
+  pdf.text("GRAND", stationTotalX + totalW / 2, footerY - 0.04, {
+    align: "center",
+  })
+  pdf.text("TOTAL:", stationTotalX + totalW / 2, footerY + 0.08, {
+    align: "center",
+  })
   pdf.line(
     stationTotalX + totalW + 0.05,
     footerY + 0.04,
