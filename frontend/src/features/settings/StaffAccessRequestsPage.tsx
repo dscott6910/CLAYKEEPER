@@ -240,7 +240,7 @@ export function StaffAccessRequestsPage() {
                 const fullName =
                   `${request.firstName} ${request.lastName}`.trim()
                 const busy = reviewingId === request.id
-                const disabled = reviewingId !== null || !canReview
+                const disabled = reviewingId !== null
 
                 return (
                   <article key={request.id} className="p-5">
