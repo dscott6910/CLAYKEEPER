@@ -29,8 +29,25 @@ import {
 } from "@/lib/branding"
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message
+  const cleanText = (value: unknown) => {
+    const text = String(value ?? "").trim()
+
+    if (
+      !text ||
+      text === "{}" ||
+      text === "[]" ||
+      text === "[object Object]"
+    ) {
+      return ""
+    }
+
+    return text
+  }
+
+  if (error instanceof Error) {
+    const message = cleanText(error.message)
+
+    if (message) return message
   }
 
   if (
@@ -38,7 +55,13 @@ function errorMessage(error: unknown) {
     error &&
     "message" in error
   ) {
-    const message = String(error.message).trim()
+    const message = cleanText(error.message)
+
+    if (message) return message
+  }
+
+  if (typeof error === "string") {
+    const message = cleanText(error)
 
     if (message) return message
   }

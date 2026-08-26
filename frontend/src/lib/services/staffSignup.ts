@@ -24,6 +24,21 @@ export type StaffSignupResult = {
 const PENDING_STAFF_SIGNUP_KEY =
   "claykeeper:pending-staff-signup"
 
+function cleanErrorText(value: unknown) {
+  const text = String(value ?? "").trim()
+
+  if (
+    !text ||
+    text === "{}" ||
+    text === "[]" ||
+    text === "[object Object]"
+  ) {
+    return ""
+  }
+
+  return text
+}
+
 function serviceErrorMessage(
   fallback: string,
   error: unknown,
@@ -37,8 +52,10 @@ function serviceErrorMessage(
     return "The staff access request database update has not been applied yet. Ask an administrator to run the latest Supabase migrations, then try again."
   }
 
-  if (error instanceof Error && error.message.trim()) {
-    return error.message
+  if (error instanceof Error) {
+    const message = cleanErrorText(error.message)
+
+    if (message) return message
   }
 
   if (
@@ -46,7 +63,13 @@ function serviceErrorMessage(
     error &&
     "message" in error
   ) {
-    const message = String(error.message).trim()
+    const message = cleanErrorText(error.message)
+
+    if (message) return message
+  }
+
+  if (typeof error === "string") {
+    const message = cleanErrorText(error)
 
     if (message) return message
   }
