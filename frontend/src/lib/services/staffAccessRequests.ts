@@ -90,7 +90,7 @@ export async function approveStaffAccessRequest(
   requestId: string,
   approvedRole: ApprovedStaffRole,
 ) {
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "approve_organization_access_request",
     {
       p_request_id: requestId,
@@ -99,12 +99,14 @@ export async function approveStaffAccessRequest(
   )
 
   if (error) throw error
+
+  return data
 }
 
 export async function declineStaffAccessRequest(
   requestId: string,
 ) {
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "decline_organization_access_request",
     {
       p_request_id: requestId,
@@ -112,4 +114,6 @@ export async function declineStaffAccessRequest(
   )
 
   if (error) throw error
+
+  return data
 }

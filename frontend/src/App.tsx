@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
+import { Toaster } from "sonner"
 
 import { AppShell } from "@/app/AppShell"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
@@ -385,6 +386,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <OrganizationProvider>
+            <Toaster richColors position="top-right" />
             <Routes>
             <Route path="/login" element={<LoginPage />} />
 

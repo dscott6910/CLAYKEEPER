@@ -60,6 +60,7 @@ export function StaffAccessRequestsPage() {
   const [role, setRole] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [approvedRoles, setApprovedRoles] = useState<
     Record<string, ApprovedStaffRole>
@@ -68,6 +69,7 @@ export function StaffAccessRequestsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError("")
+    setSuccess("")
 
     try {
       const result = await loadStaffAccessRequests()
@@ -115,6 +117,8 @@ export function StaffAccessRequestsPage() {
       approvedRoles[request.id] ??
       defaultApprovedRole(request.requestedRole)
 
+    setError("")
+    setSuccess("")
     setReviewingId(request.id)
 
     try {
@@ -122,17 +126,24 @@ export function StaffAccessRequestsPage() {
       setRequests((current) =>
         current.filter((item) => item.id !== request.id),
       )
+      setSuccess(
+        `${request.firstName} ${request.lastName} was approved as ${roleLabel(approvedRole)}.`,
+      )
       toast.success(
         `${request.firstName} ${request.lastName} was approved as ${roleLabel(approvedRole)}.`,
       )
     } catch (caught) {
-      toast.error(errorMessage(caught))
+      const message = errorMessage(caught)
+      setError(message)
+      toast.error(message)
     } finally {
       setReviewingId(null)
     }
   }
 
   async function handleDecline(request: StaffAccessRequest) {
+    setError("")
+    setSuccess("")
     setReviewingId(request.id)
 
     try {
@@ -140,11 +151,16 @@ export function StaffAccessRequestsPage() {
       setRequests((current) =>
         current.filter((item) => item.id !== request.id),
       )
+      setSuccess(
+        `${request.firstName} ${request.lastName} was declined.`,
+      )
       toast.success(
         `${request.firstName} ${request.lastName} was declined.`,
       )
     } catch (caught) {
-      toast.error(errorMessage(caught))
+      const message = errorMessage(caught)
+      setError(message)
+      toast.error(message)
     } finally {
       setReviewingId(null)
     }
@@ -207,6 +223,12 @@ export function StaffAccessRequestsPage() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             {error}
+          </div>
+        ) : null}
+
+        {success ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            {success}
           </div>
         ) : null}
 
