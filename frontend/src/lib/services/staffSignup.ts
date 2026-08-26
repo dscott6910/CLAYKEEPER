@@ -77,6 +77,28 @@ function serviceErrorMessage(
   return fallback
 }
 
+function isInvalidLoginCredentials(error: unknown) {
+  return serviceErrorMessage("", error)
+    .toLowerCase()
+    .includes("invalid login credentials")
+}
+
+function isExistingSignupUser(data: unknown) {
+  if (
+    typeof data !== "object" ||
+    !data ||
+    !("user" in data) ||
+    typeof data.user !== "object" ||
+    !data.user ||
+    !("identities" in data.user) ||
+    !Array.isArray(data.user.identities)
+  ) {
+    return false
+  }
+
+  return data.user.identities.length === 0
+}
+
 async function signInAndSubmitStaffRequest(
   email: string,
   password: string,
@@ -309,12 +331,42 @@ export async function createStaffSignupAccount(
     } catch (signinError) {
       clearPendingStaffSignup()
 
+      if (isInvalidLoginCredentials(signinError)) {
+        throw new Error(
+          "ClayKeeper could not create a new login for this email, and it could not sign in to an existing login with that password. If this email already has a ClayKeeper account, use that account's current password or sign in first. Otherwise try a different email address.",
+        )
+      }
+
       throw new Error(
         serviceErrorMessage(
           "ClayKeeper could not create this login. If this email already has an account, sign in first or use that account's password here.",
           signinError,
         ),
       )
+    }
+  }
+
+  if (isExistingSignupUser(data)) {
+    try {
+      await signInAndSubmitStaffRequest(
+        cleanEmail,
+        password,
+        pendingProfile,
+      )
+
+      return {
+        emailConfirmationRequired: false,
+      }
+    } catch (signinError) {
+      clearPendingStaffSignup()
+
+      if (isInvalidLoginCredentials(signinError)) {
+        throw new Error(
+          "This email already has a ClayKeeper login, but that password did not work. Sign in with the existing password, reset the password, or use a different email address.",
+        )
+      }
+
+      throw signinError
     }
   }
 
