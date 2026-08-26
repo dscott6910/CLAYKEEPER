@@ -288,7 +288,7 @@ export function StaffSignupPage() {
       <StaffStatusCard
         organizationName={organization.organizationName}
         title="Request submitted"
-        message="Your ClayKeeper account was created and your access request is pending organization approval. An owner or administrator must approve the requested role before permissions are granted."
+        message="We sent a confirmation email to the admin for approval. Please check your email for status of your request."
         actionLabel="Continue to sign in"
         actionTo="/login"
       />
