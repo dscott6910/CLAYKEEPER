@@ -466,6 +466,11 @@ export function StaffSignupPage() {
                 required
               />
 
+              <p className="-mt-2 text-xs leading-5 text-slate-500">
+                Use at least 8 characters. For test accounts,
+                include letters and numbers.
+              </p>
+
               <div>
                 <label
                   htmlFor="staff-message"

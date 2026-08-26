@@ -83,6 +83,17 @@ function isInvalidLoginCredentials(error: unknown) {
     .includes("invalid login credentials")
 }
 
+function isExistingAccountSignupError(error: unknown) {
+  const message = serviceErrorMessage("", error).toLowerCase()
+
+  return (
+    message.includes("already registered") ||
+    message.includes("already exists") ||
+    message.includes("user already") ||
+    message.includes("email already")
+  )
+}
+
 function isExistingSignupUser(data: unknown) {
   if (
     typeof data !== "object" ||
@@ -318,6 +329,17 @@ export async function createStaffSignupAccount(
   })
 
   if (error) {
+    if (!isExistingAccountSignupError(error)) {
+      clearPendingStaffSignup()
+
+      throw new Error(
+        serviceErrorMessage(
+          "ClayKeeper could not create this login. Try a new email address and a password that meets the sign-up requirements.",
+          error,
+        ),
+      )
+    }
+
     try {
       await signInAndSubmitStaffRequest(
         cleanEmail,
