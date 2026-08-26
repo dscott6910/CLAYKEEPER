@@ -77,6 +77,29 @@ function serviceErrorMessage(
   return fallback
 }
 
+async function signInAndSubmitStaffRequest(
+  email: string,
+  password: string,
+  profile: StaffSignupProfile,
+) {
+  const { error } =
+    await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+  if (error) {
+    throw new Error(
+      serviceErrorMessage(
+        "ClayKeeper could not create this login. If this email already has an account, use that account's password or sign in first.",
+        error,
+      ),
+    )
+  }
+
+  await completeStaffSignupRequest(profile)
+}
+
 function savePendingStaffSignup(profile: StaffSignupProfile) {
   if (typeof window === "undefined") return
 
@@ -226,22 +249,30 @@ export async function createStaffSignupAccount(
     throw new Error("Last name is required.")
   }
 
+  const pendingProfile: StaffSignupProfile = {
+    ...profile,
+    accountEmail: cleanEmail,
+  }
+
   const {
     data: { session: existingSession },
   } = await supabase.auth.getSession()
 
   if (existingSession?.user) {
     const signedInEmail =
-      existingSession.user.email || "another ClayKeeper account"
+      existingSession.user.email?.trim().toLowerCase() || ""
+
+    if (signedInEmail === cleanEmail) {
+      await completeStaffSignupRequest(pendingProfile)
+
+      return {
+        emailConfirmationRequired: false,
+      }
+    }
 
     throw new Error(
-      `You are currently signed in as ${signedInEmail}. Sign out before requesting staff access.`,
+      `You are currently signed in as ${signedInEmail || "another ClayKeeper account"}. Sign out before requesting staff access for ${cleanEmail}.`,
     )
-  }
-
-  const pendingProfile: StaffSignupProfile = {
-    ...profile,
-    accountEmail: cleanEmail,
   }
 
   savePendingStaffSignup(pendingProfile)
@@ -265,13 +296,26 @@ export async function createStaffSignupAccount(
   })
 
   if (error) {
-    clearPendingStaffSignup()
-    throw new Error(
-      serviceErrorMessage(
-        "ClayKeeper could not create this login. Please check the email and password, then try again.",
-        error,
-      ),
-    )
+    try {
+      await signInAndSubmitStaffRequest(
+        cleanEmail,
+        password,
+        pendingProfile,
+      )
+
+      return {
+        emailConfirmationRequired: false,
+      }
+    } catch (signinError) {
+      clearPendingStaffSignup()
+
+      throw new Error(
+        serviceErrorMessage(
+          "ClayKeeper could not create this login. If this email already has an account, sign in first or use that account's password here.",
+          signinError,
+        ),
+      )
+    }
   }
 
   if (data.session) {
