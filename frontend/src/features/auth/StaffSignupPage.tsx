@@ -29,14 +29,18 @@ import {
 } from "@/lib/branding"
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
 
   if (
     typeof error === "object" &&
     error &&
     "message" in error
   ) {
-    return String(error.message)
+    const message = String(error.message).trim()
+
+    if (message) return message
   }
 
   return "Unable to submit the access request. Please try again."

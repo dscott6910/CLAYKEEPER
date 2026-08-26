@@ -24,6 +24,36 @@ export type StaffSignupResult = {
 const PENDING_STAFF_SIGNUP_KEY =
   "claykeeper:pending-staff-signup"
 
+function serviceErrorMessage(
+  fallback: string,
+  error: unknown,
+) {
+  if (
+    typeof error === "object" &&
+    error &&
+    "code" in error &&
+    String(error.code) === "PGRST202"
+  ) {
+    return "The staff access request database update has not been applied yet. Ask an administrator to run the latest Supabase migrations, then try again."
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+
+  if (
+    typeof error === "object" &&
+    error &&
+    "message" in error
+  ) {
+    const message = String(error.message).trim()
+
+    if (message) return message
+  }
+
+  return fallback
+}
+
 function savePendingStaffSignup(profile: StaffSignupProfile) {
   if (typeof window === "undefined") return
 
@@ -136,7 +166,14 @@ export async function completeStaffSignupRequest(
     },
   )
 
-  if (error) throw error
+  if (error) {
+    throw new Error(
+      serviceErrorMessage(
+        "Your account was created, but ClayKeeper could not submit the access request. Please try signing in, then open this staff signup link again.",
+        error,
+      ),
+    )
+  }
 
   clearPendingStaffSignup()
 }
@@ -206,7 +243,12 @@ export async function createStaffSignupAccount(
 
   if (error) {
     clearPendingStaffSignup()
-    throw error
+    throw new Error(
+      serviceErrorMessage(
+        "ClayKeeper could not create this login. Please check the email and password, then try again.",
+        error,
+      ),
+    )
   }
 
   if (data.session) {
