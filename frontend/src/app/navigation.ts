@@ -24,6 +24,7 @@ import {
   Smartphone,
   CreditCard,
   FileInput,
+  UserCheck,
 } from "lucide-react"
 
 export type NavigationItem = {
@@ -176,6 +177,12 @@ export const navigationSections: NavigationSection[] = [
         path: "/event-maintenance",
         icon: Wrench,
           capability: "admin",
+      },
+      {
+        label: "Staff Requests",
+        path: "/staff-requests",
+        icon: UserCheck,
+        capability: "admin",
       },
       {
         label: "Public Portal",

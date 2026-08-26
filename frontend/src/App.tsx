@@ -326,6 +326,12 @@ const EventMaintenancePage = lazy(() =>
   })),
 )
 
+const StaffAccessRequestsPage = lazy(() =>
+  import("@/features/settings/StaffAccessRequestsPage").then((module) => ({
+    default: module.StaffAccessRequestsPage,
+  })),
+)
+
 
 const ScorecardCenterPage = lazy(() =>
   import("@/features/scorecards/ScorecardCenterPage").then((module) => ({
@@ -965,6 +971,15 @@ function App() {
                 />
 
                 <Route element={<CapabilityRoute capability="admin" />}>
+                  <Route
+                    path="staff-requests"
+                    element={
+                      <LazyRoute>
+                        <StaffAccessRequestsPage />
+                      </LazyRoute>
+                    }
+                  />
+
                   <Route
                     path="settings"
                     element={
