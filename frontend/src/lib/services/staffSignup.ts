@@ -43,6 +43,8 @@ function serviceErrorMessage(
   fallback: string,
   error: unknown,
 ) {
+  const rawMessage = serviceErrorMessageRaw(error)
+
   if (
     typeof error === "object" &&
     error &&
@@ -52,6 +54,27 @@ function serviceErrorMessage(
     return "The staff access request database update has not been applied yet. Ask an administrator to run the latest Supabase migrations, then try again."
   }
 
+  if (
+    rawMessage
+      .toLowerCase()
+      .includes("error sending confirmation email")
+  ) {
+    return "ClayKeeper could not send the confirmation email. Check the Supabase Auth email/SMTP settings, or temporarily disable email confirmations for testing."
+  }
+
+  if (
+    typeof error === "object" &&
+    error &&
+    "error_code" in error &&
+    String(error.error_code) === "unexpected_failure"
+  ) {
+    return "ClayKeeper could not create this login because Supabase Auth returned an unexpected email service failure. Check the Supabase Auth email/SMTP settings."
+  }
+
+  return rawMessage || fallback
+}
+
+function serviceErrorMessageRaw(error: unknown) {
   if (error instanceof Error) {
     const message = cleanErrorText(error.message)
 
@@ -74,7 +97,17 @@ function serviceErrorMessage(
     if (message) return message
   }
 
-  return fallback
+  if (
+    typeof error === "object" &&
+    error &&
+    "msg" in error
+  ) {
+    const message = cleanErrorText(error.msg)
+
+    if (message) return message
+  }
+
+  return ""
 }
 
 function isInvalidLoginCredentials(error: unknown) {
