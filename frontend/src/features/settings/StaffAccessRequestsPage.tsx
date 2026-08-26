@@ -26,6 +26,29 @@ function errorMessage(error: unknown) {
     return error.message
   }
 
+  if (error && typeof error === "object") {
+    const fields = error as {
+      message?: unknown
+      details?: unknown
+      hint?: unknown
+      code?: unknown
+    }
+    const parts = [
+      fields.message,
+      fields.details,
+      fields.hint,
+      fields.code ? `Code: ${fields.code}` : null,
+    ]
+      .filter((part): part is string => {
+        return typeof part === "string" && part.trim().length > 0
+      })
+      .map((part) => part.trim())
+
+    if (parts.length > 0) {
+      return parts.join(" ")
+    }
+  }
+
   return "Unable to load staff access requests."
 }
 
@@ -84,6 +107,7 @@ export function StaffAccessRequestsPage() {
         ),
       )
     } catch (caught) {
+      setRequests([])
       setError(errorMessage(caught))
     } finally {
       setLoading(false)
