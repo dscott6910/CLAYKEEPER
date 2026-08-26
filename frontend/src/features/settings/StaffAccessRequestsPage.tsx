@@ -282,7 +282,7 @@ export function StaffAccessRequestsPage() {
                         </p>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_auto_auto] sm:items-center">
+                      <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_auto_auto] sm:items-end">
                         <label className="block">
                           <span className="text-xs font-semibold uppercase text-slate-500">
                             Approve as
@@ -317,7 +317,7 @@ export function StaffAccessRequestsPage() {
                           type="button"
                           onClick={() => void handleApprove(request)}
                           disabled={disabled}
-                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                         >
                           <Check className="h-4 w-4" />
                           {busy ? "Approving..." : "Approve"}
@@ -327,7 +327,7 @@ export function StaffAccessRequestsPage() {
                           type="button"
                           onClick={() => void handleDecline(request)}
                           disabled={disabled}
-                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
                           <X className="h-4 w-4" />
                           Decline
