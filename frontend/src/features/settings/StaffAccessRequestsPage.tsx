@@ -5,6 +5,8 @@ import {
   Phone,
   RefreshCw,
   ShieldCheck,
+  UserMinus,
+  UserPlus,
   UserCheck,
   X,
 } from "lucide-react"
@@ -17,7 +19,9 @@ import {
   defaultApprovedRole,
   declineStaffAccessRequest,
   loadStaffAccessRequests,
+  setStaffAccessRequestApprover,
   type ApprovedStaffRole,
+  type StaffAccessRequestApprover,
   type StaffAccessRequest,
 } from "@/lib/services/staffAccessRequests"
 
@@ -85,6 +89,14 @@ export function StaffAccessRequestsPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const [savingApproverId, setSavingApproverId] =
+    useState<string | null>(null)
+  const [selectedApproverId, setSelectedApproverId] = useState("")
+  const [canManageReviewers, setCanManageReviewers] = useState(false)
+  const [canReview, setCanReview] = useState(false)
+  const [approvers, setApprovers] = useState<
+    StaffAccessRequestApprover[]
+  >([])
   const [approvedRoles, setApprovedRoles] = useState<
     Record<string, ApprovedStaffRole>
   >({})
@@ -98,6 +110,10 @@ export function StaffAccessRequestsPage() {
       const result = await loadStaffAccessRequests()
       setRequests(result.requests)
       setRole(result.role)
+      setCanReview(result.canReview)
+      setCanManageReviewers(result.canManageReviewers)
+      setApprovers(result.approvers)
+      setSelectedApproverId("")
       setApprovedRoles(
         Object.fromEntries(
           result.requests.map((request) => [
@@ -119,7 +135,12 @@ export function StaffAccessRequestsPage() {
   }, [load])
 
   const pendingCount = requests.length
-  const canReview = role === "owner" || role === "admin"
+  const selectedApprovers = approvers.filter(
+    (approver) => approver.isReviewer,
+  )
+  const availableApprovers = approvers.filter(
+    (approver) => !approver.isReviewer,
+  )
 
   const requestedSummary = useMemo(() => {
     const counts = new Map<string, number>()
@@ -190,6 +211,33 @@ export function StaffAccessRequestsPage() {
     }
   }
 
+  async function updateApprover(userId: string, enabled: boolean) {
+    setError("")
+    setSuccess("")
+    setSavingApproverId(userId)
+
+    try {
+      const updatedApprovers =
+        await setStaffAccessRequestApprover(userId, enabled)
+      const approver = updatedApprovers.find(
+        (item) => item.userId === userId,
+      )
+      setApprovers(updatedApprovers)
+      setSelectedApproverId("")
+      setSuccess(
+        enabled
+          ? `${approver?.email || "Admin"} can now approve staff requests.`
+          : `${approver?.email || "Admin"} was removed from staff request approvers.`,
+      )
+    } catch (caught) {
+      const message = errorMessage(caught)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setSavingApproverId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <AppHeader
@@ -244,6 +292,105 @@ export function StaffAccessRequestsPage() {
           </button>
         </div>
 
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">
+                Staff request approvers
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Owners always approve requests. Selected admins can
+                approve or decline pending staff access.
+              </p>
+            </div>
+
+            {canManageReviewers ? (
+              <div className="grid gap-2 sm:grid-cols-[minmax(220px,320px)_auto]">
+                <select
+                  value={selectedApproverId}
+                  onChange={(event) =>
+                    setSelectedApproverId(event.target.value)
+                  }
+                  disabled={
+                    loading ||
+                    savingApproverId !== null ||
+                    availableApprovers.length === 0
+                  }
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:opacity-50"
+                >
+                  <option value="">
+                    {availableApprovers.length === 0
+                      ? "No admins available"
+                      : "Select an admin"}
+                  </option>
+                  {availableApprovers.map((approver) => (
+                    <option
+                      key={approver.userId}
+                      value={approver.userId}
+                    >
+                      {approver.email || approver.userId}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void updateApprover(selectedApproverId, true)
+                  }
+                  disabled={
+                    !selectedApproverId ||
+                    loading ||
+                    savingApproverId !== null
+                  }
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add approver
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {selectedApprovers.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">
+                No admin approvers are selected.
+              </div>
+            ) : (
+              selectedApprovers.map((approver) => (
+                <div
+                  key={approver.userId}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {approver.email || approver.userId}
+                    </p>
+                    <p className="text-xs uppercase text-slate-500">
+                      Admin approver
+                    </p>
+                  </div>
+
+                  {canManageReviewers ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void updateApprover(approver.userId, false)
+                      }
+                      disabled={savingApproverId !== null}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <UserMinus className="h-4 w-4" />
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             {error}
@@ -259,8 +406,8 @@ export function StaffAccessRequestsPage() {
         {!canReview && !loading ? (
           <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
             Your role is <strong>{role || "unknown"}</strong>.
-            Only organization owners and administrators can review
-            staff access requests.
+            Only organization owners and selected admin approvers can
+            review staff access requests.
           </div>
         ) : null}
 

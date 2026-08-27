@@ -28,9 +28,19 @@ export type StaffAccessRequest = {
   updatedAt: string
 }
 
+export type StaffAccessRequestApprover = {
+  userId: string
+  email: string
+  role: "admin"
+  isReviewer: boolean
+}
+
 export type StaffAccessRequestReviewResult = {
   requests: StaffAccessRequest[]
   role: string
+  canReview: boolean
+  canManageReviewers: boolean
+  approvers: StaffAccessRequestApprover[]
 }
 
 function mapRequest(row: Record<string, unknown>): StaffAccessRequest {
@@ -69,6 +79,39 @@ export async function loadStaffAccessRequests(): Promise<StaffAccessRequestRevie
     )
   }
 
+  const { data: approverData, error: approverError } =
+    await supabase.rpc("list_staff_access_request_reviewers", {
+      p_organization_id: context.organizationId,
+    })
+
+  if (approverError) throw approverError
+
+  const approvers = ((approverData ?? []) as Record<string, unknown>[])
+    .map((row): StaffAccessRequestApprover => ({
+      userId: String(row.user_id),
+      email: String(row.email || ""),
+      role: "admin",
+      isReviewer: Boolean(row.is_reviewer),
+    }))
+
+  const canManageReviewers = context.role === "owner"
+  const canReview =
+    context.role === "owner" ||
+    approvers.some(
+      (approver) =>
+        approver.userId === context.userId && approver.isReviewer,
+    )
+
+  if (!canReview) {
+    return {
+      requests: [],
+      role: context.role,
+      canReview,
+      canManageReviewers,
+      approvers,
+    }
+  }
+
   const { data, error } = await supabase
     .from("organization_access_requests")
     .select(
@@ -83,7 +126,50 @@ export async function loadStaffAccessRequests(): Promise<StaffAccessRequestRevie
   return {
     requests: ((data ?? []) as Record<string, unknown>[]).map(mapRequest),
     role: context.role,
+    canReview,
+    canManageReviewers,
+    approvers,
   }
+}
+
+export async function setStaffAccessRequestApprover(
+  userId: string,
+  enabled: boolean,
+): Promise<StaffAccessRequestApprover[]> {
+  const context = await getCurrentOrganizationContext()
+
+  if (context.role !== "owner") {
+    throw new Error(
+      "Only an organization owner can manage staff request approvers.",
+    )
+  }
+
+  const { error } = await supabase.rpc(
+    "set_staff_access_request_reviewer",
+    {
+      p_organization_id: context.organizationId,
+      p_user_id: userId,
+      p_enabled: enabled,
+    },
+  )
+
+  if (error) throw error
+
+  const { data, error: loadError } = await supabase.rpc(
+    "list_staff_access_request_reviewers",
+    {
+      p_organization_id: context.organizationId,
+    },
+  )
+
+  if (loadError) throw loadError
+
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    userId: String(row.user_id),
+    email: String(row.email || ""),
+    role: "admin",
+    isReviewer: Boolean(row.is_reviewer),
+  }))
 }
 
 export async function approveStaffAccessRequest(
