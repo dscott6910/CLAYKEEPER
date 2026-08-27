@@ -288,6 +288,33 @@ export async function completeStaffSignupRequest(
   }
 
   clearPendingStaffSignup()
+
+  if (user.user_metadata?.staff_signup) {
+    await supabase.auth.updateUser({
+      data: {
+        staff_signup: null,
+      },
+    })
+  }
+}
+
+export async function completePendingStaffSignupForCurrentUser() {
+  const metadataPending =
+    await loadStaffSignupFromUserMetadata()
+
+  if (metadataPending) {
+    await completeStaffSignupRequest(metadataPending)
+
+    return true
+  }
+
+  const localPending = loadPendingStaffSignup()
+
+  if (!localPending) return false
+
+  await completeStaffSignupRequest(localPending)
+
+  return true
 }
 
 export async function createStaffSignupAccount(

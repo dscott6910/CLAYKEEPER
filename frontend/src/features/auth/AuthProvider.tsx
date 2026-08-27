@@ -3,11 +3,14 @@ import type { PropsWithChildren } from "react"
 import type { Session } from "@supabase/supabase-js"
 
 import { AuthContext } from "@/features/auth/useAuth"
+import { completePendingStaffSignupForCurrentUser } from "@/lib/services/staffSignup"
 import { supabase } from "@/lib/supabase"
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [completedStaffSignupUserId, setCompletedStaffSignupUserId] =
+    useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -37,6 +40,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    const userId = session?.user.id ?? null
+
+    if (!userId || completedStaffSignupUserId === userId) {
+      return
+    }
+
+    const completedUserId = userId
+    let cancelled = false
+
+    async function completeStaffSignup() {
+      try {
+        await completePendingStaffSignupForCurrentUser()
+      } catch (error) {
+        console.error(
+          "Unable to complete pending staff signup.",
+          error,
+        )
+      } finally {
+        if (!cancelled) {
+          setCompletedStaffSignupUserId(completedUserId)
+        }
+      }
+    }
+
+    void completeStaffSignup()
+
+    return () => {
+      cancelled = true
+    }
+  }, [session, completedStaffSignupUserId])
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({
