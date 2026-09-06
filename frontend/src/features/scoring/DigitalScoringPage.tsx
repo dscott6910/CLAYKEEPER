@@ -11,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  CloudUpload,
+  Download,
   Loader2,
   Lock,
   RefreshCw,
@@ -34,6 +36,18 @@ import {
   saveDigitalScorecard,
   type DigitalScoringData,
 } from "@/lib/services/digitalScoring"
+import {
+  cacheScoringEvent,
+  cacheScoringAppForOffline,
+  deleteOfflineScorecardDraft,
+  getCachedScoringEvent,
+  getOfflineScorecardDraft,
+  listOfflineScorecardDrafts,
+  offlineScorecardKey,
+  putOfflineScorecardDraft,
+  requestPersistentOfflineStorage,
+  type OfflineScorecardDraft,
+} from "@/lib/services/offlineDigitalScoring"
 
 function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
   if (!athlete) return "Unknown participant"
@@ -42,25 +56,9 @@ function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
   return `${first} ${athlete.last_name?.trim() || ""}`.trim()
 }
 
-type OfflineDraft = {
-  scores: Record<string, string>
-  stationNotes?: Record<string, string>
-  malfunctions: number
-  verified1: string
-  verified2: string
-  enteredBy: string
-  notes: string
-  savedAt: string
-  baseUpdatedAt: string | null
-}
-
 type SyncConflict = {
-  draft: OfflineDraft
+  draft: OfflineScorecardDraft
   serverUpdatedAt: string | null
-}
-
-function offlineDraftKey(eventId: string, memberId: string, courseId: string) {
-  return `claykeeper:scoring-draft:${eventId}:${memberId}:${courseId}`
 }
 
 function formatSavedTime(value: Date | null) {
@@ -81,6 +79,15 @@ function formatConflictTime(value: string | null) {
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(value))
+}
+
+function legacyOfflineDraftKey(eventId: string, memberId: string, courseId: string) {
+  return `claykeeper:scoring-draft:${eventId}:${memberId}:${courseId}`
+}
+
+function isLikelyConnectionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /failed to fetch|load failed|network|offline|connection/i.test(message)
 }
 
 export function DigitalScoringPage() {
@@ -113,6 +120,13 @@ export function DigitalScoringPage() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [pendingSync, setPendingSync] = useState(false)
+  const [queuedStatus, setQueuedStatus] = useState<"draft" | "finalized">("draft")
+  const [queuedCount, setQueuedCount] = useState(0)
+  const [syncingQueue, setSyncingQueue] = useState(false)
+  const [queueSyncBlocked, setQueueSyncBlocked] = useState(false)
+  const [preparingOffline, setPreparingOffline] = useState(false)
+  const [offlineCachedAt, setOfflineCachedAt] = useState<Date | null>(null)
+  const [usingOfflineData, setUsingOfflineData] = useState(false)
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
   const [lastSaveError, setLastSaveError] = useState("")
@@ -125,6 +139,12 @@ export function DigitalScoringPage() {
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
 
+  const refreshQueuedCount = useCallback(async () => {
+    if (!eventId) return
+    const drafts = await listOfflineScorecardDrafts(eventId)
+    setQueuedCount(drafts.length)
+  }, [eventId])
+
   const load = useCallback(async () => {
     if (!eventId) {
       setError("Choose an event before opening digital scoring.")
@@ -136,7 +156,23 @@ export function DigitalScoringPage() {
     setError("")
 
     try {
-      const next = await loadDigitalScoring(eventId)
+      let next: DigitalScoringData
+
+      try {
+        if (!navigator.onLine) throw new Error("The device is offline.")
+        next = await loadDigitalScoring(eventId)
+        const cached = await cacheScoringEvent(next)
+        await cacheScoringAppForOffline().catch(() => undefined)
+        setOfflineCachedAt(new Date(cached.cachedAt))
+        setUsingOfflineData(false)
+        setQueueSyncBlocked(false)
+      } catch (caught) {
+        const cached = await getCachedScoringEvent(eventId)
+        if (!cached) throw caught
+        next = cached.data
+        setOfflineCachedAt(new Date(cached.cachedAt))
+        setUsingOfflineData(true)
+      }
 
       const requestedMember = requestedMemberId
         ? next.members.find(
@@ -222,7 +258,14 @@ export function DigitalScoringPage() {
   }, [load])
 
   useEffect(() => {
-    const handleOnline = () => setOnline(true)
+    void refreshQueuedCount()
+  }, [refreshQueuedCount])
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true)
+      setQueueSyncBlocked(false)
+    }
     const handleOffline = () => setOnline(false)
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
@@ -327,12 +370,52 @@ export function DigitalScoringPage() {
     setNotes(scorecard?.notes ?? "")
 
     const key = eventId && courseId
-      ? offlineDraftKey(eventId, memberId, courseId)
+      ? offlineScorecardKey(eventId, memberId, courseId)
       : ""
-    const stored = key ? window.localStorage.getItem(key) : null
-    if (stored && !locked) {
-      try {
-        const draft = JSON.parse(stored) as OfflineDraft
+    let cancelled = false
+
+    void (async () => {
+      let draft = key ? await getOfflineScorecardDraft(key) : undefined
+
+      if (!draft && eventId && courseId) {
+        const legacyKey = legacyOfflineDraftKey(eventId, memberId, courseId)
+        const stored = window.localStorage.getItem(legacyKey)
+        if (stored) {
+          try {
+            const legacy = JSON.parse(stored) as Partial<OfflineScorecardDraft>
+            draft = {
+              key,
+              eventId,
+              organizationId: data.event.organization_id,
+              shootId: selectedSquad?.shoot_id ?? shootId,
+              memberId,
+              courseId,
+              scorecardId: scorecard?.id ?? null,
+              requestedStatus: "draft",
+              scores: legacy.scores ?? {},
+              stationNotes: legacy.stationNotes ?? {},
+              stationTargets: Object.fromEntries(
+                stations.map((station) => [station.id, station.bird_count]),
+              ),
+              malfunctions: legacy.malfunctions ?? 0,
+              verified1: legacy.verified1 ?? "",
+              verified2: legacy.verified2 ?? "",
+              enteredBy: legacy.enteredBy ?? "",
+              notes: legacy.notes ?? "",
+              savedAt: legacy.savedAt ?? new Date().toISOString(),
+              baseUpdatedAt: legacy.baseUpdatedAt ?? scorecard?.updated_at ?? null,
+            }
+            await putOfflineScorecardDraft(draft)
+            window.localStorage.removeItem(legacyKey)
+          } catch {
+            window.localStorage.removeItem(legacyKey)
+          }
+        }
+      }
+
+      if (cancelled) return
+
+      if (draft && !locked) {
         const serverUpdatedAt = scorecard?.updated_at ?? null
         const baseUpdatedAt = draft.baseUpdatedAt ?? null
         const serverIsNewer = Boolean(
@@ -348,6 +431,7 @@ export function DigitalScoringPage() {
         if (serverIsNewer || serverAppearedAfterOfflineWork) {
           setSyncConflict({ draft, serverUpdatedAt })
           setLocalDraftSavedAt(new Date(draft.savedAt))
+          setQueuedStatus(draft.requestedStatus)
           setPendingSync(false)
           setDirty(false)
           return
@@ -365,26 +449,41 @@ export function DigitalScoringPage() {
         setEnteredBy(draft.enteredBy)
         setNotes(draft.notes)
         setLocalDraftSavedAt(new Date(draft.savedAt))
+        setQueuedStatus(draft.requestedStatus)
         setPendingSync(true)
-        setDirty(true)
+        setDirty(false)
         return
-      } catch {
-        window.localStorage.removeItem(key)
       }
-    }
 
-    setSyncConflict(null)
-    setPendingSync(false)
-    setLocalDraftSavedAt(null)
-    setDirty(false)
-  }, [courseId, data, eventId, locked, memberId, scorecard?.id, stations])
+      setSyncConflict(null)
+      setPendingSync(false)
+      setQueuedStatus("draft")
+      setLocalDraftSavedAt(null)
+      setDirty(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [courseId, data, eventId, locked, memberId, scorecard?.entered_by_name, scorecard?.id, scorecard?.malfunction_count, scorecard?.notes, scorecard?.updated_at, scorecard?.verified_by_1, scorecard?.verified_by_2, selectedSquad?.shoot_id, shootId, stations])
 
   useEffect(() => {
     if (!dirty || locked || !eventId || !memberId || !courseId) return
 
-    const draft: OfflineDraft = {
+    const draft: OfflineScorecardDraft = {
+      key: offlineScorecardKey(eventId, memberId, courseId),
+      eventId,
+      organizationId: data?.event.organization_id ?? "",
+      shootId,
+      memberId,
+      courseId,
+      scorecardId: scorecard?.id ?? null,
+      requestedStatus: queuedStatus,
       scores,
       stationNotes,
+      stationTargets: Object.fromEntries(
+        stations.map((station) => [station.id, station.bird_count]),
+      ),
       malfunctions,
       verified1,
       verified2,
@@ -394,16 +493,14 @@ export function DigitalScoringPage() {
       baseUpdatedAt: scorecard?.updated_at ?? null,
     }
     const timer = window.setTimeout(() => {
-      window.localStorage.setItem(
-        offlineDraftKey(eventId, memberId, courseId),
-        JSON.stringify(draft),
-      )
-      setLocalDraftSavedAt(new Date(draft.savedAt))
-      setPendingSync(true)
+      void putOfflineScorecardDraft(draft).then(() => {
+        setLocalDraftSavedAt(new Date(draft.savedAt))
+        setPendingSync(true)
+      })
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, dirty, enteredBy, eventId, locked, malfunctions, memberId, notes, scorecard?.updated_at, scores, verified1, verified2])
+  }, [courseId, data?.event.organization_id, dirty, enteredBy, eventId, locked, malfunctions, memberId, notes, queuedStatus, scorecard?.id, scorecard?.updated_at, scores, shootId, stationNotes, stations, verified1, verified2])
 
   const participant = useMemo(() => {
     if (!data || !memberId) return null
@@ -504,26 +601,48 @@ export function DigitalScoringPage() {
         return false
       }
 
-      if (dirty) {
-        const protectedDraft: OfflineDraft = {
-          scores,
-          stationNotes,
-          malfunctions,
-          verified1,
-          verified2,
-          enteredBy,
-          notes,
-          savedAt: new Date().toISOString(),
-          baseUpdatedAt: scorecard?.updated_at ?? null,
-        }
-        window.localStorage.setItem(
-          offlineDraftKey(eventId, memberId, courseId),
-          JSON.stringify(protectedDraft),
-        )
-        setLocalDraftSavedAt(new Date(protectedDraft.savedAt))
+      const protectedDraft: OfflineScorecardDraft = {
+        key: offlineScorecardKey(eventId, memberId, courseId),
+        eventId,
+        organizationId: data.event.organization_id,
+        shootId,
+        memberId,
+        courseId,
+        scorecardId: scorecard?.id ?? null,
+        requestedStatus: status,
+        scores,
+        stationNotes,
+        stationTargets: Object.fromEntries(
+          stations.map((station) => [station.id, station.bird_count]),
+        ),
+        malfunctions,
+        verified1,
+        verified2,
+        enteredBy,
+        notes,
+        savedAt: new Date().toISOString(),
+        baseUpdatedAt: scorecard?.updated_at ?? null,
       }
 
-      setSaving(true)
+      if (online) setSaving(true)
+      await putOfflineScorecardDraft(protectedDraft)
+      setLocalDraftSavedAt(new Date(protectedDraft.savedAt))
+      setPendingSync(true)
+      setQueuedStatus(status)
+      await refreshQueuedCount()
+
+      if (!online) {
+        setDirty(false)
+        setLastSaveError("")
+        if (!options.silent) {
+          toast.info(
+            status === "finalized"
+              ? "Completed scorecard saved on this device. It will finalize after upload."
+              : "Draft saved on this device. It will upload automatically.",
+          )
+        }
+        return true
+      }
 
       try {
         await saveDigitalScorecard({
@@ -550,14 +669,14 @@ export function DigitalScoringPage() {
             })),
         })
 
-        if (eventId && memberId && courseId) {
-          window.localStorage.removeItem(
-            offlineDraftKey(eventId, memberId, courseId),
-          )
-        }
+        await deleteOfflineScorecardDraft(
+          offlineScorecardKey(eventId, memberId, courseId),
+        )
         setDirty(false)
         setPendingSync(false)
+        setQueuedStatus("draft")
         setLocalDraftSavedAt(null)
+        await refreshQueuedCount()
         const confirmedAt = new Date()
         setLastSavedAt(confirmedAt)
         setLastSaveError("")
@@ -595,6 +714,14 @@ export function DigitalScoringPage() {
             ? caught.message
             : "Scorecard could not be saved."
         setLastSaveError(message)
+        if (isLikelyConnectionError(caught)) {
+          setDirty(false)
+          setQueueSyncBlocked(true)
+          if (!options.silent) {
+            toast.info("The scorecard is saved on this device and will upload when the connection is available.")
+          }
+          return true
+        }
         if (!options.silent) {
           toast.error(message)
         }
@@ -606,7 +733,6 @@ export function DigitalScoringPage() {
     [
       courseId,
       data,
-      dirty,
       enteredBy,
       enteredCount,
       eventId,
@@ -616,11 +742,15 @@ export function DigitalScoringPage() {
       malfunctions,
       memberId,
       notes,
+      online,
+      refreshQueuedCount,
       scorecard?.id,
       scorecard?.updated_at,
+      scores,
+      stationNotes,
       shootId,
       stationRows,
-      stations.length,
+      stations,
       totalScore,
       totalTargets,
       verified1,
@@ -639,26 +769,110 @@ export function DigitalScoringPage() {
   }, [courseId, dirty, locked, memberId, online, save, saving, syncConflict])
 
   useEffect(() => {
-    if (!online || !pendingSync || !dirty || locked || saving || syncConflict) return
+    if (!online || queuedCount === 0 || saving || syncingQueue || syncConflict || queueSyncBlocked || !eventId) return
+
     const timer = window.setTimeout(() => {
-      void save("draft", { silent: true })
+      void (async () => {
+        setSyncingQueue(true)
+        let uploaded = 0
+        let conflicts = 0
+
+        try {
+          const drafts = await listOfflineScorecardDrafts(eventId)
+          for (const draft of drafts.sort((a, b) => a.savedAt.localeCompare(b.savedAt))) {
+            try {
+              await saveDigitalScorecard({
+                organizationId: draft.organizationId,
+                eventId: draft.eventId,
+                shootId: draft.shootId,
+                squadMemberId: draft.memberId,
+                courseId: draft.courseId,
+                scorecardId: draft.scorecardId,
+                malfunctionCount: draft.malfunctions,
+                verifiedBy1: draft.verified1,
+                verifiedBy2: draft.verified2,
+                enteredByName: draft.enteredBy,
+                notes: draft.notes,
+                status: draft.requestedStatus,
+                expectedUpdatedAt: draft.baseUpdatedAt,
+                stationScores: Object.entries(draft.scores)
+                  .filter(([, value]) => value !== "")
+                  .map(([stationId, value]) => ({
+                    stationId,
+                    hits: Number(value),
+                    targets: draft.stationTargets[stationId] ?? 0,
+                    notes: draft.stationNotes[stationId] ?? "",
+                  })),
+              })
+              await deleteOfflineScorecardDraft(draft.key)
+              uploaded += 1
+
+              if (draft.key === offlineScorecardKey(eventId, memberId, courseId)) {
+                setPendingSync(false)
+                setQueuedStatus("draft")
+                setLocalDraftSavedAt(null)
+              }
+            } catch (caught) {
+              if (isDigitalScorecardConflictError(caught)) {
+                conflicts += 1
+                if (draft.key === offlineScorecardKey(eventId, memberId, courseId)) {
+                  setSyncConflict({
+                    draft,
+                    serverUpdatedAt: scorecard?.updated_at ?? null,
+                  })
+                  setPendingSync(false)
+                }
+                continue
+              }
+              throw caught
+            }
+          }
+
+          await refreshQueuedCount()
+          if (uploaded > 0) {
+            toast.success(`${uploaded} saved scorecard${uploaded === 1 ? "" : "s"} uploaded.`)
+            await load()
+          }
+          if (conflicts > 0) {
+            setQueueSyncBlocked(true)
+            toast.warning(`${conflicts} queued scorecard${conflicts === 1 ? " needs" : "s need"} review before uploading.`)
+          }
+        } catch (caught) {
+          setQueueSyncBlocked(true)
+          setLastSaveError(
+            caught instanceof Error ? caught.message : "Queued scorecards could not be uploaded.",
+          )
+        } finally {
+          setSyncingQueue(false)
+        }
+      })()
     }, 750)
+
     return () => window.clearTimeout(timer)
-  }, [dirty, locked, online, pendingSync, save, saving, syncConflict])
+  }, [courseId, eventId, load, memberId, online, queuedCount, queueSyncBlocked, refreshQueuedCount, saving, scorecard?.updated_at, syncConflict, syncingQueue])
 
   function keepServerVersion() {
     if (!eventId || !memberId || !courseId) return
-    window.localStorage.removeItem(offlineDraftKey(eventId, memberId, courseId))
-    setSyncConflict(null)
-    setPendingSync(false)
-    setLocalDraftSavedAt(null)
-    setDirty(false)
-    toast.success("Server scorecard kept. The older device draft was discarded.")
+    void deleteOfflineScorecardDraft(
+      offlineScorecardKey(eventId, memberId, courseId),
+    ).then(async () => {
+      setSyncConflict(null)
+      setPendingSync(false)
+      setQueueSyncBlocked(false)
+      setLocalDraftSavedAt(null)
+      setDirty(false)
+      await refreshQueuedCount()
+      toast.success("Server scorecard kept. The older device draft was discarded.")
+    })
   }
 
   function restoreDeviceDraft() {
     if (!syncConflict) return
-    const draft = syncConflict.draft
+    const draft = {
+      ...syncConflict.draft,
+      baseUpdatedAt: syncConflict.serverUpdatedAt,
+      savedAt: new Date().toISOString(),
+    }
     setScores((current) => ({ ...current, ...draft.scores }))
     setStationNotes((current) => ({
       ...current,
@@ -670,8 +884,10 @@ export function DigitalScoringPage() {
     setEnteredBy(draft.enteredBy)
     setNotes(draft.notes)
     setSyncConflict(null)
+    setQueueSyncBlocked(false)
     setPendingSync(true)
     setDirty(true)
+    void putOfflineScorecardDraft(draft)
     toast.warning(
       "Device draft restored. Review it carefully, then save to intentionally replace the newer server draft.",
     )
@@ -682,6 +898,7 @@ export function DigitalScoringPage() {
       ...current,
       [stationId]: value.replace(/[^0-9]/g, ""),
     }))
+    setQueuedStatus("draft")
     setDirty(true)
     if (error) setError("")
   }
@@ -691,6 +908,7 @@ export function DigitalScoringPage() {
       ...current,
       [stationId]: value,
     }))
+    setQueuedStatus("draft")
     setDirty(true)
     if (error) setError("")
   }
@@ -749,8 +967,29 @@ export function DigitalScoringPage() {
     if (nextIndex >= 0) focusStation(nextIndex)
   }
 
+  async function prepareForOfflineUse() {
+    if (!online) {
+      toast.info("Reconnect before updating the offline event data.")
+      return
+    }
+
+    setPreparingOffline(true)
+    try {
+      await requestPersistentOfflineStorage()
+      await load()
+      await cacheScoringAppForOffline()
+      toast.success("This event is ready for offline scoring on this device.")
+    } catch (caught) {
+      toast.error(
+        caught instanceof Error ? caught.message : "Offline scoring could not be prepared.",
+      )
+    } finally {
+      setPreparingOffline(false)
+    }
+  }
+
   async function finalizeWithConfirmation() {
-    if (locked || saving || !online || Boolean(syncConflict)) return
+    if (locked || saving || Boolean(syncConflict)) return
     if (enteredCount !== stations.length || invalid.length > 0) {
       await save("finalized")
       return
@@ -805,8 +1044,10 @@ export function DigitalScoringPage() {
 
   const saveStateLabel = syncConflict
     ? "Sync conflict — choose a version"
-    : saving
+    : saving || syncingQueue
       ? "Saving…"
+    : queuedCount > 0
+      ? `${queuedCount} waiting to upload`
     : !online && pendingSync
       ? `Saved on device ${formatSavedTime(localDraftSavedAt)}`
       : pendingSync
@@ -847,24 +1088,37 @@ export function DigitalScoringPage() {
                 className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
                   syncConflict
                     ? "bg-red-50 text-red-800"
-                    : saving
+                    : saving || syncingQueue
                       ? "bg-blue-50 text-blue-700"
-                    : dirty
+                    : dirty || queuedCount > 0
                       ? "bg-amber-50 text-amber-800"
                       : "bg-emerald-50 text-emerald-800"
                 }`}
               >
                 {syncConflict ? (
                   <CircleAlert className="h-4 w-4" />
-                ) : saving ? (
+                ) : saving || syncingQueue ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                ) : dirty ? (
+                ) : dirty || queuedCount > 0 ? (
                   <CircleAlert className="h-4 w-4" />
                 ) : (
                   <ShieldCheck className="h-4 w-4" />
                 )}
                 {saveStateLabel}
               </div>
+              <Button
+                variant="outline"
+                disabled={!online || preparingOffline}
+                onClick={() => void prepareForOfflineUse()}
+                title="Download current event details for offline scoring"
+              >
+                {preparingOffline ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {offlineCachedAt ? "Update Offline Data" : "Prepare Offline"}
+              </Button>
               <Button variant="outline" onClick={() => void load()}>
                 <RefreshCw className="h-4 w-4" />
                 Refresh
@@ -897,6 +1151,34 @@ export function DigitalScoringPage() {
               <RefreshCw className="h-4 w-4" />
               Retry
             </Button>
+          </div>
+        ) : null}
+
+        {usingOfflineData ? (
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            <Download className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-bold">Using event data saved on this device</p>
+              <p className="mt-1">Keep scoring normally. New work will upload automatically when a connection returns.</p>
+            </div>
+          </div>
+        ) : null}
+
+        {queuedCount > 0 ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <CloudUpload className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-bold">{queuedCount} scorecard{queuedCount === 1 ? "" : "s"} saved on this device</p>
+                <p className="mt-1">{online ? queueSyncBlocked ? "One or more scorecards need conflict review before upload." : "ClayKeeper will upload them automatically." : "They will upload automatically when service returns."}</p>
+              </div>
+            </div>
+            {online && queueSyncBlocked ? (
+              <Button variant="outline" onClick={() => setQueueSyncBlocked(false)}>
+                <RefreshCw className="h-4 w-4" />
+                Retry Upload
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
@@ -969,7 +1251,7 @@ export function DigitalScoringPage() {
               <WifiOff className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <p className="font-bold">Connection lost — keep scoring.</p>
-                <p className="mt-1">Changes are being stored on this device and will automatically sync as a draft when the connection returns. Finalizing is disabled while offline.</p>
+                <p className="mt-1">Changes are stored on this device. Drafts and completed scorecards will upload automatically when the connection returns.</p>
               </div>
             </div>
           </div>
@@ -1170,8 +1452,8 @@ export function DigitalScoringPage() {
               />
               <Summary
                 label="Status"
-                value={locked ? "Finalized" : scorecard ? "Draft" : "Not Started"}
-                detail={locked ? "Locked from editing" : dirty ? "Unsaved changes" : "Editable"}
+                value={locked ? "Finalized" : pendingSync && queuedStatus === "finalized" ? "Ready to Upload" : scorecard || pendingSync ? "Draft" : "Not Started"}
+                detail={locked ? "Locked from editing" : pendingSync ? "Saved on this device" : dirty ? "Unsaved changes" : "Editable"}
               />
             </section>
 
@@ -1423,6 +1705,7 @@ export function DigitalScoringPage() {
                     setMalfunctions(
                       Math.min(3, Math.max(0, Number(event.target.value))),
                     )
+                    setQueuedStatus("draft")
                     setDirty(true)
                   }}
                   className="mt-1 min-h-12 w-full rounded-lg border px-3 text-lg"
@@ -1433,6 +1716,7 @@ export function DigitalScoringPage() {
                 value={verified1}
                 setValue={(value) => {
                   setVerified1(value)
+                  setQueuedStatus("draft")
                   setDirty(true)
                 }}
                 disabled={locked || Boolean(syncConflict)}
@@ -1442,6 +1726,7 @@ export function DigitalScoringPage() {
                 value={verified2}
                 setValue={(value) => {
                   setVerified2(value)
+                  setQueuedStatus("draft")
                   setDirty(true)
                 }}
                 disabled={locked || Boolean(syncConflict)}
@@ -1451,6 +1736,7 @@ export function DigitalScoringPage() {
                 value={enteredBy}
                 setValue={(value) => {
                   setEnteredBy(value)
+                  setQueuedStatus("draft")
                   setDirty(true)
                 }}
                 disabled={locked || Boolean(syncConflict)}
@@ -1462,6 +1748,7 @@ export function DigitalScoringPage() {
                   value={notes}
                   onChange={(event) => {
                     setNotes(event.target.value)
+                    setQueuedStatus("draft")
                     setDirty(true)
                   }}
                   className="mt-1 min-h-24 w-full rounded-lg border p-3"
@@ -1476,18 +1763,18 @@ export function DigitalScoringPage() {
                 disabled={saving || locked || Boolean(syncConflict)}
               >
                 <Save className="h-4 w-4" />
-                Save Draft
+                {online ? "Save Draft" : "Save on Device"}
               </Button>
               <Button
                 onClick={() => void finalizeWithConfirmation()}
-                disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
+                disabled={saving || locked || Boolean(syncConflict) || stations.length === 0}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                Finalize Scorecard
+                {online ? "Finalize Scorecard" : "Complete on Device"}
               </Button>
             </div>
 
@@ -1505,11 +1792,11 @@ export function DigitalScoringPage() {
                   className="min-h-12"
                 >
                   <Save className="h-5 w-5" />
-                  Save Draft
+                  {online ? "Save Draft" : "Save on Device"}
                 </Button>
                 <Button
                   onClick={() => void finalizeWithConfirmation()}
-                  disabled={saving || locked || Boolean(syncConflict) || stations.length === 0 || !online}
+                  disabled={saving || locked || Boolean(syncConflict) || stations.length === 0}
                   className="min-h-12"
                 >
                   {saving ? (
@@ -1517,7 +1804,7 @@ export function DigitalScoringPage() {
                   ) : (
                     <CheckCircle2 className="h-5 w-5" />
                   )}
-                  Finalize
+                  {online ? "Finalize" : "Complete"}
                 </Button>
                 </div>
               </div>

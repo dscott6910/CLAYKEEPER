@@ -36,6 +36,37 @@ type OrganizationContextValue = {
 const OrganizationContextReact =
   createContext<OrganizationContextValue | undefined>(undefined)
 
+const OFFLINE_ACCESS_KEY_PREFIX = "claykeeper:organization-access:"
+
+type CachedOrganizationAccess = {
+  organization: OrganizationContext
+  memberships: OrganizationMembershipOption[]
+}
+
+function readCachedOrganizationAccess(userId: string) {
+  try {
+    const stored = window.localStorage.getItem(`${OFFLINE_ACCESS_KEY_PREFIX}${userId}`)
+    return stored ? JSON.parse(stored) as CachedOrganizationAccess : null
+  } catch {
+    return null
+  }
+}
+
+function cacheOrganizationAccess(
+  userId: string,
+  organization: OrganizationContext,
+  memberships: OrganizationMembershipOption[],
+) {
+  try {
+    window.localStorage.setItem(
+      `${OFFLINE_ACCESS_KEY_PREFIX}${userId}`,
+      JSON.stringify({ organization, memberships } satisfies CachedOrganizationAccess),
+    )
+  } catch {
+    // Access is still validated by the server whenever a connection is available.
+  }
+}
+
 export function OrganizationProvider({
   children,
 }: PropsWithChildren) {
@@ -71,16 +102,28 @@ export function OrganizationProvider({
 
       setOrganization(context)
       setMemberships(availableMemberships)
+      cacheOrganizationAccess(session.user.id, context, availableMemberships)
 
-      const settings = await loadOrganizationSettings()
-      saveBrandSettings(settings)
+      try {
+        const settings = await loadOrganizationSettings()
+        saveBrandSettings(settings)
+      } catch {
+        // The last saved brand settings remain usable while offline.
+      }
     } catch (caught) {
-      setOrganization(null)
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Unable to load organization access.",
-      )
+      const cached = readCachedOrganizationAccess(session.user.id)
+      if (cached) {
+        setOrganization(cached.organization)
+        setMemberships(cached.memberships)
+        setError(null)
+      } else {
+        setOrganization(null)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to load organization access.",
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -119,6 +162,9 @@ export function OrganizationProvider({
         await getOrganizationMembershipOptions(context.userId)
 
       setMemberships(availableMemberships)
+      if (session) {
+        cacheOrganizationAccess(session.user.id, context, availableMemberships)
+      }
 
       const settings = await loadOrganizationSettings()
       saveBrandSettings(settings)
