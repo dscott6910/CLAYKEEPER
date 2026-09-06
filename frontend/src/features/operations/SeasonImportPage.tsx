@@ -5,9 +5,10 @@ import { toast } from "sonner"
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
-import { deleteHistoricalImport, finalizeHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook } from "@/lib/services/historicalImport"
+import { buildTrapSeriesReview, deleteHistoricalImport, finalizeHistoricalImport, ImportCancelledError, importTrapSeriesWorkbook, importUsOpenWorkbook, listHistoricalImports, parseTrapSeriesWorkbook, parseUsOpenWorkbook, type HistoricalImportRecord, type ParsedTrapSeriesWorkbook, type ParsedUsOpenWorkbook, type TrapSeriesRow } from "@/lib/services/historicalImport"
 import { ActiveNetImportCancelledError, importActiveNetWorkbook, parseActiveNetWorkbook, type ParsedActiveNetWorkbook } from "@/lib/services/activenetImport"
 import { activateSeason, closeSeasonAndRollover, createSeason, listSeasons, updateSeason, type Season, type SeasonCloseoutSummary } from "@/lib/services/seasons"
+import type { ParticipantRecord } from "@/lib/services/participants"
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
 const input = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -34,6 +35,8 @@ export function SeasonImportPage() {
   const [trapSeriesDate, setTrapSeriesDate] = useState("")
   const [trapSeriesEntryFee, setTrapSeriesEntryFee] = useState("0")
   const [trapSeriesOrganizationFee, setTrapSeriesOrganizationFee] = useState("2")
+  const [trapSeriesDiscipline, setTrapSeriesDiscipline] = useState<"american_trap" | "sporting_clays">("sporting_clays")
+  const [trapParticipants, setTrapParticipants] = useState<ParticipantRecord[]>([])
   const [seasonError, setSeasonError] = useState("")
   const [closingSeason, setClosingSeason] = useState<Season | null>(null)
   const [createNextSeason, setCreateNextSeason] = useState(true)
@@ -110,6 +113,10 @@ export function SeasonImportPage() {
       ready: rows.filter((row) => !row.errors.length).length,
       warnings: rows.reduce((sum, row) => sum + row.warnings.length, 0),
       errors: rows.reduce((sum, row) => sum + row.errors.length, 0),
+      matched: rows.filter((row) => row.matchStatus === "exact" || Boolean(row.matchedParticipantId)).length,
+      newParticipants: rows.filter((row) => row.matchStatus === "new").length,
+      unresolved: rows.filter((row) => row.matchStatus === "possible" && !row.matchedParticipantId && !row.errors.length).length,
+      withScores: rows.filter((row) => row.total !== null || row.scores.some((score) => score !== null)).length,
     }
   }, [trapParsed])
 
@@ -220,11 +227,13 @@ export function SeasonImportPage() {
     setBusy(true)
     try {
       const result = await parseTrapSeriesWorkbook(file)
-      setTrapParsed(result)
-      const rowCount = result.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)
-      toast.success(`${rowCount} Trap Series entries found across ${result.sheets.length} shoot worksheets`)
+      const review = await buildTrapSeriesReview(result)
+      setTrapParsed(review.parsed)
+      setTrapParticipants(review.participants)
+      const rowCount = review.parsed.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)
+      toast.success(`${rowCount} participant rows found across ${review.parsed.sheets.length} shoot worksheet${review.parsed.sheets.length === 1 ? "" : "s"}`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to read Trap Series workbook")
+      toast.error(error instanceof Error ? error.message : "Unable to read participant workbook")
     } finally {
       setBusy(false)
     }
@@ -242,6 +251,7 @@ export function SeasonImportPage() {
         seasonId,
         eventName: trapSeriesEventName,
         eventDate: trapSeriesDate,
+        discipline: trapSeriesDiscipline,
         entryFee: Number(trapSeriesEntryFee) || 0,
         organizationFee: Number(trapSeriesOrganizationFee) || 0,
       }, {
@@ -252,11 +262,12 @@ export function SeasonImportPage() {
           setTrapImportProgress({ completedRows: progress.completedRows, totalRows: progress.totalRows, percent: progress.percent, stage: progress.stage })
         },
       })
-      toast.success(`${result.uniqueParticipants} participants and ${result.importedRows} Trap Series entries imported${result.skippedRows ? `; ${result.skippedRows} invalid row(s) skipped` : ""}`)
-      setTrapImportMessage("Import completed successfully.")
+      toast.success(`${result.uniqueParticipants} participants ${result.updatedExistingEvent ? "updated" : "imported"}${result.includedScores ? " with scores" : " as a roster"}${result.skippedRows ? `; ${result.skippedRows} invalid row(s) skipped` : ""}`)
+      setTrapImportMessage(result.updatedExistingEvent ? "Existing event updated successfully." : "New event roster imported successfully.")
       setTrapImportProgress((current) => ({ ...current, completedRows: current.totalRows, percent: 100, stage: "completed" }))
       await refresh()
       setTrapParsed(null)
+      setTrapParticipants([])
       setActiveTrapImportId(null)
     } catch (error) {
       if (error instanceof ImportCancelledError) {
@@ -264,7 +275,7 @@ export function SeasonImportPage() {
         toast.warning("Import stopped. The partial import is ready for cleanup.")
         await refresh()
       } else {
-        const message = error instanceof Error ? error.message : "Trap Series import failed"
+        const message = error instanceof Error ? error.message : "Participant and score import failed"
         setTrapImportMessage(`Import failed: ${message}`)
         toast.error(message)
         await refresh()
@@ -284,10 +295,21 @@ export function SeasonImportPage() {
   function handleClearTrapWorkbook() {
     if (trapImportRunning) return
     setTrapParsed(null)
+    setTrapParticipants([])
     setTrapImportMessage("")
     setTrapImportProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
     setActiveTrapImportId(null)
     trapCancelRef.current = false
+  }
+
+  function updateTrapRow(sheetName: string, rowNumber: number, patch: Partial<TrapSeriesRow>) {
+    setTrapParsed((current) => current ? {
+      ...current,
+      sheets: current.sheets.map((sheet) => sheet.sheetName !== sheetName ? sheet : {
+        ...sheet,
+        rows: sheet.rows.map((row) => row.rowNumber === rowNumber ? { ...row, ...patch } : row),
+      }),
+    } : current)
   }
 
 
@@ -437,7 +459,7 @@ export function SeasonImportPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <AppHeader title="Seasons & Historical Import" description="Manage seasons and import Trap Series results and historical competition workbooks. ActiveNet participant files have their own dedicated import page." />
+      <AppHeader title="Seasons & Historical Import" description="Manage seasons and import participant rosters, shoot scores, and historical competition workbooks. ActiveNet participant files have their own dedicated import page." />
       <PageContainer>
         <div className="space-y-6">
           <section className={card}>
@@ -531,33 +553,35 @@ export function SeasonImportPage() {
           <section className={card}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Trap Series workbook import</h2>
-                <p className="mt-1 text-sm text-slate-600">Imports every shoot-location worksheet as a separate American Trap shoot inside one series event. Teams, classes, squads, four 25-target rounds, and totals are preserved.</p>
+                <h2 className="text-lg font-semibold text-slate-900">Participant and score workbook import</h2>
+                <p className="mt-1 text-sm text-slate-600">Import a participant roster before the shoot, then upload the same workbook after the shoot to add scores. Existing participants are matched by name and the same event is updated instead of duplicated.</p>
               </div>
               <FileSpreadsheet className="h-6 w-6 text-amber-600" />
             </div>
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <label className="text-sm font-medium text-slate-700">Season <span className="text-red-600">*</span><select className={`${input} mt-1 ${!seasonId ? "border-red-300" : ""}`} value={seasonId} onChange={(e) => setSeasonId(e.target.value)} disabled={loading || trapImportRunning}><option value="">{loading ? "Loading seasons…" : seasons.length ? "Choose a season" : "No seasons available"}</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name} ({season.status})</option>)}</select></label>
-                <label className="text-sm font-medium text-slate-700">Series name <span className="text-red-600">*</span><input className={`${input} mt-1 ${!trapSeriesEventName.trim() ? "border-red-300" : ""}`} value={trapSeriesEventName} onChange={(e) => setTrapSeriesEventName(e.target.value)} placeholder="Example: 2026 Trap Series Shoot 1" disabled={trapImportRunning} /></label>
+                <label className="text-sm font-medium text-slate-700">Event name <span className="text-red-600">*</span><input className={`${input} mt-1 ${!trapSeriesEventName.trim() ? "border-red-300" : ""}`} value={trapSeriesEventName} onChange={(e) => setTrapSeriesEventName(e.target.value)} placeholder="Example: Sporting Clays Series 1" disabled={trapImportRunning} /></label>
                 <label className="text-sm font-medium text-slate-700">Shoot date <span className="text-red-600">*</span><input className={`${input} mt-1 ${!trapSeriesDate ? "border-red-300" : ""}`} type="date" value={trapSeriesDate} onChange={(e) => setTrapSeriesDate(e.target.value)} disabled={trapImportRunning} /></label>
+                <label className="text-sm font-medium text-slate-700">Discipline <span className="text-red-600">*</span><select className={`${input} mt-1`} value={trapSeriesDiscipline} onChange={(e) => setTrapSeriesDiscipline(e.target.value as "american_trap" | "sporting_clays")} disabled={trapImportRunning}><option value="sporting_clays">Sporting Clays</option><option value="american_trap">American Trap</option></select></label>
               </div>
-              {!trapSetupComplete && <p className="mt-3 text-sm font-medium text-red-700">Choose a season, enter a series name, and select a date before choosing a workbook.</p>}
+              {!trapSetupComplete && <p className="mt-3 text-sm font-medium text-red-700">Choose a season, enter an event name, and select a date before choosing a workbook.</p>}
+              <p className="mt-3 text-xs text-slate-600">Use the same season, event name, and date on the later score upload so ClayKeeper updates the original event.</p>
             </div>
             <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${trapSetupComplete && !trapImportRunning ? "cursor-pointer border-slate-300 hover:border-amber-500 hover:bg-amber-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
               {busy ? <Loader2 className="h-8 w-8 animate-spin text-amber-600" /> : <Upload className="h-8 w-8 text-amber-600" />}
-              <span className="mt-3 font-medium text-slate-800">Choose a Trap Series workbook</span>
-              <span className="mt-1 text-xs text-slate-500">Example: 2026 Trap Series 1.xlsx. QR-code and blank worksheets are ignored automatically.</span>
+              <span className="mt-3 font-medium text-slate-800">Choose participant or score workbook</span>
+              <span className="mt-1 text-xs text-slate-500">Expected columns: last name, first name, team, class, squad number, four round scores, and total score. Blank score cells are allowed.</span>
               <input className="hidden" type="file" accept=".xlsx,.xls" disabled={!trapSetupComplete || trapImportRunning} onChange={(e) => void handleTrapSeriesFile(e.target.files?.[0])} />
             </label>
 
             {trapParsed && <>
-              <div className="mt-5 grid gap-3 sm:grid-cols-4">
-                {[['Entries', trapTotals.rows], ['Ready', trapTotals.ready], ['Warnings', trapTotals.warnings], ['Errors', trapTotals.errors]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-100 p-3"><div className="text-xs uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold">{value}</div></div>)}
+              <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {[['Rows', trapTotals.rows], ['Existing', trapTotals.matched], ['New', trapTotals.newParticipants], ['Needs review', trapTotals.unresolved], ['With scores', trapTotals.withScores], ['Errors', trapTotals.errors]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-100 p-3"><div className="text-xs uppercase text-slate-500">{label}</div><div className="mt-1 text-xl font-semibold">{value}</div></div>)}
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {trapParsed.sheets.map((sheet) => <div key={sheet.sheetName} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><strong>{sheet.sheetName}</strong><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">{sheet.rows.length} entries</span></div><p className="mt-2 text-xs text-slate-500">{sheet.hasSquadNumbers ? 'Squad numbers detected' : 'No squad column; imported holding squads will be created'}</p></div>)}
+                {trapParsed.sheets.map((sheet) => <div key={sheet.sheetName} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><strong>{sheet.sheetName}</strong><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">{sheet.rows.length} participants</span></div><p className="mt-2 text-xs text-slate-500">{sheet.rows.some((row) => row.total !== null || row.scores.some((score) => score !== null)) ? "Scores detected; saved scores will be added or updated" : "Roster-only upload; scores can be added later"}</p></div>)}
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -568,13 +592,44 @@ export function SeasonImportPage() {
               {trapParsed.workbookErrors.length > 0 && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900"><strong>Workbook structure errors must be corrected before importing.</strong><ul className="mt-2 list-disc space-y-1 pl-5">{trapParsed.workbookErrors.map((error) => <li key={error}>{error}</li>)}</ul><p className="mt-3">No data will be imported from this workbook. Correct the spreadsheet, press Remove faulty spreadsheet, and select the corrected file.</p></div>}
 
               {trapTotals.errors > 0 && trapParsed.workbookErrors.length === 0 && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>{trapTotals.errors} invalid row(s) will be skipped.</strong> The remaining {trapTotals.ready} valid entries can still be imported. Review the red rows below for details.</div>}
+              {trapTotals.unresolved > 0 && <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>{trapTotals.unresolved} possible participant match{trapTotals.unresolved === 1 ? " needs" : "es need"} review.</strong> Use the Match column below to select the existing participant or create a new participant.</div>}
 
               {trapImportMessage && <div className={`mt-5 rounded-xl border px-4 py-3 text-sm ${trapImportMessage.startsWith("Import failed") ? "border-red-200 bg-red-50 text-red-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}><div className="flex items-center gap-2">{trapImportRunning && <Loader2 className="h-4 w-4 animate-spin" />}<span>{trapImportMessage}</span></div>{activeTrapImportId && trapImportRunning ? <div className="mt-1 text-xs opacity-75">A cleanup record has been created and can be deleted if the import is stopped.</div> : null}</div>}
 
               <div className="mt-5 max-h-[520px] overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
-                  <tbody>{trapParsed.sheets.flatMap((sheet) => sheet.rows.map((row) => <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100"><td className="px-3 py-2 font-medium">{sheet.sheetName}</td><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td><td className="px-3 py-2">{row.team || '—'}</td><td className="px-3 py-2">{row.classCode || '—'}</td><td className="px-3 py-2">{row.squadNumber || 'Auto'}</td><td className="px-3 py-2 whitespace-nowrap">{row.scores.map((score) => score ?? '—').join(' · ')}</td><td className="px-3 py-2 font-semibold">{row.total ?? '—'}</td><td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td></tr>))}</tbody>
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Match</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
+                  <tbody>{trapParsed.sheets.flatMap((sheet) => sheet.rows.map((row) => (
+                    <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-medium">{sheet.sheetName}</td>
+                      <td className="px-3 py-2">{row.rowNumber}</td>
+                      <td className="px-3 py-2 font-medium">{row.firstName} {row.lastName}</td>
+                      <td className="min-w-52 px-3 py-2">
+                        {row.possibleParticipantIds.length > 0 ? (
+                          <select
+                            className="w-full rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs"
+                            value={row.matchStatus === "new" ? "__new__" : row.matchedParticipantId ?? ""}
+                            onChange={(event) => event.target.value === "__new__"
+                              ? updateTrapRow(sheet.sheetName, row.rowNumber, { matchStatus: "new", matchedParticipantId: null })
+                              : updateTrapRow(sheet.sheetName, row.rowNumber, { matchStatus: "possible", matchedParticipantId: event.target.value || null })}
+                          >
+                            <option value="">Choose a match</option>
+                            {row.possibleParticipantIds.map((participantId) => {
+                              const participant = trapParticipants.find((item) => item.id === participantId)
+                              return participant ? <option key={participant.id} value={participant.id}>{participant.first_name} {participant.last_name}</option> : null
+                            })}
+                            <option value="__new__">Create new participant</option>
+                          </select>
+                        ) : <span className={`text-xs font-medium ${row.matchStatus === "exact" ? "text-emerald-700" : "text-slate-600"}`}>{row.matchStatus === "exact" ? "Existing participant" : "New participant"}</span>}
+                      </td>
+                      <td className="px-3 py-2">{row.team || "—"}</td>
+                      <td className="px-3 py-2">{row.classCode || "—"}</td>
+                      <td className="px-3 py-2">{row.squadNumber || "Auto"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{row.scores.map((score) => score ?? "—").join(" · ")}</td>
+                      <td className="px-3 py-2 font-semibold">{row.total ?? "—"}</td>
+                      <td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.matchStatus === "possible" && !row.matchedParticipantId ? <span className="text-amber-700">Review match</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td>
+                    </tr>
+                  )))}</tbody>
                 </table>
               </div>
               {(trapImportRunning || trapImportMessage) && (
@@ -599,7 +654,7 @@ export function SeasonImportPage() {
 
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={handleClearTrapWorkbook} disabled={trapImportRunning}>{trapParsed.workbookErrors.length ? <XCircle className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}{trapParsed.workbookErrors.length ? "Remove faulty spreadsheet" : "Clear spreadsheet"}</Button>
-                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || !trapSetupComplete}><Upload className="mr-2 h-4 w-4" />Import complete Trap Series</Button>}
+                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || trapTotals.unresolved > 0 || !trapSetupComplete} title={trapTotals.unresolved > 0 ? "Review all possible participant matches first" : undefined}><Upload className="mr-2 h-4 w-4" />Import or update participants and scores</Button>}
               </div>
             </>}
           </section>
