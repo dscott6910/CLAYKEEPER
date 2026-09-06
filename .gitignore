@@ -26,3 +26,6 @@ supabase/.temp/
 
 # Windows
 Thumbs.db
+# Local staff request email secrets
+frontend/.staff-request-email.env
+frontend/.staff-request-email.env.save
