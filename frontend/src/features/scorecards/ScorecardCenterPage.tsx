@@ -797,9 +797,7 @@ async function drawScorecard(
     y + 0.98,
     { maxWidth: 4.7 },
   )
-  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.15, {
-    align: "center",
-  })
+  pdf.text("LOSS = BUBBLE EMPTY", x + margin + pdf.getTextWidth("INSTRUCTIONS: "), y + 1.15)
 
   if (card) {
     const scoringUrl = new URL(
