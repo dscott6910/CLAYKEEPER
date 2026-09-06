@@ -792,11 +792,14 @@ async function drawScorecard(
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8.4)
   pdf.text(
-    "INSTRUCTIONS: DEAD = BUBBLE FILL - LOSS = BUBBLE EMPTY",
+    "INSTRUCTIONS: DEAD = BUBBLE FILL",
     x + margin,
-    y + 1.00,
+    y + 0.98,
     { maxWidth: 4.7 },
   )
+  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.15, {
+    align: "center",
+  })
 
   if (card) {
     const scoringUrl = new URL(
