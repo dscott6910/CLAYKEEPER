@@ -167,6 +167,7 @@ function finderPatternScore(
     }
   }
 
+  if (lightest - darkest < 35) return 0
   const localThreshold =
     lightest - darkest >= 35 ? (darkest + lightest) / 2 : threshold
   let outerDark = 0
@@ -198,6 +199,8 @@ function finderPatternScore(
     }
   }
 
+  if (centerCount && centerDark / centerCount < 0.45) return 0
+  if (outerCount && outerDark / outerCount < 0.40) return 0
   return (
     (outerCount ? outerDark / outerCount : 0) * 0.42 +
     (middleCount ? middleLight / middleCount : 0) * 0.28 +
@@ -323,11 +326,9 @@ function selectMarkerQuadrilateral(
     if (distinct.length >= 36) break
   }
 
-  const strongestScore = distinct[0]?.score ?? 0
-  const strongest = distinct.filter(
-    (candidate) => candidate.score >= strongestScore - 0.10,
-  )
-  const pool = strongest.length >= 4 ? strongest : distinct
+  // Keep dimmer registration squares: crisp QR finder patterns must not
+  // exclude a real corner before the four-corner geometry is evaluated.
+  const pool = distinct
 
   let best: { markers: RegistrationMarker[]; score: number } | null = null
 
@@ -404,7 +405,7 @@ function selectMarkerQuadrilateral(
           const score =
             finderScore +
             areaRatio * 0.8 -
-            symmetryPenalty * 0.25 -
+            symmetryPenalty * 1.5 -
             sizePenalty * 0.6 -
             horizontalSkew * 0.2 -
             verticalSkew * 0.2
@@ -428,7 +429,7 @@ export function detectRegistrationMarkers(
   const width = image.width
   const height = image.height
   const minDimension = Math.min(width, height)
-  const minSize = Math.max(14, Math.round(minDimension * 0.012))
+  const minSize = Math.max(8, Math.round(minDimension * 0.009))
   const maxSize = Math.round(minDimension * 0.18)
 
   const binary = new Uint8Array(width * height)
@@ -615,6 +616,9 @@ export function detectRegistrationMarkers(
     if (fallback) candidates.push(fallback)
   }
 
+  const fallbackQuadrilateral = selectMarkerQuadrilateral(candidates, width, height)
+  if (fallbackQuadrilateral.length === 4) return fallbackQuadrilateral
+
   const targets = normalizedTargets.map((point) => ({
     x: point.x * width,
     y: point.y * height,
@@ -656,7 +660,9 @@ export function detectRegistrationMarkers(
     }
   }
 
-  return selected
+  // Four individually plausible points are not enough to define a card.
+  // Without a valid quadrilateral, require review instead of warping scores.
+  return selected.slice(0, 3)
 }
 
 function solveLinearSystem(matrix: number[][], values: number[]) {
