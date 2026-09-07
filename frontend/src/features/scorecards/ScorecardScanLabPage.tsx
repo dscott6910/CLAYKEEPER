@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react"
 import {
   Camera,
   CheckCircle2,
@@ -159,6 +166,7 @@ export function ScorecardScanLabPage() {
   const [genericShootId, setGenericShootId] = useState("")
   const [genericCourseId, setGenericCourseId] = useState("")
   const [genericMemberId, setGenericMemberId] = useState("")
+  const [manualMarking, setManualMarking] = useState(false)
 
   const stations = useMemo(
     () =>
@@ -269,6 +277,7 @@ export function ScorecardScanLabPage() {
   ])
 
   function clearScanResults() {
+    setManualMarking(false)
     setMarkers([])
     setReadings([])
     setOverrides({})
@@ -430,7 +439,7 @@ export function ScorecardScanLabPage() {
     canvas.getContext("2d")?.putImageData(corrected, 0, 0)
   }
 
-  function scanScorecard() {
+  function scanScorecard(useMarkedCorners = false) {
     const canvas = sourceCanvasRef.current
     if (!canvas || !imageRef.current || !identity || !data) {
       setError(
@@ -448,21 +457,25 @@ export function ScorecardScanLabPage() {
     if (!context) return
     drawSource([])
     const source = context.getImageData(0, 0, canvas.width, canvas.height)
-    setStatus("Finding the four alignment markers...")
-    const found = detectRegistrationMarkers(
-      source,
-      markerCenters(stations.length),
+    setStatus(
+      useMarkedCorners
+        ? "Using the four marked corners..."
+        : "Finding the four alignment markers...",
     )
+    const found = useMarkedCorners
+      ? markers
+      : detectRegistrationMarkers(source, markerCenters(stations.length))
     if (found.length !== 4) {
       setMarkers(found)
       setReadings([])
       drawSource(found)
       setStatus("Scan needs another photo")
       setError(
-        `Found ${found.length} of 4 square markers. Keep one complete half-page card visible, use even light, and move a little closer.`,
+        `Found ${found.length} of 4 square markers. Try Mark corners manually below, or take another photo.`,
       )
       return
     }
+    setManualMarking(false)
     setMarkers(found)
     drawSource(found)
     try {
@@ -490,6 +503,50 @@ export function ScorecardScanLabPage() {
           : "Unable to process this scorecard photo.",
       )
     }
+  }
+
+  function startManualMarking() {
+    setManualMarking(true)
+    setMarkers([])
+    setReadings([])
+    setOverrides({})
+    setSaved(false)
+    setError("")
+    setStatus("Tap the top-left square marker")
+    drawSource([])
+  }
+
+  function markCorner(event: MouseEvent<HTMLCanvasElement>) {
+    if (!manualMarking || markers.length >= 4) return
+    const canvas = sourceCanvasRef.current
+    if (!canvas) return
+
+    const bounds = canvas.getBoundingClientRect()
+    const x = ((event.clientX - bounds.left) / bounds.width) * canvas.width
+    const y = ((event.clientY - bounds.top) / bounds.height) * canvas.height
+    const size = Math.max(18, Math.min(canvas.width, canvas.height) * 0.025)
+    const nextMarkers = [
+      ...markers,
+      {
+        center: { x, y },
+        bounds: {
+          x: x - size / 2,
+          y: y - size / 2,
+          width: size,
+          height: size,
+        },
+        score: 1,
+      },
+    ]
+    const nextInstructions = [
+      "Tap the top-right square marker",
+      "Tap the bottom-right square marker",
+      "Tap the bottom-left square marker",
+      "All four corners marked - select Scan with marked corners",
+    ]
+
+    setMarkers(nextMarkers)
+    setStatus(nextInstructions[nextMarkers.length - 1])
   }
 
   function cycleReading(reading: BubbleCellReading) {
@@ -839,7 +896,10 @@ export function ScorecardScanLabPage() {
                   {imageUrl ? (
                     <canvas
                       ref={sourceCanvasRef}
-                      className="mx-auto block h-auto max-w-full rounded-md bg-white"
+                      onClick={markCorner}
+                      className={`mx-auto block h-auto max-w-full rounded-md bg-white ${
+                        manualMarking ? "cursor-crosshair touch-manipulation" : ""
+                      }`}
                     />
                   ) : (
                     <div className="flex min-h-80 flex-col items-center justify-center text-center text-slate-500">
@@ -850,10 +910,10 @@ export function ScorecardScanLabPage() {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
                   <Button
                     size="lg"
-                    onClick={scanScorecard}
+                    onClick={() => scanScorecard(false)}
                     disabled={!identity || identifying || stations.length === 0}
                     className="h-11 bg-slate-950 font-bold text-white hover:bg-slate-800"
                   >
@@ -863,6 +923,24 @@ export function ScorecardScanLabPage() {
                       <ScanLine />
                     )}
                     Scan filled bubbles
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() =>
+                      manualMarking && markers.length === 4
+                        ? scanScorecard(true)
+                        : startManualMarking()
+                    }
+                    disabled={!imageUrl || !identity || identifying}
+                    className="h-11 font-bold"
+                  >
+                    <ScanLine />
+                    {manualMarking && markers.length === 4
+                      ? "Scan with marked corners"
+                      : manualMarking
+                        ? "Restart corners"
+                        : "Mark corners manually"}
                   </Button>
                   <Button
                     size="lg"
