@@ -826,16 +826,16 @@ async function drawScorecard(
       width: 512,
       errorCorrectionLevel: "H",
     })
-    pdf.addImage(qr, "PNG", x + width - 1.55, y + 0.04, 1.08, 1.08)
+    pdf.addImage(qr, "PNG", x + width - 1.48, y + 7.02, 1.28, 1.28)
 
     pdf.setFont("helvetica", "normal")
     pdf.setFontSize(4.8)
     pdf.text(
       "Scan to enter this participant's score",
-      x + width - 1.01,
-      y + 1.17,
+      x + width - 0.84,
+      y + 6.94,
       {
-        maxWidth: 1.08,
+        maxWidth: 1.28,
         align: "center",
       },
     )
