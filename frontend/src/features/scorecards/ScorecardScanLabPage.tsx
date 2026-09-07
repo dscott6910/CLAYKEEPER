@@ -75,6 +75,516 @@ type CardIdentity = {
 
 type ScanMode = "assigned" | "generic"
 
+type BatchCard = {
+  key: string
+  label: string
+  identity?: CardIdentity
+  name?: string
+  eventName?: string
+  preview?: string
+  stations: Array<{
+    id: string
+    number: number
+    targets: number
+    hits: number
+    uncertain: boolean
+  }>
+  reviewed: boolean
+  imported: boolean
+  error?: string
+  blocked?: boolean
+  existingId?: string
+  existingUpdatedAt?: string
+}
+
+function batchError(error: unknown) {
+  return error instanceof Error && error.message
+    ? error.message
+    : "The card could not be read. Retry this page in the single-card scanner."
+}
+
+function BatchScorecardImport({ onBack }: { onBack: () => void }) {
+  const [cards, setCards] = useState<BatchCard[]>([])
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState("")
+  const [error, setError] = useState("")
+  const [selected, setSelected] = useState<string | null>(null)
+  const cancelled = useRef(false)
+  const running = useRef(false)
+  useEffect(
+    () => () => {
+      cancelled.current = true
+    },
+    [],
+  )
+  const update = (key: string, patch: Partial<BatchCard>) =>
+    setCards((rows) =>
+      rows.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    )
+  const ready = cards.filter(
+    (card) => card.reviewed && !card.imported && !card.blocked && card.identity,
+  )
+  const current = cards.find((card) => card.key === selected)
+
+  async function loadBatch(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    if (!files.length || running.current) return
+    running.current = true
+    cancelled.current = false
+    setBusy(true)
+    setError("")
+    const seen = new Set(
+      cards.flatMap((card) =>
+        card.identity
+          ? [`${card.identity.eventId}:${card.identity.memberId}`]
+          : [],
+      ),
+    )
+    const cache = new Map<string, DigitalScoringData>()
+    try {
+      const { BrowserQRCodeReader } = await import("@zxing/browser")
+      for (const file of files) {
+        if (cancelled.current) break
+        let pdf: Awaited<ReturnType<typeof getDocument>["promise"]> | undefined
+        try {
+          pdf = await getDocument({ data: await file.arrayBuffer() }).promise
+          for (let page = 1; page <= pdf.numPages; page++) {
+            if (cancelled.current) break
+            const card: BatchCard = {
+              key: crypto.randomUUID(),
+              label: `${file.name} - page ${page}`,
+              stations: [],
+              reviewed: false,
+              imported: false,
+            }
+            setProgress(
+              `${file.name}: scanning page ${page} of ${pdf.numPages}`,
+            )
+            try {
+              const url = await readPdfPageAsDataUrl(file, page, pdf)
+              const image = new Image()
+              image.src = url
+              await image.decode()
+              const canvas = document.createElement("canvas")
+              const scale = Math.min(1, 1400 / image.width, 1800 / image.height)
+              canvas.width = Math.round(image.width * scale)
+              canvas.height = Math.round(image.height * scale)
+              const context = canvas.getContext("2d")!
+              context.drawImage(image, 0, 0, canvas.width, canvas.height)
+              card.preview = canvas.toDataURL("image/jpeg", 0.65)
+              const reader = new BrowserQRCodeReader()
+              const result = await reader
+                .decodeFromImageUrl(url)
+                .catch(async () => {
+                  // Registration squares can distract QR detection on a full
+                  // page. Retry the footer where assigned cards print the QR.
+                  const footer = document.createElement("canvas")
+                  footer.width = Math.ceil(canvas.width * 0.6)
+                  footer.height = Math.ceil(canvas.height * 0.45)
+                  footer
+                    .getContext("2d")!
+                    .drawImage(
+                      canvas,
+                      canvas.width - footer.width,
+                      canvas.height - footer.height,
+                      footer.width,
+                      footer.height,
+                      0,
+                      0,
+                      footer.width,
+                      footer.height,
+                    )
+                  return reader.decodeFromImageUrl(
+                    footer.toDataURL("image/png"),
+                  )
+                })
+              const identity = parseScorecardQr(result.getText().trim())
+              card.identity = identity
+              let data = cache.get(identity.eventId)
+              if (!data) {
+                data = await loadDigitalScoring(identity.eventId)
+                cache.set(identity.eventId, data)
+              }
+              card.name = participantName(data, identity.memberId)
+              card.eventName = data.event.name
+              const member = data.members.find(
+                (row) => row.id === identity.memberId,
+              )
+              const squad = data.squads.find(
+                (row) => row.id === member?.squad_id,
+              )
+              if (
+                !member ||
+                squad?.shoot_id !== identity.shootId ||
+                !data.courses.some((row) => row.id === identity.courseId)
+              )
+                throw new Error("The QR assignment is no longer valid.")
+              const key = `${identity.eventId}:${identity.memberId}`
+              if (seen.has(key))
+                throw new Error(
+                  "Duplicate participant scorecard in this batch.",
+                )
+              const existing = data.scorecards.find(
+                (row) => row.squad_member_id === identity.memberId,
+              )
+              if (existing?.status === "finalized")
+                throw new Error("This scorecard is already finalized.")
+              card.existingId = existing?.id
+              card.existingUpdatedAt = existing?.updated_at
+              const stations = data.stations
+                .filter(
+                  (row) =>
+                    row.course_id === identity.courseId && row.bird_count > 0,
+                )
+                .sort((a, b) => a.display_order - b.display_order)
+              if (!stations.length)
+                throw new Error("This course has no active stations.")
+              const source = context.getImageData(
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+              )
+              const centers = markerCenters(stations.length)
+              const markers = detectRegistrationMarkers(source, centers)
+              if (markers.length !== 4)
+                throw new Error(
+                  "Corners need manual marking in the single-card scanner.",
+                )
+              const corrected = warpUsingMarkerTemplate(
+                source,
+                markers.map((row) => row.center),
+                centers,
+                1100,
+                1700,
+              )
+              const readings = analyzeBubbleScorecard(
+                corrected,
+                buildTemplate(stations),
+              )
+              card.stations = stations.map((station) => ({
+                id: station.id,
+                number: station.station_number,
+                targets: station.bird_count,
+                hits: readings.filter(
+                  (row) =>
+                    row.station === station.station_number &&
+                    row.state === "hit",
+                ).length,
+                uncertain: readings.some(
+                  (row) =>
+                    row.station === station.station_number &&
+                    row.state === "review",
+                ),
+              }))
+              seen.add(key)
+            } catch (caught) {
+              card.error = batchError(caught)
+              card.blocked = true
+            }
+            setCards((rows) => [...rows, card])
+            // Release the renderer's page cache between cards in large documents.
+            await pdf.cleanup()
+            await new Promise((resolve) => setTimeout(resolve, 0))
+          }
+        } catch (caught) {
+          setError(`${file.name}: ${batchError(caught)}`)
+        } finally {
+          await pdf?.destroy()
+        }
+      }
+      setProgress(
+        cancelled.current
+          ? "Batch scan stopped. Completed pages are available below."
+          : "Batch scan complete",
+      )
+    } finally {
+      running.current = false
+      setBusy(false)
+    }
+  }
+
+  async function importBatch() {
+    if (running.current) return
+    running.current = true
+    cancelled.current = false
+    setBusy(true)
+    let imported = 0
+    try {
+      for (const card of ready) {
+        if (cancelled.current) break
+        const identity = card.identity!
+        setProgress(
+          `Importing ${card.name} (${imported + 1} of ${ready.length})`,
+        )
+        try {
+          const data = await loadDigitalScoring(identity.eventId)
+          const prior = data.scorecards.find(
+            (row) => row.squad_member_id === identity.memberId,
+          )
+          if (prior?.status === "finalized")
+            throw new Error("This scorecard is now finalized.")
+          if (
+            prior?.id !== card.existingId ||
+            prior?.updated_at !== card.existingUpdatedAt
+          )
+            throw new Error(
+              "This scorecard changed since scanning. Reload it before importing.",
+            )
+          const liveStations = data.stations.filter(
+            (row) => row.course_id === identity.courseId && row.bird_count > 0,
+          )
+          if (
+            liveStations.length !== card.stations.length ||
+            card.stations.some(
+              (station) =>
+                !liveStations.some(
+                  (live) =>
+                    live.id === station.id &&
+                    live.bird_count === station.targets,
+                ),
+            )
+          )
+            throw new Error(
+              "The course changed since scanning. Scan this page again.",
+            )
+          await saveDigitalScorecard({
+            organizationId: data.event.organization_id,
+            eventId: identity.eventId,
+            shootId: identity.shootId,
+            squadMemberId: identity.memberId,
+            courseId: identity.courseId,
+            scorecardId: prior?.id,
+            malfunctionCount: prior?.malfunction_count ?? 0,
+            verifiedBy1: prior?.verified_by_1 ?? "",
+            verifiedBy2: prior?.verified_by_2 ?? "",
+            enteredByName: prior?.entered_by_name ?? "Paper scorecard scan",
+            notes:
+              `${prior?.notes ?? ""}\nImported from ${card.label} on ${new Date().toLocaleString()}.`.trim(),
+            status: "draft",
+            expectedUpdatedAt: prior?.updated_at ?? null,
+            stationScores: card.stations.map((station) => ({
+              stationId: station.id,
+              hits: station.hits,
+              targets: station.targets,
+              notes:
+                data.stationScores.find(
+                  (row) =>
+                    row.scorecard_id === prior?.id &&
+                    row.station_id === station.id,
+                )?.notes ?? "",
+            })),
+          })
+          imported++
+          update(card.key, { imported: true, error: undefined })
+        } catch (caught) {
+          update(card.key, { error: batchError(caught), reviewed: false })
+        }
+      }
+      setProgress(
+        `${imported} draft${imported === 1 ? "" : "s"} imported. Remaining pages stay in the batch.`,
+      )
+    } finally {
+      running.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <AppHeader
+        title="Batch Paper Scorecard Import"
+        description="Review scanned pages and import draft scores"
+      />
+      <PageContainer>
+        <div className="space-y-5 py-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={onBack} disabled={busy}>
+              <RotateCcw /> Single card
+            </Button>
+            <label
+              className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md bg-emerald-600 px-4 text-sm font-bold text-white ${busy ? "opacity-50" : "cursor-pointer"}`}
+            >
+              <Upload className="h-4 w-4" /> Add PDFs
+              <input
+                aria-label="Add PDFs"
+                className="sr-only"
+                type="file"
+                multiple
+                accept=".pdf,application/pdf"
+                disabled={busy}
+                onChange={loadBatch}
+              />
+            </label>
+            <Button disabled={busy || !ready.length} onClick={importBatch}>
+              <Save /> Import reviewed ({ready.length})
+            </Button>
+            {busy && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  cancelled.current = true
+                }}
+              >
+                <CircleAlert /> Stop after current page
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-slate-600">
+            One assigned QR scorecard per page. Imported scores remain drafts
+            until finalized in Digital Scoring.
+          </p>
+          <p role="status" className="text-sm font-semibold">
+            {busy && <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />}
+            {progress || "No documents selected"}
+          </p>
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-3">Page</th>
+                  <th className="p-3">Participant</th>
+                  <th className="p-3">Score</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cards.map((card) => (
+                  <tr key={card.key} className="border-b align-top">
+                    <td className="max-w-64 break-words p-3">{card.label}</td>
+                    <td className="p-3">
+                      {card.name ?? "Unidentified"}
+                      <div className="text-xs text-slate-500">
+                        {card.eventName}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap p-3">
+                      {card.stations.length
+                        ? `${card.stations.reduce((n, s) => n + s.hits, 0)} / ${card.stations.reduce((n, s) => n + s.targets, 0)}`
+                        : "-"}
+                    </td>
+                    <td className="max-w-64 p-3">
+                      {card.imported
+                        ? "Imported"
+                        : (card.error ??
+                          (card.reviewed
+                            ? "Reviewed"
+                            : card.stations.some((s) => s.uncertain)
+                              ? "Uncertain bubbles"
+                              : "Awaiting review"))}
+                      {card.existingId && !card.imported && (
+                        <div className="text-xs text-amber-700">
+                          Replaces existing draft
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setSelected(card.key)}
+                      >
+                        <FileText /> View
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {current && (
+            <section className="border-t pt-5">
+              <h2 className="font-bold">
+                {current.name ?? "Unidentified card"} - {current.label}
+              </h2>
+              <div className="mt-3 grid gap-5 lg:grid-cols-2">
+                {current.preview && (
+                  <img
+                    src={current.preview}
+                    alt={`Scanned ${current.label}`}
+                    className="h-auto w-full"
+                  />
+                )}
+                <div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {current.stations.map((station, i) => (
+                      <label key={station.id} className="text-sm">
+                        Station {station.number}
+                        {station.uncertain && (
+                          <span className="block text-amber-700">
+                            Check bubbles
+                          </span>
+                        )}
+                        <input
+                          aria-label={`Station ${station.number} hits`}
+                          type="number"
+                          min={0}
+                          max={station.targets}
+                          step={1}
+                          value={station.hits}
+                          disabled={busy || current.imported}
+                          className="mt-1 block min-h-11 w-full rounded border px-3"
+                          onChange={(event) => {
+                            const hits = Number(event.target.value)
+                            if (
+                              !Number.isInteger(hits) ||
+                              hits < 0 ||
+                              hits > station.targets
+                            )
+                              return
+                            update(current.key, {
+                              reviewed: false,
+                              stations: current.stations.map((s, j) =>
+                                j === i ? { ...s, hits, uncertain: false } : s,
+                              ),
+                            })
+                          }}
+                        />
+                        <span className="text-xs text-slate-500">
+                          of {station.targets}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {!current.blocked && !current.imported && (
+                    <label className="mt-5 flex items-start gap-3 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={current.reviewed}
+                        disabled={busy}
+                        onChange={(event) =>
+                          update(current.key, {
+                            reviewed: event.target.checked,
+                          })
+                        }
+                      />
+                      I checked the participant and every station score
+                      {current.existingId
+                        ? " and approve replacing the existing draft"
+                        : ""}
+                      .
+                    </label>
+                  )}
+                  {current.error && (
+                    <p className="mt-3 text-sm text-red-700">{current.error}</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+      </PageContainer>
+    </div>
+  )
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -85,13 +595,18 @@ function readFileAsDataUrl(file: File) {
   })
 }
 
-async function readPdfPageAsDataUrl(file: File) {
-  const pdf = await getDocument({ data: await file.arrayBuffer() }).promise
+async function readPdfPageAsDataUrl(
+  file: File,
+  pageNumber = 1,
+  document?: Awaited<ReturnType<typeof getDocument>["promise"]>,
+) {
+  const pdf =
+    document ?? (await getDocument({ data: await file.arrayBuffer() }).promise)
   try {
     if (pdf.numPages < 1) {
       throw new Error("The selected PDF does not contain a scorecard page.")
     }
-    const page = await pdf.getPage(1)
+    const page = await pdf.getPage(pageNumber)
     const viewport = page.getViewport({ scale: 2.5 })
     const canvas = window.document.createElement("canvas")
     canvas.width = Math.ceil(viewport.width)
@@ -124,7 +639,7 @@ async function readPdfPageAsDataUrl(file: File) {
       )
     return cardCanvas.toDataURL("image/png")
   } finally {
-    await pdf.destroy()
+    if (!document) await pdf.destroy()
   }
 }
 
@@ -224,6 +739,7 @@ export function ScorecardScanLabPage() {
   const [genericCourseId, setGenericCourseId] = useState("")
   const [genericMemberId, setGenericMemberId] = useState("")
   const [manualMarking, setManualMarking] = useState(false)
+  const [batchMode, setBatchMode] = useState(false)
 
   const stations = useMemo(
     () =>
@@ -265,17 +781,20 @@ export function ScorecardScanLabPage() {
         const enrollment = enrollmentMap.get(member.registration_shoot_id)
         if (enrollment?.shoot_id !== genericShootId) return []
         const squad = squadMap.get(member.squad_id)
-        return [{
-          memberId: member.id,
-          name: participantName(data, member.id),
-          squad: squad?.squad_number ?? "Unassigned",
-          position: member.position,
-        }]
+        return [
+          {
+            memberId: member.id,
+            name: participantName(data, member.id),
+            squad: squad?.squad_number ?? "Unassigned",
+            position: member.position,
+          },
+        ]
       })
-      .sort((left, right) =>
-        left.name.localeCompare(right.name) ||
-        left.squad.localeCompare(right.squad, undefined, { numeric: true }) ||
-        left.position - right.position,
+      .sort(
+        (left, right) =>
+          left.name.localeCompare(right.name) ||
+          left.squad.localeCompare(right.squad, undefined, { numeric: true }) ||
+          left.position - right.position,
       )
   }, [data, genericShootId])
 
@@ -399,7 +918,8 @@ export function ScorecardScanLabPage() {
     event.target.value = ""
     if (!file) return
     const isPdf =
-      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf")
     if (!file.type.startsWith("image/") && !isPdf) {
       setError("Please choose an image or PDF scorecard file.")
       return
@@ -755,6 +1275,9 @@ export function ScorecardScanLabPage() {
     summary.review === 0 &&
     !saving
 
+  if (batchMode)
+    return <BatchScorecardImport onBack={() => setBatchMode(false)} />
+
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader
@@ -783,6 +1306,14 @@ export function ScorecardScanLabPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="font-bold text-slate-950">Scorecard type</h2>
+                <Button
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => setBatchMode(true)}
+                  disabled={saving || identifying}
+                >
+                  <Upload /> Batch PDF import
+                </Button>
                 <p className="mt-1 text-sm text-slate-500">
                   Assigned cards identify the participant from the QR code.
                   Generic cards are assigned manually.
@@ -905,7 +1436,9 @@ export function ScorecardScanLabPage() {
                           : "Assignment selected - take or upload the scorecard photo",
                       )
                     }}
-                    disabled={!genericShootId || genericParticipants.length === 0}
+                    disabled={
+                      !genericShootId || genericParticipants.length === 0
+                    }
                     className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                   >
                     <option value="">
@@ -936,9 +1469,11 @@ export function ScorecardScanLabPage() {
                       Scorecard image or PDF
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Upload an image or PDF of one complete half-page card
-                      with all four square markers visible
-                      {mode === "assigned" ? " and keep the QR code clear." : "."}
+                      Upload an image or PDF of one complete half-page card with
+                      all four square markers visible
+                      {mode === "assigned"
+                        ? " and keep the QR code clear."
+                        : "."}
                     </p>
                   </div>
                   <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700">
@@ -959,7 +1494,9 @@ export function ScorecardScanLabPage() {
                       ref={sourceCanvasRef}
                       onClick={markCorner}
                       className={`mx-auto block h-auto max-w-full rounded-md bg-white ${
-                        manualMarking ? "cursor-crosshair touch-manipulation" : ""
+                        manualMarking
+                          ? "cursor-crosshair touch-manipulation"
+                          : ""
                       }`}
                     />
                   ) : (
@@ -1107,7 +1644,9 @@ export function ScorecardScanLabPage() {
                     <FileText className="h-5 w-5 text-emerald-600" />
                   )}
                   <h2 className="font-bold text-slate-950">
-                    {mode === "assigned" ? "Assigned card" : "Manual assignment"}
+                    {mode === "assigned"
+                      ? "Assigned card"
+                      : "Manual assignment"}
                   </h2>
                 </div>
                 {cardDetails ? (
