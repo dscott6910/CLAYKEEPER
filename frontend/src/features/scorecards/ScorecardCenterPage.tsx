@@ -811,35 +811,7 @@ async function drawScorecard(
   )
   pdf.text("LOSS = BUBBLE EMPTY", x + margin + pdf.getTextWidth("INSTRUCTIONS: "), y + 1.15)
 
-  if (card) {
-    const scoringUrl = new URL(
-      `/events/${data.event.id}/digital-scoring`,
-      window.location.origin,
-    )
-
-    scoringUrl.searchParams.set("shootId", card.shootId)
-    scoringUrl.searchParams.set("memberId", card.memberId)
-    scoringUrl.searchParams.set("courseId", course.id)
-
-    const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 2,
-      width: 512,
-      errorCorrectionLevel: "H",
-    })
-    pdf.addImage(qr, "PNG", x + width - 1.48, y + 7.02, 1.28, 1.28)
-
-    pdf.setFont("helvetica", "normal")
-    pdf.setFontSize(4.8)
-    pdf.text(
-      "Scan to enter this participant's score",
-      x + width - 0.84,
-      y + 6.94,
-      {
-        maxWidth: 1.28,
-        align: "center",
-      },
-    )
-  } else {
+  if (!card) {
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(8)
     pdf.text("GENERIC", x + width - 0.82, y + 0.28, {
@@ -991,8 +963,36 @@ async function drawScorecard(
     maxWidth: 3.0,
   })
 
-  pdf.text(`Squad: ${squadLabel}`, x + 3.45, identityY + 0.34)
-  pdf.text(`Post: ${postLabel}`, x + 3.45, identityY + 0.62)
+  pdf.text(`Squad: ${squadLabel}`, tableX, identityY + 0.90)
+  pdf.text(`Post: ${postLabel}`, tableX + 1.72, identityY + 0.90)
+
+  if (card) {
+    const scoringUrl = new URL(
+      `/events/${data.event.id}/digital-scoring`,
+      window.location.origin,
+    )
+
+    scoringUrl.searchParams.set("shootId", card.shootId)
+    scoringUrl.searchParams.set("memberId", card.memberId)
+    scoringUrl.searchParams.set("courseId", course.id)
+
+    const qr = await QRCode.toDataURL(scoringUrl.toString(), {
+      margin: 2,
+      width: 768,
+      errorCorrectionLevel: "H",
+    })
+    const qrSize = Math.min(2.0, 8.28 - (footerY + 0.14))
+    const qrX = x + width - qrSize - 0.16
+    const qrY = footerY + 0.14
+    pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
+
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(4.8)
+    pdf.text("Scan to enter this participant's score", qrX + qrSize / 2, qrY - 0.06, {
+      maxWidth: qrSize,
+      align: "center",
+    })
+  }
 
   const markerLeft = x + 0.24
   const markerRight = x + width - 0.24
