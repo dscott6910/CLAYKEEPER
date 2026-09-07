@@ -822,20 +822,20 @@ async function drawScorecard(
     scoringUrl.searchParams.set("courseId", course.id)
 
     const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 0,
-      width: 256,
-      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 512,
+      errorCorrectionLevel: "H",
     })
-    pdf.addImage(qr, "PNG", x + width - 0.95, y + 0.14, 0.74, 0.74)
+    pdf.addImage(qr, "PNG", x + width - 1.55, y + 0.04, 1.08, 1.08)
 
     pdf.setFont("helvetica", "normal")
     pdf.setFontSize(4.8)
     pdf.text(
       "Scan to enter this participant's score",
-      x + width - 1.08,
-      y + 0.96,
+      x + width - 1.01,
+      y + 1.17,
       {
-        maxWidth: 1.0,
+        maxWidth: 1.08,
         align: "center",
       },
     )
