@@ -19,6 +19,7 @@ import {
   ScanLine,
   Upload,
 } from "lucide-react"
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
 import { Link } from "react-router-dom"
 
 import { AppHeader } from "@/app/AppHeader"
@@ -43,6 +44,11 @@ import {
   type ScoringEvent,
   type ScoringShoot,
 } from "@/lib/services/scoring"
+
+GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString()
 
 const CARD_WIDTH = 5.5
 const CARD_HEIGHT = 8.5
@@ -72,6 +78,26 @@ function readFileAsDataUrl(file: File) {
       reject(reader.error ?? new Error("The photo could not be read."))
     reader.readAsDataURL(file)
   })
+}
+
+async function readPdfPageAsDataUrl(file: File) {
+  const pdf = await getDocument({ data: await file.arrayBuffer() }).promise
+  try {
+    if (pdf.numPages < 1) {
+      throw new Error("The selected PDF does not contain a scorecard page.")
+    }
+    const page = await pdf.getPage(1)
+    const viewport = page.getViewport({ scale: 2.5 })
+    const canvas = window.document.createElement("canvas")
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("The PDF page could not be rendered.")
+    await page.render({ canvas, canvasContext: context, viewport }).promise
+    return canvas.toDataURL("image/png")
+  } finally {
+    await pdf.destroy()
+  }
 }
 
 function parseScorecardQr(value: string): CardIdentity {
@@ -344,8 +370,10 @@ export function ScorecardScanLabPage() {
     const file = event.target.files?.[0]
     event.target.value = ""
     if (!file) return
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.")
+    const isPdf =
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    if (!file.type.startsWith("image/") && !isPdf) {
+      setError("Please choose an image or PDF scorecard file.")
       return
     }
     clearScanResults()
@@ -358,16 +386,18 @@ export function ScorecardScanLabPage() {
     setStatus(
       mode === "assigned"
         ? "Reading the scorecard QR code..."
-        : "Loading the generic scorecard photo...",
+        : "Loading the generic scorecard file...",
     )
     try {
-      const nextUrl = await readFileAsDataUrl(file)
+      const nextUrl = isPdf
+        ? await readPdfPageAsDataUrl(file)
+        : await readFileAsDataUrl(file)
       setImageUrl(nextUrl)
       if (mode === "generic") {
         setStatus(
           identity
-            ? "Photo loaded - select Scan filled bubbles"
-            : "Photo loaded - complete the scorecard assignment",
+            ? "File loaded - select Scan filled bubbles"
+            : "File loaded - complete the scorecard assignment",
         )
         return
       }
@@ -875,20 +905,20 @@ export function ScorecardScanLabPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-950">
-                      Scorecard photo
+                      Scorecard image or PDF
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Photograph one complete half-page card with all four
-                      square markers visible
+                      Upload an image or PDF of one complete half-page card
+                      with all four square markers visible
                       {mode === "assigned" ? " and keep the QR code clear." : "."}
                     </p>
                   </div>
                   <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700">
                     <Camera className="h-4 w-4" />
-                    Take or upload photo
+                    Take photo or upload file
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,application/pdf"
                       capture="environment"
                       onChange={loadFile}
                       className="hidden"
