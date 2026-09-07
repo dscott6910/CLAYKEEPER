@@ -1139,6 +1139,23 @@ export function ScorecardScanLabPage() {
     setSaved(false)
   }
 
+  function approveStation(stationNumber: number) {
+    setOverrides((values) => {
+      const next = { ...values }
+      for (const reading of readings) {
+        const key = `${reading.station}-${reading.bird}`
+        if (
+          reading.station === stationNumber &&
+          (values[key] ?? reading.state) === "review"
+        ) {
+          next[key] = "blank"
+        }
+      }
+      return next
+    })
+    setSaved(false)
+  }
+
   function reset() {
     setImageUrl("")
     imageRef.current = null
@@ -1596,6 +1613,7 @@ export function ScorecardScanLabPage() {
                               key={`${reading.station}-${reading.bird}`}
                               type="button"
                               onClick={() => cycleReading(reading)}
+                              disabled={saving}
                               title={`Detection confidence ${Math.round(reading.score * 100)}%`}
                               aria-label={`Station ${reading.station}, target ${reading.bird}: ${reading.state}`}
                               className={
@@ -1610,6 +1628,17 @@ export function ScorecardScanLabPage() {
                             </button>
                           ))}
                         </div>
+                        <Button
+                          variant="outline"
+                          className="mt-3 w-full whitespace-nowrap"
+                          disabled={saving || review === 0}
+                          onClick={() => approveStation(station.station_number)}
+                          aria-label={`Approve all pending bubbles as losses for station ${station.station_number}`}
+                          title="Confirm orange bubbles as losses; keep green hits unchanged"
+                        >
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          {review > 0 ? "Approve All" : "Reviewed"}
+                        </Button>
                       </div>
                     ))}
                   </div>
