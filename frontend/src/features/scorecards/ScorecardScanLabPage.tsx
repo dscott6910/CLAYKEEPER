@@ -19,7 +19,7 @@ import {
   ScanLine,
   Upload,
 } from "lucide-react"
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist"
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { Link } from "react-router-dom"
 
 import { AppHeader } from "@/app/AppHeader"
@@ -44,11 +44,6 @@ import {
   type ScoringEvent,
   type ScoringShoot,
 } from "@/lib/services/scoring"
-
-GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString()
 
 const CARD_WIDTH = 5.5
 const CARD_HEIGHT = 8.5
