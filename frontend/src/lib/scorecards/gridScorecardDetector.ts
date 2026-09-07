@@ -290,6 +290,136 @@ function searchForFinderPattern(
   return refined
 }
 
+function orderMarkerCorners(markers: RegistrationMarker[]) {
+  const byY = [...markers].sort((a, b) => a.center.y - b.center.y)
+  const top = byY.slice(0, 2).sort((a, b) => a.center.x - b.center.x)
+  const bottom = byY.slice(2).sort((a, b) => a.center.x - b.center.x)
+
+  return [top[0], top[1], bottom[1], bottom[0]] as const
+}
+
+function markerDistance(a: RegistrationMarker, b: RegistrationMarker) {
+  return Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
+}
+
+function selectMarkerQuadrilateral(
+  candidates: RegistrationMarker[],
+  imageWidth: number,
+  imageHeight: number,
+) {
+  const distinct: RegistrationMarker[] = []
+
+  for (const candidate of [...candidates].sort((a, b) => b.score - a.score)) {
+    if (
+      distinct.some(
+        (item) =>
+          markerDistance(item, candidate) <
+          Math.max(item.bounds.width, candidate.bounds.width) * 0.8,
+      )
+    ) {
+      continue
+    }
+    distinct.push(candidate)
+    if (distinct.length >= 36) break
+  }
+
+  const strongestScore = distinct[0]?.score ?? 0
+  const strongest = distinct.filter(
+    (candidate) => candidate.score >= strongestScore - 0.10,
+  )
+  const pool = strongest.length >= 4 ? strongest : distinct
+
+  let best: { markers: RegistrationMarker[]; score: number } | null = null
+
+  for (let a = 0; a < pool.length - 3; a += 1) {
+    for (let b = a + 1; b < pool.length - 2; b += 1) {
+      for (let c = b + 1; c < pool.length - 1; c += 1) {
+        for (let d = c + 1; d < pool.length; d += 1) {
+          const ordered = orderMarkerCorners([
+            pool[a],
+            pool[b],
+            pool[c],
+            pool[d],
+          ])
+          const [topLeft, topRight, bottomRight, bottomLeft] = ordered
+
+          if (
+            topLeft.center.x >= topRight.center.x ||
+            bottomLeft.center.x >= bottomRight.center.x ||
+            topLeft.center.y >= bottomLeft.center.y ||
+            topRight.center.y >= bottomRight.center.y
+          ) {
+            continue
+          }
+
+          const topWidth = markerDistance(topLeft, topRight)
+          const bottomWidth = markerDistance(bottomLeft, bottomRight)
+          const leftHeight = markerDistance(topLeft, bottomLeft)
+          const rightHeight = markerDistance(topRight, bottomRight)
+          const averageWidth = (topWidth + bottomWidth) / 2
+          const averageHeight = (leftHeight + rightHeight) / 2
+
+          if (
+            averageWidth < imageWidth * 0.35 ||
+            averageHeight < imageHeight * 0.18 ||
+            averageWidth / averageHeight < 0.82 ||
+            averageWidth / averageHeight > 1.65 ||
+            Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth) < 0.55 ||
+            Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight) < 0.55
+          ) {
+            continue
+          }
+
+          const horizontalSkew =
+            (Math.abs(topLeft.center.y - topRight.center.y) +
+              Math.abs(bottomLeft.center.y - bottomRight.center.y)) /
+            (2 * averageHeight)
+          const verticalSkew =
+            (Math.abs(topLeft.center.x - bottomLeft.center.x) +
+              Math.abs(topRight.center.x - bottomRight.center.x)) /
+            (2 * averageWidth)
+
+          if (horizontalSkew > 0.38 || verticalSkew > 0.38) continue
+
+          const area =
+            Math.abs(
+              ordered.reduce((sum, marker, index) => {
+                const next = ordered[(index + 1) % ordered.length]
+                return (
+                  sum +
+                  marker.center.x * next.center.y -
+                  next.center.x * marker.center.y
+                )
+              }, 0),
+            ) / 2
+          const areaRatio = area / (imageWidth * imageHeight)
+          const finderScore =
+            ordered.reduce((sum, marker) => sum + marker.score, 0) / 4
+          const symmetryPenalty =
+            Math.abs(topWidth - bottomWidth) / averageWidth +
+            Math.abs(leftHeight - rightHeight) / averageHeight
+          const markerSizes = ordered.map((marker) => marker.bounds.width)
+          const sizePenalty =
+            1 - Math.min(...markerSizes) / Math.max(...markerSizes)
+          const score =
+            finderScore +
+            areaRatio * 0.8 -
+            symmetryPenalty * 0.25 -
+            sizePenalty * 0.6 -
+            horizontalSkew * 0.2 -
+            verticalSkew * 0.2
+
+          if (!best || score > best.score) {
+            best = { markers: [...ordered], score }
+          }
+        }
+      }
+    }
+  }
+
+  return best?.markers ?? []
+}
+
 export function detectRegistrationMarkers(
   image: ImageData,
   expectedCenters?: readonly Point[],
@@ -313,6 +443,12 @@ export function detectRegistrationMarkers(
   const queueX = new Int32Array(width * height)
   const queueY = new Int32Array(width * height)
   const candidates: RegistrationMarker[] = []
+  const centerCandidates: Array<{
+    center: Point
+    width: number
+    height: number
+    density: number
+  }> = []
 
   for (let startY = 0; startY < height; startY += 1) {
     for (let startX = 0; startX < width; startX += 1) {
@@ -367,6 +503,28 @@ export function detectRegistrationMarkers(
 
       const componentWidth = maxX - minX + 1
       const componentHeight = maxY - minY + 1
+      const aspectRatio = componentWidth / componentHeight
+      const density = area / (componentWidth * componentHeight)
+
+      if (
+        componentWidth >= 3 &&
+        componentHeight >= 3 &&
+        componentWidth <= minDimension * 0.024 &&
+        componentHeight <= minDimension * 0.024 &&
+        aspectRatio >= 0.62 &&
+        aspectRatio <= 1.62 &&
+        density >= 0.48
+      ) {
+        centerCandidates.push({
+          center: {
+            x: minX + componentWidth / 2,
+            y: minY + componentHeight / 2,
+          },
+          width: componentWidth,
+          height: componentHeight,
+          density,
+        })
+      }
 
       if (
         componentWidth < minSize ||
@@ -377,10 +535,8 @@ export function detectRegistrationMarkers(
         continue
       }
 
-      const aspectRatio = componentWidth / componentHeight
       if (aspectRatio < 0.72 || aspectRatio > 1.38) continue
 
-      const density = area / (componentWidth * componentHeight)
       if (density < 0.12 || density > 0.88) continue
 
       const bounds = {
@@ -403,6 +559,49 @@ export function detectRegistrationMarkers(
       })
     }
   }
+
+  // The outer ring often touches a table line in handheld photos. In that
+  // case its connected component is no longer square, but the solid center
+  // remains isolated and gives us a reliable way to reconstruct the marker.
+  for (const centerCandidate of centerCandidates) {
+    let best: RegistrationMarker | null = null
+    const centerSize = Math.max(centerCandidate.width, centerCandidate.height)
+
+    for (const scale of [3.1, 3.7, 4.3, 4.9]) {
+      const size = Math.round(centerSize * scale)
+      if (size < minSize || size > maxSize) continue
+
+      const bounds = {
+        x: Math.round(centerCandidate.center.x - size / 2),
+        y: Math.round(centerCandidate.center.y - size / 2),
+        width: size,
+        height: size,
+      }
+      if (
+        bounds.x < 0 ||
+        bounds.y < 0 ||
+        bounds.x + bounds.width >= width ||
+        bounds.y + bounds.height >= height
+      ) {
+        continue
+      }
+
+      const patternScore = finderPatternScore(image, bounds, threshold)
+      const score = patternScore + centerCandidate.density * 0.04
+      if (patternScore >= 0.60 && (!best || score > best.score)) {
+        best = {
+          center: centerCandidate.center,
+          bounds,
+          score,
+        }
+      }
+    }
+
+    if (best) candidates.push(best)
+  }
+
+  const quadrilateral = selectMarkerQuadrilateral(candidates, width, height)
+  if (quadrilateral.length === 4) return quadrilateral
 
   const normalizedTargets = expectedCenters ?? [
     { x: 0.14, y: 0.14 },
@@ -992,12 +1191,10 @@ function measureBubble(
       const distance = Math.hypot(x - centerX, y - centerY)
       const value = pixel(image, x, y)
       const lum = luminance(value.red, value.green, value.blue)
-      const sat = saturation(value.red, value.green, value.blue)
 
       if (distance <= innerRadius) {
         innerPixels += 1
         innerLuminance += lum
-        if (lum < 190 || (sat > 0.30 && lum < 225)) innerInk += 1
       } else if (distance >= radius * 1.25 && distance <= backgroundRadius) {
         backgroundPixels += 1
         backgroundLuminance += lum
@@ -1005,9 +1202,26 @@ function measureBubble(
     }
   }
 
-  const fillRatio = innerPixels ? innerInk / innerPixels : 0
   const innerAverage = innerPixels ? innerLuminance / innerPixels : 255
   const backgroundAverage = backgroundPixels ? backgroundLuminance / backgroundPixels : 255
+  const inkThreshold = Math.min(190, backgroundAverage - 22)
+
+  for (let y = Math.floor(centerY - innerRadius); y <= Math.ceil(centerY + innerRadius); y += 1) {
+    for (let x = Math.floor(centerX - innerRadius); x <= Math.ceil(centerX + innerRadius); x += 1) {
+      if (Math.hypot(x - centerX, y - centerY) > innerRadius) continue
+      const value = pixel(image, x, y)
+      const lum = luminance(value.red, value.green, value.blue)
+      const sat = saturation(value.red, value.green, value.blue)
+      if (
+        lum < inkThreshold ||
+        (sat > 0.30 && lum < backgroundAverage - 12)
+      ) {
+        innerInk += 1
+      }
+    }
+  }
+
+  const fillRatio = innerPixels ? innerInk / innerPixels : 0
   const contrast = clamp((backgroundAverage - innerAverage) / 115)
   const score = clamp(fillRatio * 0.76 + contrast * 0.24)
   return { fillRatio, contrast, score }
