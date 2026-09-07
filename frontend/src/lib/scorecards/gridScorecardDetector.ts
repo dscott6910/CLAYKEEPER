@@ -152,6 +152,23 @@ function finderPatternScore(
   threshold: number,
 ) {
   const grid = 21
+  let darkest = 255
+  let lightest = 0
+
+  for (let gy = 0; gy < grid; gy += 1) {
+    for (let gx = 0; gx < grid; gx += 1) {
+      const value = pixelLuminance(
+        image,
+        bounds.x + ((gx + 0.5) / grid) * bounds.width,
+        bounds.y + ((gy + 0.5) / grid) * bounds.height,
+      )
+      darkest = Math.min(darkest, value)
+      lightest = Math.max(lightest, value)
+    }
+  }
+
+  const localThreshold =
+    lightest - darkest >= 35 ? (darkest + lightest) / 2 : threshold
   let outerDark = 0
   let outerCount = 0
   let middleLight = 0
@@ -165,7 +182,7 @@ function finderPatternScore(
       const ny = (gy + 0.5) / grid
       const x = bounds.x + nx * bounds.width
       const y = bounds.y + ny * bounds.height
-      const dark = pixelLuminance(image, x, y) < threshold
+      const dark = pixelLuminance(image, x, y) < localThreshold
       const edgeDistance = Math.min(nx, ny, 1 - nx, 1 - ny)
 
       if (edgeDistance < 0.18) {
@@ -188,6 +205,91 @@ function finderPatternScore(
   )
 }
 
+function searchForFinderPattern(
+  image: ImageData,
+  expectedCenter: Point,
+  threshold: number,
+): RegistrationMarker | null {
+  const minDimension = Math.min(image.width, image.height)
+  const expectedX = expectedCenter.x * image.width
+  const expectedY = expectedCenter.y * image.height
+  const step = Math.max(5, Math.round(minDimension * 0.008))
+  const radiusX = image.width * 0.10
+  const radiusY = image.height * 0.08
+  const sizes = [0.014, 0.019, 0.024, 0.03, 0.037, 0.046, 0.058]
+    .map((ratio) => Math.round(minDimension * ratio))
+    .filter((size) => size >= 14)
+  let best: RegistrationMarker | null = null
+
+  for (const size of sizes) {
+    for (let centerY = expectedY - radiusY; centerY <= expectedY + radiusY; centerY += step) {
+      for (let centerX = expectedX - radiusX; centerX <= expectedX + radiusX; centerX += step) {
+        const bounds = {
+          x: Math.round(centerX - size / 2),
+          y: Math.round(centerY - size / 2),
+          width: size,
+          height: size,
+        }
+        if (
+          bounds.x < 0 ||
+          bounds.y < 0 ||
+          bounds.x + bounds.width >= image.width ||
+          bounds.y + bounds.height >= image.height
+        ) {
+          continue
+        }
+
+        const patternScore = finderPatternScore(image, bounds, threshold)
+        const distancePenalty =
+          (Math.hypot(centerX - expectedX, centerY - expectedY) /
+            Math.hypot(image.width, image.height)) *
+          0.18
+        const score = patternScore - distancePenalty
+        if (!best || score > best.score) {
+          best = {
+            center: { x: centerX, y: centerY },
+            bounds,
+            score,
+          }
+        }
+      }
+    }
+  }
+
+  if (!best || best.score < 0.60) return null
+
+  const refinementStep = Math.max(1, Math.round(step / 3))
+  let refined = best
+  for (
+    let centerY = best.center.y - step;
+    centerY <= best.center.y + step;
+    centerY += refinementStep
+  ) {
+    for (
+      let centerX = best.center.x - step;
+      centerX <= best.center.x + step;
+      centerX += refinementStep
+    ) {
+      const bounds = {
+        x: Math.round(centerX - best.bounds.width / 2),
+        y: Math.round(centerY - best.bounds.height / 2),
+        width: best.bounds.width,
+        height: best.bounds.height,
+      }
+      const patternScore = finderPatternScore(image, bounds, threshold)
+      if (patternScore > refined.score) {
+        refined = {
+          center: { x: centerX, y: centerY },
+          bounds,
+          score: patternScore,
+        }
+      }
+    }
+  }
+
+  return refined
+}
+
 export function detectRegistrationMarkers(
   image: ImageData,
   expectedCenters?: readonly Point[],
@@ -196,7 +298,7 @@ export function detectRegistrationMarkers(
   const width = image.width
   const height = image.height
   const minDimension = Math.min(width, height)
-  const minSize = Math.max(18, Math.round(minDimension * 0.025))
+  const minSize = Math.max(14, Math.round(minDimension * 0.012))
   const maxSize = Math.round(minDimension * 0.18)
 
   const binary = new Uint8Array(width * height)
@@ -302,19 +404,40 @@ export function detectRegistrationMarkers(
     }
   }
 
-  const targets = (expectedCenters ?? [
+  const normalizedTargets = expectedCenters ?? [
     { x: 0.14, y: 0.14 },
     { x: 0.86, y: 0.14 },
     { x: 0.86, y: 0.86 },
     { x: 0.14, y: 0.86 },
-  ]).map((point) => ({ x: point.x * width, y: point.y * height }))
+  ]
+
+  for (const expectedCenter of normalizedTargets) {
+    const fallback = searchForFinderPattern(image, expectedCenter, threshold)
+    if (fallback) candidates.push(fallback)
+  }
+
+  const targets = normalizedTargets.map((point) => ({
+    x: point.x * width,
+    y: point.y * height,
+  }))
 
   const selected: RegistrationMarker[] = []
   const used = new Set<RegistrationMarker>()
 
   for (const target of targets) {
     const candidate = candidates
-      .filter((item) => !used.has(item))
+      .filter(
+        (item) =>
+          !used.has(item) &&
+          selected.every(
+            (chosen) =>
+              Math.hypot(
+                item.center.x - chosen.center.x,
+                item.center.y - chosen.center.y,
+              ) >
+              Math.max(item.bounds.width, chosen.bounds.width) * 1.5,
+          ),
+      )
       .map((item) => ({
         item,
         ranking:
@@ -334,7 +457,7 @@ export function detectRegistrationMarkers(
     }
   }
 
-  return selected.length === 4 ? selected : []
+  return selected
 }
 
 function solveLinearSystem(matrix: number[][], values: number[]) {

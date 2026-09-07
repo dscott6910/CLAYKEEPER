@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CircleAlert,
   ExternalLink,
+  FileText,
   Loader2,
   QrCode,
   RotateCcw,
@@ -30,6 +31,11 @@ import {
   saveDigitalScorecard,
   type DigitalScoringData,
 } from "@/lib/services/digitalScoring"
+import {
+  loadScoringBaseData,
+  type ScoringEvent,
+  type ScoringShoot,
+} from "@/lib/services/scoring"
 
 const CARD_WIDTH = 5.5
 const CARD_HEIGHT = 8.5
@@ -48,6 +54,8 @@ type CardIdentity = {
   courseId: string
   scoringUrl: string
 }
+
+type ScanMode = "assigned" | "generic"
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -132,6 +140,7 @@ export function ScorecardScanLabPage() {
   const correctedCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const correctedImageRef = useRef<ImageData | null>(null)
+  const [mode, setMode] = useState<ScanMode>("assigned")
   const [imageUrl, setImageUrl] = useState("")
   const [identity, setIdentity] = useState<CardIdentity | null>(null)
   const [data, setData] = useState<DigitalScoringData | null>(null)
@@ -143,6 +152,13 @@ export function ScorecardScanLabPage() {
   const [identifying, setIdentifying] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [events, setEvents] = useState<ScoringEvent[]>([])
+  const [shoots, setShoots] = useState<ScoringShoot[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(true)
+  const [genericEventId, setGenericEventId] = useState("")
+  const [genericShootId, setGenericShootId] = useState("")
+  const [genericCourseId, setGenericCourseId] = useState("")
+  const [genericMemberId, setGenericMemberId] = useState("")
 
   const stations = useMemo(
     () =>
@@ -174,6 +190,144 @@ export function ScorecardScanLabPage() {
     }
   }, [data, identity])
 
+  const genericParticipants = useMemo(() => {
+    if (!data || !genericShootId) return []
+    const enrollmentMap = new Map(data.enrollments.map((row) => [row.id, row]))
+    const squadMap = new Map(data.squads.map((row) => [row.id, row]))
+
+    return data.members
+      .flatMap((member) => {
+        const enrollment = enrollmentMap.get(member.registration_shoot_id)
+        if (enrollment?.shoot_id !== genericShootId) return []
+        const squad = squadMap.get(member.squad_id)
+        return [{
+          memberId: member.id,
+          name: participantName(data, member.id),
+          squad: squad?.squad_number ?? "Unassigned",
+          position: member.position,
+        }]
+      })
+      .sort((left, right) =>
+        left.name.localeCompare(right.name) ||
+        left.squad.localeCompare(right.squad, undefined, { numeric: true }) ||
+        left.position - right.position,
+      )
+  }, [data, genericShootId])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const base = await loadScoringBaseData()
+        setEvents(base.events)
+        setShoots(base.shoots)
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Events could not be loaded for generic scorecards.",
+        )
+      } finally {
+        setLoadingEvents(false)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (mode !== "generic") return
+    if (
+      !data ||
+      !genericEventId ||
+      !genericShootId ||
+      !genericCourseId ||
+      !genericMemberId
+    ) {
+      setIdentity(null)
+      return
+    }
+
+    const scoringUrl = new URL(
+      `/events/${genericEventId}/digital-scoring`,
+      window.location.origin,
+    )
+    scoringUrl.searchParams.set("shootId", genericShootId)
+    scoringUrl.searchParams.set("memberId", genericMemberId)
+    scoringUrl.searchParams.set("courseId", genericCourseId)
+    setIdentity({
+      eventId: genericEventId,
+      shootId: genericShootId,
+      memberId: genericMemberId,
+      courseId: genericCourseId,
+      scoringUrl: scoringUrl.toString(),
+    })
+  }, [
+    data,
+    genericCourseId,
+    genericEventId,
+    genericMemberId,
+    genericShootId,
+    mode,
+  ])
+
+  function clearScanResults() {
+    setMarkers([])
+    setReadings([])
+    setOverrides({})
+    setSaved(false)
+    correctedImageRef.current = null
+    const canvas = correctedCanvasRef.current
+    if (canvas) {
+      canvas.width = 0
+      canvas.height = 0
+    }
+  }
+
+  function changeMode(nextMode: ScanMode) {
+    setMode(nextMode)
+    setImageUrl("")
+    imageRef.current = null
+    clearScanResults()
+    setIdentity(null)
+    setData(null)
+    setGenericEventId("")
+    setGenericShootId("")
+    setGenericCourseId("")
+    setGenericMemberId("")
+    setError("")
+    setStatus(
+      nextMode === "assigned"
+        ? "Ready for an assigned scorecard photo"
+        : "Select the scorecard assignment, then take or upload a photo",
+    )
+  }
+
+  async function selectGenericEvent(eventId: string) {
+    setGenericEventId(eventId)
+    setGenericShootId("")
+    setGenericCourseId("")
+    setGenericMemberId("")
+    setIdentity(null)
+    setData(null)
+    clearScanResults()
+    setError("")
+    if (!eventId) return
+
+    setIdentifying(true)
+    setStatus("Loading the event scorecard assignments...")
+    try {
+      const nextData = await loadDigitalScoring(eventId)
+      setData(nextData)
+      setStatus("Select the shoot, course, and participant")
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The selected event could not be loaded.",
+      )
+    } finally {
+      setIdentifying(false)
+    }
+  }
+
   async function loadFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ""
@@ -182,19 +336,29 @@ export function ScorecardScanLabPage() {
       setError("Please choose an image file.")
       return
     }
-    setMarkers([])
-    setReadings([])
-    setOverrides({})
-    setIdentity(null)
-    setData(null)
-    setSaved(false)
+    clearScanResults()
+    if (mode === "assigned") {
+      setIdentity(null)
+      setData(null)
+    }
     setError("")
-    setIdentifying(true)
-    correctedImageRef.current = null
-    setStatus("Reading the scorecard QR code...")
+    setIdentifying(mode === "assigned")
+    setStatus(
+      mode === "assigned"
+        ? "Reading the scorecard QR code..."
+        : "Loading the generic scorecard photo...",
+    )
     try {
       const nextUrl = await readFileAsDataUrl(file)
       setImageUrl(nextUrl)
+      if (mode === "generic") {
+        setStatus(
+          identity
+            ? "Photo loaded - select Scan filled bubbles"
+            : "Photo loaded - complete the scorecard assignment",
+        )
+        return
+      }
       const { BrowserQRCodeReader } = await import("@zxing/browser")
       const result = await new BrowserQRCodeReader().decodeFromImageUrl(nextUrl)
       const nextIdentity = parseScorecardQr(result.getText().trim())
@@ -270,7 +434,9 @@ export function ScorecardScanLabPage() {
     const canvas = sourceCanvasRef.current
     if (!canvas || !imageRef.current || !identity || !data) {
       setError(
-        "Upload an assigned scorecard and wait for its QR code to be identified first.",
+        mode === "assigned"
+          ? "Upload an assigned scorecard and wait for its QR code to be identified first."
+          : "Select the event, shoot, course, and participant before scanning.",
       )
       return
     }
@@ -288,11 +454,12 @@ export function ScorecardScanLabPage() {
       markerCenters(stations.length),
     )
     if (found.length !== 4) {
-      setMarkers([])
+      setMarkers(found)
       setReadings([])
+      drawSource(found)
       setStatus("Scan needs another photo")
       setError(
-        "Could not find all four square markers. Keep the complete half-page card visible, use even light, and move a little closer.",
+        `Found ${found.length} of 4 square markers. Keep one complete half-page card visible, use even light, and move a little closer.`,
       )
       return
     }
@@ -336,21 +503,20 @@ export function ScorecardScanLabPage() {
 
   function reset() {
     setImageUrl("")
-    setIdentity(null)
-    setData(null)
-    setMarkers([])
-    setReadings([])
-    setOverrides({})
-    setSaved(false)
-    correctedImageRef.current = null
     imageRef.current = null
-    setError("")
-    setStatus("Ready for an assigned scorecard photo")
-    const canvas = correctedCanvasRef.current
-    if (canvas) {
-      canvas.width = 0
-      canvas.height = 0
+    clearScanResults()
+    if (mode === "assigned") {
+      setIdentity(null)
+      setData(null)
     }
+    setError("")
+    setStatus(
+      mode === "assigned"
+        ? "Ready for an assigned scorecard photo"
+        : identity
+          ? "Assignment selected - take or upload a generic scorecard photo"
+          : "Select the scorecard assignment, then take or upload a photo",
+    )
   }
 
   useEffect(() => {
@@ -408,9 +574,7 @@ export function ScorecardScanLabPage() {
     if (!data || !identity || readings.length === 0 || summary.review > 0)
       return
     const scorecard = data.scorecards.find(
-      (row) =>
-        row.squad_member_id === identity.memberId &&
-        row.course_id === identity.courseId,
+      (row) => row.squad_member_id === identity.memberId,
     )
     if (scorecard?.status === "finalized") {
       setError(
@@ -427,7 +591,7 @@ export function ScorecardScanLabPage() {
           .filter((row) => row.scorecard_id === scorecard?.id)
           .map((row) => [row.station_id, row]),
       )
-      const importNote = `Imported from paper scorecard on ${new Date().toLocaleString()}.`
+      const importNote = `Imported from ${mode === "generic" ? "generic " : ""}paper scorecard on ${new Date().toLocaleString()}.`
       await saveDigitalScorecard({
         organizationId: data.event.organization_id,
         eventId: identity.eventId,
@@ -496,6 +660,155 @@ export function ScorecardScanLabPage() {
               </div>
             </div>
           </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="font-bold text-slate-950">Scorecard type</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Assigned cards identify the participant from the QR code.
+                  Generic cards are assigned manually.
+                </p>
+              </div>
+              <div className="grid min-w-72 grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => changeMode("assigned")}
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold ${
+                    mode === "assigned"
+                      ? "bg-white text-slate-950 shadow-sm"
+                      : "text-slate-600 hover:text-slate-950"
+                  }`}
+                >
+                  <QrCode className="h-4 w-4" />
+                  Assigned QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeMode("generic")}
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold ${
+                    mode === "generic"
+                      ? "bg-white text-slate-950 shadow-sm"
+                      : "text-slate-600 hover:text-slate-950"
+                  }`}
+                >
+                  <FileText className="h-4 w-4" />
+                  Generic card
+                </button>
+              </div>
+            </div>
+
+            {mode === "generic" ? (
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">
+                    Event
+                  </span>
+                  <select
+                    value={genericEventId}
+                    onChange={(event) =>
+                      void selectGenericEvent(event.target.value)
+                    }
+                    disabled={loadingEvents || identifying}
+                    className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">
+                      {loadingEvents ? "Loading events..." : "Select event"}
+                    </option>
+                    {events.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">
+                    Shoot
+                  </span>
+                  <select
+                    value={genericShootId}
+                    onChange={(event) => {
+                      setGenericShootId(event.target.value)
+                      setGenericMemberId("")
+                      setSaved(false)
+                      setStatus("Select the course and participant")
+                    }}
+                    disabled={!data || identifying}
+                    className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">Select shoot</option>
+                    {shoots
+                      .filter((shoot) => shoot.event_id === genericEventId)
+                      .map((shoot) => (
+                        <option key={shoot.id} value={shoot.id}>
+                          {shoot.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">
+                    Course
+                  </span>
+                  <select
+                    value={genericCourseId}
+                    onChange={(event) => {
+                      setGenericCourseId(event.target.value)
+                      clearScanResults()
+                      setStatus("Select the participant, then scan the card")
+                    }}
+                    disabled={!data || identifying}
+                    className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">Select course</option>
+                    {data?.courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-bold uppercase text-slate-600">
+                    Participant
+                  </span>
+                  <select
+                    value={genericMemberId}
+                    onChange={(event) => {
+                      setGenericMemberId(event.target.value)
+                      setSaved(false)
+                      setStatus(
+                        imageUrl
+                          ? "Assignment selected - scan the filled bubbles"
+                          : "Assignment selected - take or upload the scorecard photo",
+                      )
+                    }}
+                    disabled={!genericShootId || genericParticipants.length === 0}
+                    className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">
+                      {genericShootId && genericParticipants.length === 0
+                        ? "No assigned participants"
+                        : "Select participant"}
+                    </option>
+                    {genericParticipants.map((participant) => (
+                      <option
+                        key={participant.memberId}
+                        value={participant.memberId}
+                      >
+                        {participant.name} - Squad {participant.squad}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+          </section>
+
           <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <div className="space-y-5">
               <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -505,8 +818,9 @@ export function ScorecardScanLabPage() {
                       Scorecard photo
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Photograph one complete half-page card with its QR code
-                      and all four square markers visible.
+                      Photograph one complete half-page card with all four
+                      square markers visible
+                      {mode === "assigned" ? " and keep the QR code clear." : "."}
                     </p>
                   </div>
                   <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700">
@@ -648,8 +962,14 @@ export function ScorecardScanLabPage() {
             <aside className="space-y-5">
               <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <QrCode className="h-5 w-5 text-emerald-600" />
-                  <h2 className="font-bold text-slate-950">Assigned card</h2>
+                  {mode === "assigned" ? (
+                    <QrCode className="h-5 w-5 text-emerald-600" />
+                  ) : (
+                    <FileText className="h-5 w-5 text-emerald-600" />
+                  )}
+                  <h2 className="font-bold text-slate-950">
+                    {mode === "assigned" ? "Assigned card" : "Manual assignment"}
+                  </h2>
                 </div>
                 {cardDetails ? (
                   <div className="mt-4 space-y-3 text-sm">
@@ -663,7 +983,9 @@ export function ScorecardScanLabPage() {
                   </div>
                 ) : (
                   <p className="mt-4 text-sm text-slate-500">
-                    The card details appear after its QR code is read.
+                    {mode === "assigned"
+                      ? "The card details appear after its QR code is read."
+                      : "Select the event, shoot, course, and participant above."}
                   </p>
                 )}
               </section>
