@@ -214,8 +214,8 @@ function searchForFinderPattern(
   const expectedX = expectedCenter.x * image.width
   const expectedY = expectedCenter.y * image.height
   const step = Math.max(5, Math.round(minDimension * 0.008))
-  const radiusX = image.width * 0.10
-  const radiusY = image.height * 0.08
+  const radiusX = image.width * 0.16
+  const radiusY = image.height * 0.14
   const sizes = [0.014, 0.019, 0.024, 0.03, 0.037, 0.046, 0.058]
     .map((ratio) => Math.round(minDimension * ratio))
     .filter((size) => size >= 14)

@@ -99,7 +99,30 @@ async function readPdfPageAsDataUrl(file: File) {
     const context = canvas.getContext("2d")
     if (!context) throw new Error("The PDF page could not be rendered.")
     await page.render({ canvas, canvasContext: context, viewport }).promise
-    return canvas.toDataURL("image/png")
+    if (canvas.width <= canvas.height * 1.1) {
+      return canvas.toDataURL("image/png")
+    }
+
+    // Scorecard PDFs are landscape sheets with the scannable card on the
+    // left half and print whitespace on the right. Crop that whitespace so
+    // the marker geometry matches the same half-card used by photographs.
+    const cardCanvas = window.document.createElement("canvas")
+    cardCanvas.width = Math.ceil(canvas.width / 2)
+    cardCanvas.height = canvas.height
+    cardCanvas
+      .getContext("2d")
+      ?.drawImage(
+        canvas,
+        0,
+        0,
+        cardCanvas.width,
+        cardCanvas.height,
+        0,
+        0,
+        cardCanvas.width,
+        cardCanvas.height,
+      )
+    return cardCanvas.toDataURL("image/png")
   } finally {
     await pdf.destroy()
   }
