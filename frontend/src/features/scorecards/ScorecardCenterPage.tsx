@@ -803,13 +803,20 @@ async function drawScorecard(
   )
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8.4)
-  pdf.text(
-    "INSTRUCTIONS: DEAD = BUBBLE FILL",
-    x + margin,
-    y + 0.98,
-    { maxWidth: 4.7 },
-  )
-  pdf.text("LOSS = BUBBLE EMPTY", x + margin + pdf.getTextWidth("INSTRUCTIONS: "), y + 1.15)
+  const instructionX = x + margin
+  const instructionY = y + 0.86
+  const instructionW = width - margin * 2
+  const instructionH = 0.34
+  pdf.setFillColor("#000000")
+  pdf.rect(instructionX, instructionY, instructionW, instructionH, "F")
+  pdf.setTextColor("#ffffff")
+  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.00, {
+    align: "center",
+  })
+  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.16, {
+    align: "center",
+  })
+  pdf.setTextColor("#141414")
 
   if (!card) {
     pdf.setFont("helvetica", "bold")
@@ -912,7 +919,25 @@ async function drawScorecard(
     pdf.rect(stationTotalX + totalW, rowY, runningW, rowH)
   }
 
-  const footerY = tableY + rowH * (printableStations.length + 1) + 0.18
+  const subtotalY = tableY + rowH * (printableStations.length + 1)
+  pdf.rect(tableX, subtotalY, tableW, rowH)
+  pdf.setFontSize(5.8)
+  pdf.text("SUB", tableX + stationW / 2, subtotalY + 0.14, {
+    align: "center",
+  })
+  pdf.text("TOTAL", tableX + stationW / 2, subtotalY + 0.27, {
+    align: "center",
+  })
+  pdf.rect(stationTotalX, subtotalY, totalW, rowH)
+  pdf.rect(stationTotalX + totalW, subtotalY, runningW, rowH)
+  pdf.text("GRAND", stationTotalX + totalW / 2, subtotalY + 0.14, {
+    align: "center",
+  })
+  pdf.text("TOTAL", stationTotalX + totalW / 2, subtotalY + 0.27, {
+    align: "center",
+  })
+
+  const footerY = subtotalY + rowH + 0.18
   pdf.setFontSize(7)
   pdf.setFont("helvetica", "bold")
   pdf.text("MALFUNCTIONS", tableX + 0.26, footerY)
@@ -977,27 +1002,20 @@ async function drawScorecard(
     scoringUrl.searchParams.set("courseId", course.id)
 
     const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 2,
+      margin: 3,
       width: 768,
-      errorCorrectionLevel: "H",
+      errorCorrectionLevel: "M",
     })
-    const qrSize = Math.min(2.0, 8.28 - (footerY + 0.14))
+    const qrY = footerY + 0.22
+    const qrSize = Math.min(1.95, 8.28 - qrY)
     const qrX = x + width - qrSize - 0.16
-    const qrY = footerY + 0.14
     pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
-
-    pdf.setFont("helvetica", "normal")
-    pdf.setFontSize(4.8)
-    pdf.text("Scan to enter this participant's score", qrX + qrSize / 2, qrY - 0.06, {
-      maxWidth: qrSize,
-      align: "center",
-    })
   }
 
   const markerLeft = x + 0.24
   const markerRight = x + width - 0.24
   const markerTop = tableY - 0.12
-  const markerBottom = tableY + rowH * (printableStations.length + 1) + 0.10
+  const markerBottom = subtotalY + rowH + 0.10
   drawRegistrationMarker(pdf, markerLeft, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerBottom)

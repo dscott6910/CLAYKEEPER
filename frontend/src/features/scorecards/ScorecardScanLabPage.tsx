@@ -133,7 +133,10 @@ function buildTemplate(
 
 function markerCenters(stationCount: number) {
   const top = (TABLE_Y - 0.12) / CARD_HEIGHT
-  const bottom = (TABLE_Y + ROW_HEIGHT * (stationCount + 1) + 0.1) / CARD_HEIGHT
+  const subtotalRow = 1
+  const bottom =
+    (TABLE_Y + ROW_HEIGHT * (stationCount + 1 + subtotalRow) + 0.1) /
+    CARD_HEIGHT
   return [
     { x: 0.24 / CARD_WIDTH, y: top },
     { x: (CARD_WIDTH - 0.24) / CARD_WIDTH, y: top },
