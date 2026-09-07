@@ -283,10 +283,10 @@ export function TournamentOperationsCenterPage() {
         key: "scanning",
         title: "Scorecard Scanning",
         description: "Scan and review completed paper scorecards.",
-        detail: "The current scanner remains in testing mode.",
-        status: "not_started",
+        detail: "Import filled-bubble scorecards as drafts for final review.",
+        status: "ready",
         href: "/scorecard-scan-lab",
-        action: "Open Scan Lab",
+        action: "Import Scorecards",
         icon: ScanLine,
       },
       {

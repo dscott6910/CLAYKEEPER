@@ -742,6 +742,18 @@ function drawCutLine(pdf: jsPDF) {
   pdf.text("✂", centerX, 8.46, { align: "center" })
 }
 
+function drawRegistrationMarker(pdf: jsPDF, centerX: number, centerY: number) {
+  const outer = 0.18
+  const middle = 0.105
+  const inner = 0.048
+  pdf.setFillColor(0, 0, 0)
+  pdf.rect(centerX - outer / 2, centerY - outer / 2, outer, outer, "F")
+  pdf.setFillColor(255, 255, 255)
+  pdf.rect(centerX - middle / 2, centerY - middle / 2, middle, middle, "F")
+  pdf.setFillColor(0, 0, 0)
+  pdf.rect(centerX - inner / 2, centerY - inner / 2, inner, inner, "F")
+}
+
 async function drawScorecard(
   pdf: jsPDF,
   x: number,
@@ -931,9 +943,9 @@ async function drawScorecard(
   const footerY = tableY + rowH * (printableStations.length + 1) + 0.18
   pdf.setFontSize(7)
   pdf.setFont("helvetica", "bold")
-  pdf.text("MALFUNCTIONS", tableX, footerY)
+  pdf.text("MALFUNCTIONS", tableX + 0.26, footerY)
   for (let i = 0; i < 3; i += 1) {
-    pdf.rect(tableX + 0.95 + i * 0.24, footerY - 0.13, 0.18, 0.18)
+    pdf.rect(tableX + 1.21 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
   pdf.text("GRAND", stationTotalX + totalW / 2, footerY - 0.04, {
     align: "center",
@@ -981,4 +993,13 @@ async function drawScorecard(
 
   pdf.text(`Squad: ${squadLabel}`, x + 3.45, identityY + 0.34)
   pdf.text(`Post: ${postLabel}`, x + 3.45, identityY + 0.62)
+
+  const markerLeft = x + 0.24
+  const markerRight = x + width - 0.24
+  const markerTop = tableY - 0.12
+  const markerBottom = tableY + rowH * (printableStations.length + 1) + 0.10
+  drawRegistrationMarker(pdf, markerLeft, markerTop)
+  drawRegistrationMarker(pdf, markerRight, markerTop)
+  drawRegistrationMarker(pdf, markerRight, markerBottom)
+  drawRegistrationMarker(pdf, markerLeft, markerBottom)
 }

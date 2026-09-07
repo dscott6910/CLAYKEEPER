@@ -963,14 +963,16 @@ function App() {
                   />
                 </Route>
 
-                <Route
-                  path="scorecard-scan-lab"
-                  element={
-                    <LazyRoute>
-                      <ScorecardScanLabPage />
-                    </LazyRoute>
-                  }
-                />
+                <Route element={<CapabilityRoute capability="score" />}>
+                  <Route
+                    path="scorecard-scan-lab"
+                    element={
+                      <LazyRoute>
+                        <ScorecardScanLabPage />
+                      </LazyRoute>
+                    }
+                  />
+                </Route>
 
                 <Route element={<CapabilityRoute capability="admin" />}>
                   <Route

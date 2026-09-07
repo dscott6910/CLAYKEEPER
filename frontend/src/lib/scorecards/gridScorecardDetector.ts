@@ -30,6 +30,28 @@ export type GridCellReading = {
   state: GridCellState
 }
 
+export type BubbleCellReading = {
+  station: number
+  bird: number
+  fillRatio: number
+  contrast: number
+  score: number
+  state: GridCellState
+}
+
+export type BubbleGridTemplate = {
+  stations: Array<{ stationNumber: number; birdCount: number }>
+  x: number
+  y: number
+  width: number
+  stationColumnWidth: number
+  totalColumnWidth: number
+  runningColumnWidth: number
+  headerHeight: number
+  rowHeight: number
+  birdColumns: number
+}
+
 export type GridTemplate = {
   markerCenters: readonly [Point, Point, Point, Point]
   blocks: Array<{
@@ -168,6 +190,7 @@ function finderPatternScore(
 
 export function detectRegistrationMarkers(
   image: ImageData,
+  expectedCenters?: readonly Point[],
 ): RegistrationMarker[] {
   const threshold = otsuThreshold(image)
   const width = image.width
@@ -279,30 +302,19 @@ export function detectRegistrationMarkers(
     }
   }
 
-  const targets = [
-    { x: width * 0.14, y: height * 0.14 },
-    { x: width * 0.86, y: height * 0.14 },
-    { x: width * 0.86, y: height * 0.86 },
-    { x: width * 0.14, y: height * 0.86 },
-  ]
+  const targets = (expectedCenters ?? [
+    { x: 0.14, y: 0.14 },
+    { x: 0.86, y: 0.14 },
+    { x: 0.86, y: 0.86 },
+    { x: 0.14, y: 0.86 },
+  ]).map((point) => ({ x: point.x * width, y: point.y * height }))
 
   const selected: RegistrationMarker[] = []
+  const used = new Set<RegistrationMarker>()
 
   for (const target of targets) {
     const candidate = candidates
-      .filter((item) => {
-        const left = target.x < width / 2
-        const top = target.y < height / 2
-
-        return (
-          (left
-            ? item.center.x < width / 2
-            : item.center.x >= width / 2) &&
-          (top
-            ? item.center.y < height / 2
-            : item.center.y >= height / 2)
-        )
-      })
+      .filter((item) => !used.has(item))
       .map((item) => ({
         item,
         ranking:
@@ -316,7 +328,10 @@ export function detectRegistrationMarkers(
       }))
       .sort((a, b) => b.ranking - a.ranking)[0]
 
-    if (candidate) selected.push(candidate.item)
+    if (candidate) {
+      selected.push(candidate.item)
+      used.add(candidate.item)
+    }
   }
 
   return selected.length === 4 ? selected : []
@@ -831,4 +846,98 @@ export function analyzeGridScorecard(
         left.station - right.station ||
         left.bird - right.bird,
     )
+}
+
+function measureBubble(
+  image: ImageData,
+  centerX: number,
+  centerY: number,
+  cellWidth: number,
+  rowHeight: number,
+) {
+  const radius = Math.min(cellWidth * 0.32, rowHeight * 0.23)
+  const innerRadius = radius * 0.72
+  const backgroundRadius = Math.min(cellWidth, rowHeight) * 0.40
+  let innerPixels = 0
+  let innerInk = 0
+  let innerLuminance = 0
+  let backgroundPixels = 0
+  let backgroundLuminance = 0
+
+  for (let y = Math.floor(centerY - backgroundRadius); y <= Math.ceil(centerY + backgroundRadius); y += 1) {
+    for (let x = Math.floor(centerX - backgroundRadius); x <= Math.ceil(centerX + backgroundRadius); x += 1) {
+      const distance = Math.hypot(x - centerX, y - centerY)
+      const value = pixel(image, x, y)
+      const lum = luminance(value.red, value.green, value.blue)
+      const sat = saturation(value.red, value.green, value.blue)
+
+      if (distance <= innerRadius) {
+        innerPixels += 1
+        innerLuminance += lum
+        if (lum < 190 || (sat > 0.30 && lum < 225)) innerInk += 1
+      } else if (distance >= radius * 1.25 && distance <= backgroundRadius) {
+        backgroundPixels += 1
+        backgroundLuminance += lum
+      }
+    }
+  }
+
+  const fillRatio = innerPixels ? innerInk / innerPixels : 0
+  const innerAverage = innerPixels ? innerLuminance / innerPixels : 255
+  const backgroundAverage = backgroundPixels ? backgroundLuminance / backgroundPixels : 255
+  const contrast = clamp((backgroundAverage - innerAverage) / 115)
+  const score = clamp(fillRatio * 0.76 + contrast * 0.24)
+  return { fillRatio, contrast, score }
+}
+
+export function analyzeBubbleScorecard(
+  image: ImageData,
+  template: BubbleGridTemplate,
+): BubbleCellReading[] {
+  const tableX = template.x * image.width
+  const tableY = template.y * image.height
+  const tableWidth = template.width * image.width
+  const stationWidth = template.stationColumnWidth * image.width
+  const totalWidth = template.totalColumnWidth * image.width
+  const runningWidth = template.runningColumnWidth * image.width
+  const headerHeight = template.headerHeight * image.height
+  const rowHeight = template.rowHeight * image.height
+  const birdWidth = (tableWidth - stationWidth - totalWidth - runningWidth) / template.birdColumns
+  const measured: BubbleCellReading[] = []
+
+  template.stations.forEach((station, rowIndex) => {
+    for (let birdIndex = 0; birdIndex < station.birdCount; birdIndex += 1) {
+      const reading = measureBubble(
+        image,
+        tableX + stationWidth + birdIndex * birdWidth + birdWidth / 2,
+        tableY + headerHeight + rowIndex * rowHeight + rowHeight / 2,
+        birdWidth,
+        rowHeight,
+      )
+      measured.push({
+        station: station.stationNumber,
+        bird: birdIndex + 1,
+        ...reading,
+        state: "blank",
+      })
+    }
+  })
+
+  const scores = measured.map((reading) => reading.score).sort((a, b) => a - b)
+  const baseline = scores.slice(0, Math.max(1, Math.floor(scores.length * 0.60)))
+  const baselineMedian = baseline[Math.floor(baseline.length / 2)] ?? 0
+  const deviations = baseline.map((value) => Math.abs(value - baselineMedian)).sort((a, b) => a - b)
+  const medianDeviation = deviations[Math.floor(deviations.length / 2)] ?? 0
+  const filledThreshold = Math.max(0.34, baselineMedian + Math.max(0.20, medianDeviation * 7))
+  const reviewThreshold = Math.max(0.14, baselineMedian + Math.max(0.09, medianDeviation * 4))
+
+  return measured.map((reading) => ({
+    ...reading,
+    state:
+      reading.score >= filledThreshold && reading.fillRatio >= 0.25
+        ? "hit"
+        : reading.score >= reviewThreshold || reading.fillRatio >= 0.12
+          ? "review"
+          : "blank",
+  }))
 }
