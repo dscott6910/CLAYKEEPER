@@ -1148,7 +1148,7 @@ export function ScorecardScanLabPage() {
           reading.station === stationNumber &&
           (values[key] ?? reading.state) === "review"
         ) {
-          next[key] = "blank"
+          next[key] = "hit"
         }
       }
       return next
@@ -1633,8 +1633,8 @@ export function ScorecardScanLabPage() {
                           className="mt-3 w-full whitespace-nowrap"
                           disabled={saving || review === 0}
                           onClick={() => approveStation(station.station_number)}
-                          aria-label={`Approve all pending bubbles as losses for station ${station.station_number}`}
-                          title="Confirm orange bubbles as losses; keep green hits unchanged"
+                          aria-label={`Approve all pending bubbles as hits for station ${station.station_number}`}
+                          title="Confirm orange bubbles as dead hits; keep green hits unchanged"
                         >
                           <CheckCircle2 className="h-4 w-4 shrink-0" />
                           {review > 0 ? "Approve All" : "Reviewed"}
