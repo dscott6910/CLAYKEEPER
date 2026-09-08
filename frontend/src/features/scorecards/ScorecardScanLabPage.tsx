@@ -89,6 +89,11 @@ type BatchCard = {
     hits: number
     uncertain: boolean
   }>
+  bubbles: Array<{
+    station: number
+    bird: number
+    state: GridCellState
+  }>
   reviewed: boolean
   imported: boolean
   error?: string
@@ -101,6 +106,31 @@ function batchError(error: unknown) {
   return error instanceof Error && error.message
     ? error.message
     : "The card could not be read. Retry this page in the single-card scanner."
+}
+
+function updateBatchStation(
+  card: BatchCard,
+  stationNumber: number,
+  update: (state: GridCellState, bubble: { station: number; bird: number; state: GridCellState }) => GridCellState,
+) {
+  const bubbles = card.bubbles.map((bubble) =>
+    bubble.station === stationNumber
+      ? { ...bubble, state: update(bubble.state, bubble) }
+      : bubble,
+  )
+  return {
+    bubbles,
+    stations: card.stations.map((station) => ({
+      ...station,
+      hits: bubbles.filter(
+        (bubble) => bubble.station === station.number && bubble.state === "hit",
+      ).length,
+      uncertain: bubbles.some(
+        (bubble) => bubble.station === station.number && bubble.state === "review",
+      ),
+    })),
+    reviewed: false,
+  }
 }
 
 function BatchScorecardImport({ onBack }: { onBack: () => void }) {
@@ -125,6 +155,23 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
     (card) => card.reviewed && !card.imported && !card.blocked && card.identity,
   )
   const current = cards.find((card) => card.key === selected)
+
+  function cycleBatchBubble(card: BatchCard, stationNumber: number, bird: number) {
+    update(card.key, {
+      ...updateBatchStation(card, stationNumber, (state, bubble) => {
+        if (bubble.bird !== bird) return state
+        return state === "blank" ? "hit" : state === "hit" ? "review" : "blank"
+      }),
+    })
+  }
+
+  function approveBatchStation(card: BatchCard, stationNumber: number) {
+    update(card.key, {
+      ...updateBatchStation(card, stationNumber, (state) =>
+        state === "review" ? "hit" : state,
+      ),
+    })
+  }
 
   async function loadBatch(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])
@@ -155,6 +202,7 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
               key: crypto.randomUUID(),
               label: `${file.name} - page ${page}`,
               stations: [],
+              bubbles: [],
               reviewed: false,
               imported: false,
             }
@@ -277,6 +325,11 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
                     row.station === station.station_number &&
                     row.state === "review",
                 ),
+              }))
+              card.bubbles = readings.map((reading) => ({
+                station: reading.station,
+                bird: reading.bird,
+                state: reading.state,
               }))
               seen.add(key)
             } catch (caught) {
@@ -513,45 +566,75 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
                   />
                 )}
                 <div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {current.stations.map((station, i) => (
-                      <label key={station.id} className="text-sm">
-                        Station {station.number}
-                        {station.uncertain && (
-                          <span className="block text-amber-700">
-                            Check bubbles
-                          </span>
-                        )}
-                        <input
-                          aria-label={`Station ${station.number} hits`}
-                          type="number"
-                          min={0}
-                          max={station.targets}
-                          step={1}
-                          value={station.hits}
-                          disabled={busy || current.imported}
-                          className="mt-1 block min-h-11 w-full rounded border px-3"
-                          onChange={(event) => {
-                            const hits = Number(event.target.value)
-                            if (
-                              !Number.isInteger(hits) ||
-                              hits < 0 ||
-                              hits > station.targets
-                            )
-                              return
-                            update(current.key, {
-                              reviewed: false,
-                              stations: current.stations.map((s, j) =>
-                                j === i ? { ...s, hits, uncertain: false } : s,
-                              ),
-                            })
-                          }}
-                        />
-                        <span className="text-xs text-slate-500">
-                          of {station.targets}
-                        </span>
-                      </label>
-                    ))}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {current.stations.map((station) => {
+                      const bubbles = current.bubbles.filter(
+                        (bubble) => bubble.station === station.number,
+                      )
+                      const review = bubbles.filter(
+                        (bubble) => bubble.state === "review",
+                      ).length
+                      return (
+                        <div
+                          key={station.id}
+                          className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-bold uppercase text-slate-500">
+                                Station {station.number}
+                              </p>
+                              <p className="mt-1 text-2xl font-black text-slate-950">
+                                {station.hits} / {station.targets}
+                              </p>
+                            </div>
+                            {review > 0 && (
+                              <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+                                {review} review
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {bubbles.map((bubble) => (
+                              <button
+                                key={`${bubble.station}-${bubble.bird}`}
+                                type="button"
+                                disabled={busy || current.imported}
+                                onClick={() =>
+                                  cycleBatchBubble(
+                                    current,
+                                    bubble.station,
+                                    bubble.bird,
+                                  )
+                                }
+                                aria-label={`Station ${bubble.station}, target ${bubble.bird}: ${bubble.state}`}
+                                className={
+                                  bubble.state === "hit"
+                                    ? "h-9 w-9 rounded-full border-2 border-emerald-700 bg-emerald-600 text-xs font-bold text-white"
+                                    : bubble.state === "review"
+                                      ? "h-9 w-9 rounded-full border-2 border-amber-600 bg-amber-100 text-xs font-bold text-amber-900"
+                                      : "h-9 w-9 rounded-full border-2 border-slate-300 bg-white text-xs font-bold text-slate-600"
+                                }
+                              >
+                                {bubble.bird}
+                              </button>
+                            ))}
+                          </div>
+                          <Button
+                            variant="outline"
+                            className="mt-3 w-full whitespace-nowrap"
+                            disabled={busy || current.imported || review === 0}
+                            onClick={() =>
+                              approveBatchStation(current, station.number)
+                            }
+                            title="Confirm orange bubbles as dead hits"
+                          >
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            {review > 0 ? "Approve All" : "Reviewed"}
+                          </Button>
+                        </div>
+                      )
+                    })}
                   </div>
                   {!current.blocked && !current.imported && (
                     <label className="mt-5 flex items-start gap-3 text-sm font-semibold">
