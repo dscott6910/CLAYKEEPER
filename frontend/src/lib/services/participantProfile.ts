@@ -62,6 +62,7 @@ export type ParticipantProfile = {
     total_score: number
     total_possible: number
     score_percentage: number
+    scan_url: string | null
   }>
 
   statistics: {
@@ -266,7 +267,7 @@ export async function loadParticipantProfile(
           .order("round_number"),
         supabase
           .from("digital_scorecards")
-          .select("squad_member_id, status, total_score, total_targets")
+          .select("squad_member_id, status, total_score, total_targets, scan_storage_path")
           .eq("organization_id", organizationId)
           .in("squad_member_id", memberIds)
           .eq("status", "finalized"),
@@ -278,6 +279,20 @@ export async function loadParticipantProfile(
 
   throwIfError(scoresResult.error)
   throwIfError(digitalScorecardsResult.error)
+
+  const scanUrls = new Map<string, string>()
+  await Promise.all(
+    (digitalScorecardsResult.data ?? [])
+      .filter((scorecard) => scorecard.scan_storage_path)
+      .map(async (scorecard) => {
+        const result = await supabase.storage
+          .from("scorecard-scans")
+          .createSignedUrl(scorecard.scan_storage_path!, 60 * 60)
+        if (!result.error && result.data?.signedUrl) {
+          scanUrls.set(scorecard.squad_member_id, result.data.signedUrl)
+        }
+      }),
+  )
 
   const scoresByMemberId = new Map<
     string,
@@ -339,6 +354,14 @@ export async function loadParticipantProfile(
           : digitalComplete
             ? digitalScorecard!.total_targets
             : configuredPossible
+      const profileRoundScores =
+        digitalComplete && roundScores.length === 0
+          ? [digitalScorecard!.total_score]
+          : roundScores
+      const profileTargetsPerRound =
+        digitalComplete && roundScores.length === 0
+          ? digitalScorecard!.total_targets
+          : targetsPerRound
 
       return {
         registration_id: enrollment.registration_id,
@@ -349,14 +372,20 @@ export async function loadParticipantProfile(
         shoot_id: enrollment.shoot_id,
         shoot_name: shoot?.name ?? "Unknown shoot",
         discipline: shoot?.discipline ?? "unknown",
-        number_of_rounds: shoot?.number_of_rounds ?? 0,
-        targets_per_round: targetsPerRound,
-        round_scores: roundScores,
+        number_of_rounds:
+          digitalComplete && roundScores.length === 0
+            ? 1
+            : shoot?.number_of_rounds ?? 0,
+        targets_per_round: profileTargetsPerRound,
+        round_scores: profileRoundScores,
         historical_total_score: historicalTotal,
         total_score: totalScore,
         total_possible: totalPossible,
         score_percentage:
           totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0,
+        scan_url: digitalScorecard
+          ? scanUrls.get(digitalScorecard.squad_member_id) ?? null
+          : null,
       }
     })
     .sort((left, right) =>

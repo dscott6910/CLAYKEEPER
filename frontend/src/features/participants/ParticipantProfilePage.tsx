@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Mail,
   Phone,
+  FileImage,
   School,
   Target,
   TrendingDown,
@@ -763,6 +764,17 @@ export function ParticipantProfilePage() {
                           <p className="mt-3 text-xs text-slate-500">
                             Historical total; individual round scores were not imported.
                           </p>
+                        ) : null}
+                        {result.scan_url ? (
+                          <a
+                            href={result.scan_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-emerald-700 hover:text-emerald-800"
+                          >
+                            <FileImage className="h-4 w-4" />
+                            View scanned scorecard
+                          </a>
                         ) : null}
                       </div>
                     ))}

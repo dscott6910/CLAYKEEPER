@@ -136,4 +136,5 @@ export type DigitalScorecardRecord = {
   total_score: number
   total_targets: number
   finalized_at: string | null
+  scan_storage_path: string | null
 }

@@ -92,6 +92,7 @@ export type DigitalScorecard = {
   total_score: number
   total_targets: number
   finalized_at: string | null
+  scan_storage_path: string | null
   updated_at: string
 }
 
@@ -158,7 +159,7 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
       p_organization_id: event.organization_id,
       p_event_id: eventId,
     }),
-    supabase.from("digital_scorecards").select("id,organization_id,event_id,shoot_id,squad_member_id,course_id,status,malfunction_count,verified_by_1,verified_by_2,entered_by_name,notes,total_score,total_targets,finalized_at,updated_at").eq("organization_id", event.organization_id).eq("event_id", eventId),
+    supabase.from("digital_scorecards").select("id,organization_id,event_id,shoot_id,squad_member_id,course_id,status,malfunction_count,verified_by_1,verified_by_2,entered_by_name,notes,total_score,total_targets,finalized_at,scan_storage_path,updated_at").eq("organization_id", event.organization_id).eq("event_id", eventId),
   ])
   for (const result of [shoots, courses, squads, registrations, athletes, teams, classes, enrollments, scorecards]) check(result.error)
 
@@ -257,6 +258,7 @@ export async function saveDigitalScorecard(input: {
   notes: string
   status: "draft" | "finalized"
   expectedUpdatedAt?: string | null
+  scanImage?: { dataUrl: string; contentType: string }
   stationScores: Array<{
     stationId: string
     hits: number
@@ -295,5 +297,25 @@ export async function saveDigitalScorecard(input: {
   const row = Array.isArray(data) ? data[0] : data
   const scorecardId = row?.scorecard_id as string | undefined
   if (!scorecardId) throw new Error("No scorecard ID was returned.")
+
+  if (input.scanImage) {
+    const response = await fetch(input.scanImage.dataUrl)
+    const file = await response.blob()
+    const path = `${input.organizationId}/${input.eventId}/${input.squadMemberId}.png`
+    const upload = await supabase.storage
+      .from("scorecard-scans")
+      .upload(path, file, {
+        contentType: file.type || input.scanImage.contentType,
+        upsert: true,
+      })
+    check(upload.error)
+    const update = await supabase
+      .from("digital_scorecards")
+      .update({ scan_storage_path: path })
+      .eq("id", scorecardId)
+      .eq("organization_id", input.organizationId)
+    check(update.error)
+  }
+
   return scorecardId
 }

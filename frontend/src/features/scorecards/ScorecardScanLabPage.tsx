@@ -82,6 +82,7 @@ type BatchCard = {
   name?: string
   eventName?: string
   preview?: string
+  scanImageDataUrl?: string
   stations: Array<{
     id: string
     number: number
@@ -221,6 +222,7 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
               const context = canvas.getContext("2d")!
               context.drawImage(image, 0, 0, canvas.width, canvas.height)
               card.preview = canvas.toDataURL("image/jpeg", 0.65)
+              card.scanImageDataUrl = url
               const reader = new BrowserQRCodeReader()
               const result = await reader
                 .decodeFromImageUrl(url)
@@ -427,7 +429,10 @@ function BatchScorecardImport({ onBack }: { onBack: () => void }) {
                     row.scorecard_id === prior?.id &&
                     row.station_id === station.id,
                 )?.notes ?? "",
-            })),
+              })),
+            scanImage: card.scanImageDataUrl
+              ? { dataUrl: card.scanImageDataUrl, contentType: "image/png" }
+              : undefined,
           })
           imported++
           update(card.key, { imported: true, error: undefined })
@@ -1352,6 +1357,9 @@ export function ScorecardScanLabPage() {
           targets: station.bird_count,
           notes: prior.get(station.id)?.notes ?? "",
         })),
+        scanImage: imageUrl
+          ? { dataUrl: imageUrl, contentType: "image/png" }
+          : undefined,
       })
       setSaved(true)
       setStatus(
