@@ -725,6 +725,23 @@ export function DigitalScoringPage() {
         return true
       }
 
+      let saveScorecardId = scorecard?.id
+      let expectedUpdatedAt = scorecard?.updated_at ?? null
+      if (status === "finalized") {
+        try {
+          const latest = await loadDigitalScoring(eventId)
+          const latestScorecard = latest.scorecards.find(
+            (row) => row.squad_member_id === memberId,
+          )
+          if (latestScorecard) {
+            saveScorecardId = latestScorecard.id
+            expectedUpdatedAt = latestScorecard.updated_at
+          }
+        } catch {
+          // The normal save path below still handles offline/network failures.
+        }
+      }
+
       try {
         await saveDigitalScorecard({
           organizationId: data.event.organization_id,
@@ -732,14 +749,14 @@ export function DigitalScoringPage() {
           shootId,
           squadMemberId: memberId,
           courseId,
-          scorecardId: scorecard?.id,
+          scorecardId: saveScorecardId,
           malfunctionCount: malfunctions,
           verifiedBy1: verified1,
           verifiedBy2: verified2,
           enteredByName: enteredBy,
           notes,
           status,
-          expectedUpdatedAt: scorecard?.updated_at ?? null,
+          expectedUpdatedAt,
           stationScores: stationRows
             .filter((row) => row.parsed !== null)
             .map((row) => ({
