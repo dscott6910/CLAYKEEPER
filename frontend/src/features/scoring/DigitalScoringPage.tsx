@@ -154,11 +154,11 @@ export function DigitalScoringPage() {
     setQueuedCount(drafts.length)
   }, [eventId])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options: { silent?: boolean } = {}) => {
     if (!eventId) {
-      setError("Choose an event before opening digital scoring.")
+      if (!options.silent) setError("Choose an event before opening digital scoring.")
       setLoading(false)
-      return
+      return false
     }
 
     setLoading(true)
@@ -244,7 +244,7 @@ export function DigitalScoringPage() {
           setCourseId(requestedCourse)
         }
 
-        return
+        return true
       }
 
       setShootId(
@@ -254,12 +254,16 @@ export function DigitalScoringPage() {
           next.shoots[0]?.id ||
           "",
       )
+      return true
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Scoring could not be loaded.",
-      )
+      if (!options.silent) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Scoring could not be loaded.",
+        )
+      }
+      return false
     } finally {
       setLoading(false)
     }
@@ -676,6 +680,8 @@ export function DigitalScoringPage() {
         return false
       }
 
+      selectionRef.current = { shootId, squadId, memberId }
+
       const protectedDraft: OfflineScorecardDraft = {
         key: offlineScorecardKey(eventId, memberId, courseId),
         eventId,
@@ -770,7 +776,7 @@ export function DigitalScoringPage() {
           )
         }
 
-        await load()
+        await load({ silent: true })
         setShootId(shootId)
         setSquadId(squadId)
         setMemberId(memberId)
