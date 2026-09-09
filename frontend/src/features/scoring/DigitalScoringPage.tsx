@@ -153,6 +153,7 @@ export function DigitalScoringPage() {
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
   const [lastSaveError, setLastSaveError] = useState("")
+  const lastSaveErrorRef = useRef("")
   const [lastServerConfirmation, setLastServerConfirmation] = useState<{
     at: Date
     status: "draft" | "finalized"
@@ -162,6 +163,11 @@ export function DigitalScoringPage() {
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
   const selectionRef = useRef({ shootId: "", squadId: "", memberId: "" })
+
+  function recordLastSaveError(message: string) {
+    lastSaveErrorRef.current = message
+    setLastSaveError(message)
+  }
 
   useEffect(() => {
     selectionRef.current = { shootId, squadId, memberId }
@@ -739,7 +745,7 @@ export function DigitalScoringPage() {
 
       if (!online) {
         setDirty(false)
-        setLastSaveError("")
+        recordLastSaveError("")
         if (!options.silent) {
           toast.info(
             status === "finalized"
@@ -751,6 +757,8 @@ export function DigitalScoringPage() {
       }
 
       let saveScorecardId = scorecard?.id
+      let saveShootId = shootId
+      let saveCourseId = courseId
       let expectedUpdatedAt = scorecard?.updated_at ?? null
       if (status === "finalized") {
         try {
@@ -765,7 +773,7 @@ export function DigitalScoringPage() {
               setPendingSync(false)
               setQueuedStatus("draft")
               setLocalDraftSavedAt(null)
-              setLastSaveError("")
+              recordLastSaveError("")
               setLastSavedAt(new Date())
               setLastServerConfirmation({
                 at: new Date(),
@@ -784,6 +792,8 @@ export function DigitalScoringPage() {
               return true
             }
             saveScorecardId = latestScorecard.id
+            saveShootId = latestScorecard.shoot_id
+            saveCourseId = latestScorecard.course_id
             expectedUpdatedAt = latestScorecard.updated_at
           }
         } catch {
@@ -795,9 +805,9 @@ export function DigitalScoringPage() {
         await saveDigitalScorecard({
           organizationId: data.event.organization_id,
           eventId,
-          shootId,
+          shootId: saveShootId,
           squadMemberId: memberId,
-          courseId,
+          courseId: saveCourseId,
           scorecardId: saveScorecardId,
           malfunctionCount: malfunctions,
           verifiedBy1: verified1,
@@ -826,7 +836,7 @@ export function DigitalScoringPage() {
         await refreshQueuedCount().catch(() => undefined)
         const confirmedAt = new Date()
         setLastSavedAt(confirmedAt)
-        setLastSaveError("")
+        recordLastSaveError("")
         setLastServerConfirmation({
           at: confirmedAt,
           status,
@@ -850,7 +860,7 @@ export function DigitalScoringPage() {
       } catch (caught) {
         if (isDigitalScorecardConflictError(caught)) {
           setPendingSync(false)
-          setLastSaveError("A newer server scorecard was found. Choose which version to keep before continuing.")
+          recordLastSaveError("A newer server scorecard was found. Choose which version to keep before continuing.")
           toast.warning(
             "A newer server scorecard was found. ClayKeeper protected your device draft instead of overwriting it.",
           )
@@ -863,7 +873,7 @@ export function DigitalScoringPage() {
           caught instanceof Error
             ? caught.message
             : "Scorecard could not be saved."
-        setLastSaveError(message)
+        recordLastSaveError(message)
         if (isLikelyConnectionError(caught)) {
           setDirty(false)
           setQueueSyncBlocked(true)
@@ -989,7 +999,7 @@ export function DigitalScoringPage() {
           }
         } catch (caught) {
           setQueueSyncBlocked(true)
-          setLastSaveError(
+          recordLastSaveError(
             caught instanceof Error ? caught.message : "Queued scorecards could not be uploaded.",
           )
         } finally {
@@ -1158,7 +1168,9 @@ export function DigitalScoringPage() {
     const finalized = await save("finalized")
     if (!finalized) {
       toast.error(
-        "Finalization was not confirmed by the server. Your protected draft remains available.",
+        lastSaveErrorRef.current
+          ? `Finalization failed: ${lastSaveErrorRef.current}`
+          : "Finalization was not confirmed by the server. Your protected draft remains available.",
       )
     }
   }
