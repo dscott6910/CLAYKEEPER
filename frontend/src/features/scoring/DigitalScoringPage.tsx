@@ -771,6 +771,9 @@ export function DigitalScoringPage() {
         }
 
         await load()
+        setShootId(shootId)
+        setSquadId(squadId)
+        setMemberId(memberId)
         return true
       } catch (caught) {
         if (isDigitalScorecardConflictError(caught)) {
