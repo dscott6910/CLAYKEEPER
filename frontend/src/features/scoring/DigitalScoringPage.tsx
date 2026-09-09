@@ -125,7 +125,7 @@ export function DigitalScoringPage() {
 
   const [data, setData] = useState<DigitalScoringData | null>(null)
   const [shootId, setShootId] = useState("")
-  const [squadId, setSquadId] = useState("")
+  const [squadId, setSquadId] = useState(ALL_SQUADS)
   const [memberId, setMemberId] = useState("")
   const [memberSort, setMemberSort] = useState<MemberSort>("squad")
   const [courseId, setCourseId] = useState("")
@@ -162,7 +162,7 @@ export function DigitalScoringPage() {
   } | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
-  const selectionRef = useRef({ shootId: "", squadId: "", memberId: "" })
+  const selectionRef = useRef({ shootId: "", squadId: ALL_SQUADS, memberId: "" })
 
   const recordLastSaveError = useCallback((message: string) => {
     setLastSaveError(message)
@@ -184,7 +184,11 @@ export function DigitalScoringPage() {
     setQueuedCount(drafts.length)
   }, [eventId])
 
-  const load = useCallback(async (options: { silent?: boolean } = {}) => {
+  const load = useCallback(async (options: { silent?: boolean; resetSquads?: boolean } = {}) => {
+    if (options.resetSquads) {
+      selectionRef.current.squadId = ALL_SQUADS
+      setSquadId(ALL_SQUADS)
+    }
     if (!eventId) {
       if (!options.silent) setError("Choose an event before opening digital scoring.")
       setLoading(false)
@@ -349,9 +353,9 @@ export function DigitalScoringPage() {
 
   useEffect(() => {
     setSquadId((current) =>
-      squads.some((row) => row.id === current)
+      current === ALL_SQUADS || squads.some((row) => row.id === current)
         ? current
-        : squads[0]?.id || "",
+        : ALL_SQUADS,
     )
   }, [squads])
 
@@ -1285,7 +1289,7 @@ export function DigitalScoringPage() {
                 )}
                 {offlineCachedAt ? "Update Offline Data" : "Prepare Offline"}
               </Button>
-              <Button variant="outline" onClick={() => void load()}>
+              <Button variant="outline" onClick={() => void load({ resetSquads: true })}>
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
@@ -1313,7 +1317,7 @@ export function DigitalScoringPage() {
         {error ? (
           <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
-            <Button variant="outline" onClick={() => void load()} className="shrink-0">
+            <Button variant="outline" onClick={() => void load({ resetSquads: true })} className="shrink-0">
               <RefreshCw className="h-4 w-4" />
               Retry
             </Button>
@@ -1445,10 +1449,10 @@ export function DigitalScoringPage() {
             setValue={(value) => {
               void protectBeforeNavigation(() => setSquadId(value))
             }}
-            options={squads.map((row) => ({
+            options={[{ value: ALL_SQUADS, label: "All Squads" }, ...squads.map((row) => ({
               value: row.id,
               label: `Squad ${row.squad_number}`,
-            })).concat({ value: ALL_SQUADS, label: "All squads" })}
+            }))]}
           />
           <Select
             label="Participant / Post"
@@ -1909,7 +1913,7 @@ export function DigitalScoringPage() {
                 disabled={locked || Boolean(syncConflict)}
               />
               <Field
-                label="Entered by (required to finalize)"
+                label={<>Entered by <strong className="font-bold text-red-600">(REQUIRED TO FINALIZE)</strong></>}
                 inputRef={enteredByInputRef}
                 value={enteredBy}
                 setValue={(value) => {
@@ -2021,7 +2025,7 @@ function Select(props: {
 
 function Field(props: {
   inputRef?: React.Ref<HTMLInputElement>
-  label: string
+  label: React.ReactNode
   value: string
   setValue: (value: string) => void
   disabled: boolean
