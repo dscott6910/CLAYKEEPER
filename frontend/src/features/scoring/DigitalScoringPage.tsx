@@ -153,7 +153,7 @@ export function DigitalScoringPage() {
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
   const [lastSaveError, setLastSaveError] = useState("")
-  const lastSaveErrorRef = useRef("")
+  const enteredByInputRef = useRef<HTMLInputElement | null>(null)
   const [lastServerConfirmation, setLastServerConfirmation] = useState<{
     at: Date
     status: "draft" | "finalized"
@@ -164,10 +164,9 @@ export function DigitalScoringPage() {
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
   const selectionRef = useRef({ shootId: "", squadId: "", memberId: "" })
 
-  function recordLastSaveError(message: string) {
-    lastSaveErrorRef.current = message
+  const recordLastSaveError = useCallback((message: string) => {
     setLastSaveError(message)
-  }
+  }, [])
 
   useEffect(() => {
     selectionRef.current = { shootId, squadId, memberId }
@@ -691,22 +690,33 @@ export function DigitalScoringPage() {
       status: "draft" | "finalized",
       options: { silent?: boolean } = {},
     ): Promise<boolean> => {
-      if (!data || !eventId || !shootId || !memberId || !courseId) return false
+      recordLastSaveError("")
+      if (!data || !eventId || !shootId || !memberId || !courseId) {
+        recordLastSaveError("Select a shoot, participant, and course before saving.")
+        if (!options.silent) toast.error("Select a shoot, participant, and course before saving.")
+        return false
+      }
       if (locked) {
+        recordLastSaveError("This scorecard is finalized and locked.")
         if (!options.silent) toast.error("This scorecard is finalized and locked.")
         return false
       }
       if (invalid.length) {
+        recordLastSaveError("Correct the highlighted station scores before saving.")
         if (!options.silent) {
           toast.error("Correct the highlighted station scores before saving.")
         }
         return false
       }
       if (status === "finalized" && enteredCount !== stations.length) {
+        recordLastSaveError("Enter a score for every active station before finalizing.")
         toast.error("Enter a score for every active station before finalizing.")
         return false
       }
       if (status === "finalized" && !enteredBy.trim()) {
+        recordLastSaveError("Entered by is required before finalizing. Enter the scorekeeper's name below.")
+        enteredByInputRef.current?.scrollIntoView({ block: "center" })
+        enteredByInputRef.current?.focus({ preventScroll: true })
         toast.error("Entered by is required before finalizing.")
         return false
       }
@@ -904,11 +914,13 @@ export function DigitalScoringPage() {
       notes,
       online,
       refreshQueuedCount,
+      recordLastSaveError,
       scorecard?.id,
       scorecard?.updated_at,
       scores,
       stationNotes,
       shootId,
+      squadId,
       stationRows,
       stations,
       totalScore,
@@ -1150,7 +1162,7 @@ export function DigitalScoringPage() {
 
   async function finalizeWithConfirmation() {
     if (locked || saving || Boolean(syncConflict)) return
-    if (enteredCount !== stations.length || invalid.length > 0) {
+    if (enteredCount !== stations.length || invalid.length > 0 || !enteredBy.trim()) {
       await save("finalized")
       return
     }
@@ -1165,14 +1177,7 @@ export function DigitalScoringPage() {
       return
     }
 
-    const finalized = await save("finalized")
-    if (!finalized) {
-      toast.error(
-        lastSaveErrorRef.current
-          ? `Finalization failed: ${lastSaveErrorRef.current}`
-          : "Finalization was not confirmed by the server. Your protected draft remains available.",
-      )
-    }
+    await save("finalized")
   }
 
 
@@ -1904,7 +1909,8 @@ export function DigitalScoringPage() {
                 disabled={locked || Boolean(syncConflict)}
               />
               <Field
-                label="Entered by"
+                label="Entered by (required to finalize)"
+                inputRef={enteredByInputRef}
                 value={enteredBy}
                 setValue={(value) => {
                   setEnteredBy(value)
@@ -2014,6 +2020,7 @@ function Select(props: {
 }
 
 function Field(props: {
+  inputRef?: React.Ref<HTMLInputElement>
   label: string
   value: string
   setValue: (value: string) => void
@@ -2023,6 +2030,7 @@ function Field(props: {
     <label>
       <span className="text-sm font-semibold">{props.label}</span>
       <input
+        ref={props.inputRef}
         disabled={props.disabled}
         value={props.value}
         onChange={(event) => props.setValue(event.target.value)}
