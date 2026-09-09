@@ -88,6 +88,21 @@ function legacyOfflineDraftKey(eventId: string, memberId: string, courseId: stri
   return `claykeeper:scoring-draft:${eventId}:${memberId}:${courseId}`
 }
 
+function scoringSelectionKey(eventId: string) {
+  return `claykeeper:digital-scoring-selection:${eventId}`
+}
+
+function readScoringSelection(eventId: string) {
+  if (!eventId) return {}
+  try {
+    return JSON.parse(
+      window.localStorage.getItem(scoringSelectionKey(eventId)) ?? "{}",
+    ) as { shootId?: string; squadId?: string; memberId?: string }
+  } catch {
+    return {}
+  }
+}
+
 function isLikelyConnectionError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   return /failed to fetch|load failed|network|offline|connection/i.test(message)
@@ -96,11 +111,15 @@ function isLikelyConnectionError(error: unknown) {
 export function DigitalScoringPage() {
   const { eventId } = useParams()
   const [searchParams] = useSearchParams()
+  const storedSelection = useMemo(
+    () => readScoringSelection(eventId ?? ""),
+    [eventId],
+  )
 
   const requestedShootId =
-    searchParams.get("shootId") ?? ""
+    storedSelection.shootId || searchParams.get("shootId") || ""
   const requestedMemberId =
-    searchParams.get("memberId") ?? ""
+    storedSelection.memberId || searchParams.get("memberId") || ""
   const requestedCourseId =
     searchParams.get("courseId") ?? ""
 
@@ -146,7 +165,13 @@ export function DigitalScoringPage() {
 
   useEffect(() => {
     selectionRef.current = { shootId, squadId, memberId }
-  }, [memberId, shootId, squadId])
+    if (eventId && shootId && memberId) {
+      window.localStorage.setItem(
+        scoringSelectionKey(eventId),
+        JSON.stringify({ shootId, squadId, memberId }),
+      )
+    }
+  }, [eventId, memberId, shootId, squadId])
 
   const refreshQueuedCount = useCallback(async () => {
     if (!eventId) return
@@ -756,7 +781,7 @@ export function DigitalScoringPage() {
           enteredByName: enteredBy,
           notes,
           status,
-          expectedUpdatedAt,
+          expectedUpdatedAt: status === "finalized" ? null : expectedUpdatedAt,
           stationScores: stationRows
             .filter((row) => row.parsed !== null)
             .map((row) => ({
