@@ -135,6 +135,24 @@ export function isDigitalScorecardConflictError(error: unknown) {
   return error instanceof DigitalScorecardConflictError
 }
 
+export async function loadDigitalStationScores(organizationId: string, eventId: string) {
+  const rows: DigitalStationScore[] = []
+  // Read until an empty page, including when the server caps pages below our request.
+  for (;;) {
+    const { data, error } = await supabase
+      .from("digital_scorecard_station_scores")
+      .select("id,scorecard_id,station_id,hits,notes")
+      .eq("organization_id", organizationId)
+      .eq("event_id", eventId)
+      .order("id")
+      .range(rows.length, rows.length + 499)
+    check(error)
+    const page = (data ?? []) as DigitalStationScore[]
+    if (!page.length) return rows
+    rows.push(...page)
+  }
+}
+
 export async function loadDigitalScoring(eventId: string): Promise<DigitalScoringData> {
   const eventResult = await supabase
     .from("events")
@@ -218,14 +236,13 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
   const courseIds = courseRows.map((row) => row.id)
   const enrollmentIds = enrollmentRows.map((row) => row.id)
   const scorecardRows = (scorecards.data ?? []) as DigitalScorecard[]
-  const scorecardIds = scorecardRows.map((row) => row.id)
 
   const [stations, members, stationScores] = await Promise.all([
     courseIds.length ? supabase.from("course_stations").select("id,course_id,station_number,bird_count,notes,display_order").in("course_id", courseIds).order("display_order") : Promise.resolve({ data: [], error: null }),
     enrollmentIds.length ? supabase.from("squad_members").select("id,squad_id,registration_shoot_id,position,position_label").in("registration_shoot_id", enrollmentIds).neq("status", "withdrawn").order("position") : Promise.resolve({ data: [], error: null }),
-    scorecardIds.length ? supabase.from("digital_scorecard_station_scores").select("id,scorecard_id,station_id,hits,notes").in("scorecard_id", scorecardIds) : Promise.resolve({ data: [], error: null }),
+    loadDigitalStationScores(event.organization_id, eventId),
   ])
-  for (const result of [stations, members, stationScores]) check(result.error)
+  for (const result of [stations, members]) check(result.error)
 
   return {
     event,
@@ -240,7 +257,7 @@ export async function loadDigitalScoring(eventId: string): Promise<DigitalScorin
     teams: (teams.data ?? []) as DigitalScoringNamed[],
     classes: (classes.data ?? []) as DigitalScoringClass[],
     scorecards: scorecardRows,
-    stationScores: (stationScores.data ?? []) as DigitalStationScore[],
+    stationScores,
   }
 }
 
