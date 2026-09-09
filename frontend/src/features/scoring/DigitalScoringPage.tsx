@@ -163,6 +163,13 @@ export function DigitalScoringPage() {
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
   const selectionRef = useRef({ shootId: "", squadId: ALL_SQUADS, memberId: "" })
+  const editRevisionRef = useRef(0)
+  const preservedFormRef = useRef<{ data: DigitalScoringData; memberId: string; courseId: string } | null>(null)
+
+  function markEdited() {
+    editRevisionRef.current += 1
+    setDirty(true)
+  }
 
   const recordLastSaveError = useCallback((message: string) => {
     setLastSaveError(message)
@@ -184,7 +191,7 @@ export function DigitalScoringPage() {
     setQueuedCount(drafts.length)
   }, [eventId])
 
-  const load = useCallback(async (options: { silent?: boolean; resetSquads?: boolean } = {}) => {
+  const load = useCallback(async (options: { silent?: boolean; resetSquads?: boolean; preserveForm?: { memberId: string; courseId: string } } = {}) => {
     if (options.resetSquads) {
       selectionRef.current.squadId = ALL_SQUADS
       setSquadId(ALL_SQUADS)
@@ -195,7 +202,7 @@ export function DigitalScoringPage() {
       return false
     }
 
-    setLoading(true)
+    if (!options.preserveForm) setLoading(true)
     setError("")
 
     try {
@@ -259,6 +266,9 @@ export function DigitalScoringPage() {
           ? requestedCourseId
           : ""
 
+      if (options.preserveForm) {
+        preservedFormRef.current = { data: next, ...options.preserveForm }
+      }
       setData(next)
 
       if (
@@ -449,6 +459,11 @@ export function DigitalScoringPage() {
 
   useEffect(() => {
     if (!data || !memberId) return
+    // A save refreshes server metadata without replacing the active inputs.
+    const preserved = preservedFormRef.current
+    if (preserved?.data === data && preserved.memberId === memberId && preserved.courseId === courseId) return
+    preservedFormRef.current = null
+    const hydrationRevision = editRevisionRef.current
 
     const scorecardStationScores = data.stationScores.filter(
       (row) => row.scorecard_id === scorecard?.id,
@@ -526,7 +541,7 @@ export function DigitalScoringPage() {
         }
       }
 
-      if (cancelled) return
+      if (cancelled || editRevisionRef.current !== hydrationRevision) return
 
       if (draft && !locked) {
         const serverUpdatedAt = scorecard?.updated_at ?? null
@@ -726,6 +741,7 @@ export function DigitalScoringPage() {
       }
 
       selectionRef.current = { shootId, squadId, memberId }
+      const savedRevision = editRevisionRef.current
 
       const protectedDraft: OfflineScorecardDraft = {
         key: offlineScorecardKey(eventId, memberId, courseId),
@@ -840,11 +856,14 @@ export function DigitalScoringPage() {
             })),
         })
 
-        await deleteOfflineScorecardDraft(
-          offlineScorecardKey(eventId, memberId, courseId),
-        ).catch(() => undefined)
-        setDirty(false)
-        setPendingSync(false)
+        if (editRevisionRef.current === savedRevision) {
+          await deleteOfflineScorecardDraft(
+            offlineScorecardKey(eventId, memberId, courseId),
+          ).catch(() => undefined)
+        }
+        const hasNewEdits = editRevisionRef.current !== savedRevision
+        setDirty(hasNewEdits)
+        setPendingSync(hasNewEdits)
         setQueuedStatus("draft")
         setLocalDraftSavedAt(null)
         await refreshQueuedCount().catch(() => undefined)
@@ -866,7 +885,7 @@ export function DigitalScoringPage() {
           )
         }
 
-        await load({ silent: true })
+        await load({ silent: true, ...(status === "draft" ? { preserveForm: { memberId, courseId } } : {}) })
         setShootId(shootId)
         setSquadId(squadId)
         setMemberId(memberId)
@@ -934,22 +953,28 @@ export function DigitalScoringPage() {
     ],
   )
 
+  const autosaveRef = useRef(save)
+  useEffect(() => {
+    autosaveRef.current = save
+  }, [save])
+
   useEffect(() => {
     if (!dirty || locked || saving || !memberId || !courseId || !online || syncConflict) return
 
     const timer = window.setTimeout(() => {
-      void save("draft", { silent: true })
-    }, 5000)
+      void autosaveRef.current("draft", { silent: true })
+    }, 20000)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, dirty, locked, memberId, online, save, saving, syncConflict])
+  }, [courseId, dirty, enteredBy, locked, malfunctions, memberId, notes, online, saving, scores, stationNotes, syncConflict, verified1, verified2])
 
   useEffect(() => {
-    if (!online || queuedCount === 0 || saving || syncingQueue || syncConflict || queueSyncBlocked || !eventId) return
+    if (!online || dirty || queuedCount === 0 || saving || syncingQueue || syncConflict || queueSyncBlocked || !eventId) return
 
     const timer = window.setTimeout(() => {
       void (async () => {
         setSyncingQueue(true)
+        const syncRevision = editRevisionRef.current
         let uploaded = 0
         let conflicts = 0
 
@@ -980,10 +1005,12 @@ export function DigitalScoringPage() {
                     notes: draft.stationNotes[stationId] ?? "",
                   })),
               })
-              await deleteOfflineScorecardDraft(draft.key)
+              const activeDraft = draft.key === offlineScorecardKey(eventId, memberId, courseId)
+              const hasNewEdits = activeDraft && editRevisionRef.current !== syncRevision
+              if (!hasNewEdits) await deleteOfflineScorecardDraft(draft.key)
               uploaded += 1
 
-              if (draft.key === offlineScorecardKey(eventId, memberId, courseId)) {
+              if (activeDraft && !hasNewEdits) {
                 setPendingSync(false)
                 setQueuedStatus("draft")
                 setLocalDraftSavedAt(null)
@@ -1007,7 +1034,7 @@ export function DigitalScoringPage() {
           await refreshQueuedCount()
           if (uploaded > 0) {
             toast.success(`${uploaded} saved scorecard${uploaded === 1 ? "" : "s"} uploaded.`)
-            await load()
+            await load({ silent: true, preserveForm: { memberId, courseId } })
           }
           if (conflicts > 0) {
             setQueueSyncBlocked(true)
@@ -1025,7 +1052,7 @@ export function DigitalScoringPage() {
     }, 750)
 
     return () => window.clearTimeout(timer)
-  }, [courseId, eventId, load, memberId, online, queuedCount, queueSyncBlocked, refreshQueuedCount, saving, scorecard?.updated_at, syncConflict, syncingQueue])
+  }, [courseId, dirty, eventId, load, memberId, online, queuedCount, queueSyncBlocked, refreshQueuedCount, saving, scorecard?.updated_at, syncConflict, syncingQueue])
 
   function keepServerVersion() {
     if (!eventId || !memberId || !courseId) return
@@ -1062,7 +1089,7 @@ export function DigitalScoringPage() {
     setSyncConflict(null)
     setQueueSyncBlocked(false)
     setPendingSync(true)
-    setDirty(true)
+    markEdited()
     void putOfflineScorecardDraft(draft)
     toast.warning(
       "Device draft restored. Review it carefully, then save to intentionally replace the newer server draft.",
@@ -1075,7 +1102,7 @@ export function DigitalScoringPage() {
       [stationId]: value.replace(/[^0-9]/g, ""),
     }))
     setQueuedStatus("draft")
-    setDirty(true)
+    markEdited()
     if (error) setError("")
   }
 
@@ -1085,7 +1112,7 @@ export function DigitalScoringPage() {
       [stationId]: value,
     }))
     setQueuedStatus("draft")
-    setDirty(true)
+    markEdited()
     if (error) setError("")
   }
 
@@ -1887,7 +1914,7 @@ export function DigitalScoringPage() {
                       Math.min(3, Math.max(0, Number(event.target.value))),
                     )
                     setQueuedStatus("draft")
-                    setDirty(true)
+                    markEdited()
                   }}
                   className="mt-1 min-h-12 w-full rounded-lg border px-3 text-lg"
                 />
@@ -1898,7 +1925,7 @@ export function DigitalScoringPage() {
                 setValue={(value) => {
                   setVerified1(value)
                   setQueuedStatus("draft")
-                  setDirty(true)
+                  markEdited()
                 }}
                 disabled={locked || Boolean(syncConflict)}
               />
@@ -1908,7 +1935,7 @@ export function DigitalScoringPage() {
                 setValue={(value) => {
                   setVerified2(value)
                   setQueuedStatus("draft")
-                  setDirty(true)
+                  markEdited()
                 }}
                 disabled={locked || Boolean(syncConflict)}
               />
@@ -1919,7 +1946,7 @@ export function DigitalScoringPage() {
                 setValue={(value) => {
                   setEnteredBy(value)
                   setQueuedStatus("draft")
-                  setDirty(true)
+                  markEdited()
                 }}
                 disabled={locked || Boolean(syncConflict)}
               />
@@ -1931,7 +1958,7 @@ export function DigitalScoringPage() {
                   onChange={(event) => {
                     setNotes(event.target.value)
                     setQueuedStatus("draft")
-                    setDirty(true)
+                    markEdited()
                   }}
                   className="mt-1 min-h-24 w-full rounded-lg border p-3"
                 />
