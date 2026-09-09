@@ -61,6 +61,9 @@ type SyncConflict = {
   serverUpdatedAt: string | null
 }
 
+const ALL_SQUADS = "__all_squads__"
+type MemberSort = "squad" | "name" | "status"
+
 function formatSavedTime(value: Date | null) {
   if (!value) return "Not saved yet"
   return new Intl.DateTimeFormat("en-US", {
@@ -105,6 +108,7 @@ export function DigitalScoringPage() {
   const [shootId, setShootId] = useState("")
   const [squadId, setSquadId] = useState("")
   const [memberId, setMemberId] = useState("")
+  const [memberSort, setMemberSort] = useState<MemberSort>("squad")
   const [courseId, setCourseId] = useState("")
   const [scores, setScores] = useState<Record<string, string>>({})
   const [stationNotes, setStationNotes] = useState<Record<string, string>>({})
@@ -138,6 +142,11 @@ export function DigitalScoringPage() {
   } | null>(null)
   const scoreInputRefs = useRef<Array<HTMLInputElement | null>>([])
   const stationCardRefs = useRef<Array<HTMLElement | null>>([])
+  const selectionRef = useRef({ shootId: "", squadId: "", memberId: "" })
+
+  useEffect(() => {
+    selectionRef.current = { shootId, squadId, memberId }
+  }, [memberId, shootId, squadId])
 
   const refreshQueuedCount = useCallback(async () => {
     if (!eventId) return
@@ -174,9 +183,11 @@ export function DigitalScoringPage() {
         setUsingOfflineData(true)
       }
 
-      const requestedMember = requestedMemberId
+      const preferredMemberId =
+        selectionRef.current.memberId || requestedMemberId
+      const requestedMember = preferredMemberId
         ? next.members.find(
-            (row) => row.id === requestedMemberId,
+            (row) => row.id === preferredMemberId,
           )
         : undefined
 
@@ -186,22 +197,24 @@ export function DigitalScoringPage() {
           )
         : undefined
 
+      const preferredShootId =
+        selectionRef.current.shootId || requestedShootId
       const requestedShoot =
         requestedSquad &&
         next.shoots.some(
           (row) =>
             row.id === requestedSquad.shoot_id &&
             (
-              !requestedShootId ||
-              row.id === requestedShootId
+              !preferredShootId ||
+              row.id === preferredShootId
             ),
         )
           ? requestedSquad.shoot_id
-          : requestedShootId &&
+          : preferredShootId &&
               next.shoots.some(
-                (row) => row.id === requestedShootId,
+                (row) => row.id === preferredShootId,
               )
-            ? requestedShootId
+            ? preferredShootId
             : ""
 
       const requestedCourse =
@@ -220,7 +233,11 @@ export function DigitalScoringPage() {
         requestedShoot
       ) {
         setShootId(requestedShoot)
-        setSquadId(requestedSquad.id)
+        setSquadId(
+          selectionRef.current.squadId === ALL_SQUADS
+            ? ALL_SQUADS
+            : requestedSquad.id,
+        )
         setMemberId(requestedMember.id)
 
         if (requestedCourse) {
@@ -287,7 +304,12 @@ export function DigitalScoringPage() {
   }, [dirty])
 
   const squads = useMemo(
-    () => data?.squads.filter((row) => row.shoot_id === shootId) ?? [],
+    () =>
+      [...(data?.squads.filter((row) => row.shoot_id === shootId) ?? [])].sort(
+        (left, right) =>
+          Number(left.squad_number) - Number(right.squad_number) ||
+          left.squad_number.localeCompare(right.squad_number),
+      ),
     [data, shootId],
   )
 
@@ -299,10 +321,61 @@ export function DigitalScoringPage() {
     )
   }, [squads])
 
-  const members = useMemo(
-    () => data?.members.filter((row) => row.squad_id === squadId) ?? [],
-    [data, squadId],
-  )
+  const members = useMemo(() => {
+    if (!data) return []
+    const squadById = new Map(data.squads.map((row) => [row.id, row]))
+    const athleteByMemberId = new Map(
+      data.members.map((member) => {
+        const enrollment = data.enrollments.find(
+          (row) => row.id === member.registration_shoot_id,
+        )
+        const registration = data.registrations.find(
+          (row) => row.id === enrollment?.registration_id,
+        )
+        return [member.id, data.athletes.find((row) => row.id === registration?.athlete_id)]
+      }),
+    )
+    const eligibleSquadIds = new Set(squads.map((row) => row.id))
+    const filtered = data.members.filter((row) =>
+      squadId === ALL_SQUADS
+        ? eligibleSquadIds.has(row.squad_id)
+        : row.squad_id === squadId,
+    )
+    const statusRank = (member: typeof filtered[number]) => {
+      const status = data.scorecards.find(
+        (row) => row.squad_member_id === member.id,
+      )?.status
+      return status === "finalized" ? 0 : status === "draft" ? 1 : 2
+    }
+    const name = (member: typeof filtered[number]) =>
+      nameOf(athleteByMemberId.get(member.id))
+    const squadOrder = (member: typeof filtered[number]) => {
+      const squad = squadById.get(member.squad_id)
+      return Number(squad?.squad_number ?? 0)
+    }
+
+    return [...filtered].sort((left, right) => {
+      if (memberSort === "name") {
+        return (
+          name(left).localeCompare(name(right)) ||
+          squadOrder(left) - squadOrder(right) ||
+          left.position - right.position
+        )
+      }
+      if (memberSort === "status") {
+        return (
+          statusRank(left) - statusRank(right) ||
+          squadOrder(left) - squadOrder(right) ||
+          left.position - right.position
+        )
+      }
+      return (
+        squadOrder(left) - squadOrder(right) ||
+        left.position - right.position ||
+        name(left).localeCompare(name(right))
+      )
+    })
+  }, [data, memberSort, squadId, squads])
 
   useEffect(() => {
     setMemberId((current) =>
@@ -312,7 +385,9 @@ export function DigitalScoringPage() {
     )
   }, [members])
 
-  const selectedSquad = data?.squads.find((row) => row.id === squadId)
+  const selectedSquad =
+    data?.squads.find((row) => row.id === squadId) ??
+    data?.squads.find((row) => row.id === members.find((row) => row.id === memberId)?.squad_id)
   const suggestedCourse =
     data?.courses.find((row) => row.name === selectedSquad?.course_name) ??
     data?.courses[0]
@@ -1261,7 +1336,7 @@ export function DigitalScoringPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-4 md:p-5">
+        <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm md:grid-cols-5 md:p-5">
           <Select
             label="Shoot"
             value={shootId}
@@ -1282,7 +1357,7 @@ export function DigitalScoringPage() {
             options={squads.map((row) => ({
               value: row.id,
               label: `Squad ${row.squad_number}`,
-            }))}
+            })).concat({ value: ALL_SQUADS, label: "All squads" })}
           />
           <Select
             label="Participant / Post"
@@ -1291,6 +1366,7 @@ export function DigitalScoringPage() {
               void moveToMember(value)
             }}
             options={members.map((member) => {
+              const squad = data.squads.find((row) => row.id === member.squad_id)
               const enrollment = data.enrollments.find(
                 (row) => row.id === member.registration_shoot_id,
               )
@@ -1302,9 +1378,19 @@ export function DigitalScoringPage() {
               )
               return {
                 value: member.id,
-                label: `${member.position_label || `Post ${member.position}`} · ${nameOf(athlete)}`,
+                label: `${squadId === ALL_SQUADS ? `Squad ${squad?.squad_number} · ` : ""}${member.position_label || `Post ${member.position}`} · ${nameOf(athlete)}`,
               }
             })}
+          />
+          <Select
+            label="Sort shooters"
+            value={memberSort}
+            setValue={(value) => setMemberSort(value as MemberSort)}
+            options={[
+              { value: "squad", label: "Squad / post" },
+              { value: "name", label: "Shooter name" },
+              { value: "status", label: "Score status" },
+            ]}
           />
           <Select
             label="Course"
