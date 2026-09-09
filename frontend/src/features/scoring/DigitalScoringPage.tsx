@@ -759,6 +759,30 @@ export function DigitalScoringPage() {
             (row) => row.squad_member_id === memberId,
           )
           if (latestScorecard) {
+            if (latestScorecard.status === "finalized") {
+              setData(latest)
+              setDirty(false)
+              setPendingSync(false)
+              setQueuedStatus("draft")
+              setLocalDraftSavedAt(null)
+              setLastSaveError("")
+              setLastSavedAt(new Date())
+              setLastServerConfirmation({
+                at: new Date(),
+                status: "finalized",
+                score: latestScorecard.total_score,
+                targets: latestScorecard.total_targets,
+              })
+              await deleteOfflineScorecardDraft(
+                offlineScorecardKey(eventId, memberId, courseId),
+              ).catch(() => undefined)
+              await refreshQueuedCount()
+              if (!options.silent) {
+                toast.info("This scorecard was already finalized on the server.")
+              }
+              setSaving(false)
+              return true
+            }
             saveScorecardId = latestScorecard.id
             expectedUpdatedAt = latestScorecard.updated_at
           }
