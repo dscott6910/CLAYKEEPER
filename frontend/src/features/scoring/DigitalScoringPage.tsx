@@ -731,11 +731,11 @@ export function DigitalScoringPage() {
       }
 
       if (online) setSaving(true)
-      await putOfflineScorecardDraft(protectedDraft)
+      await putOfflineScorecardDraft(protectedDraft).catch(() => undefined)
       setLocalDraftSavedAt(new Date(protectedDraft.savedAt))
       setPendingSync(true)
       setQueuedStatus(status)
-      await refreshQueuedCount()
+      await refreshQueuedCount().catch(() => undefined)
 
       if (!online) {
         setDirty(false)
@@ -818,12 +818,12 @@ export function DigitalScoringPage() {
 
         await deleteOfflineScorecardDraft(
           offlineScorecardKey(eventId, memberId, courseId),
-        )
+        ).catch(() => undefined)
         setDirty(false)
         setPendingSync(false)
         setQueuedStatus("draft")
         setLocalDraftSavedAt(null)
-        await refreshQueuedCount()
+        await refreshQueuedCount().catch(() => undefined)
         const confirmedAt = new Date()
         setLastSavedAt(confirmedAt)
         setLastSaveError("")
@@ -1146,12 +1146,11 @@ export function DigitalScoringPage() {
     }
 
     const athlete = nameOf(participant?.athlete)
-    const confirmation = window.prompt(
-      `FINAL REVIEW\n\nParticipant: ${athlete}\nScore: ${totalScore} / ${totalTargets}\nStations: ${enteredCount} / ${stations.length}\n\nFinalized scorecards are locked from normal editing.\n\nType FINALIZE to confirm.`,
-      "",
+    const confirmation = window.confirm(
+      `FINAL REVIEW\n\nParticipant: ${athlete}\nScore: ${totalScore} / ${totalTargets}\nStations: ${enteredCount} / ${stations.length}\n\nFinalized scorecards are locked from normal editing.\n\nPress OK to finalize this scorecard.`,
     )
 
-    if (confirmation?.trim().toUpperCase() !== "FINALIZE") {
+    if (!confirmation) {
       toast.message("Finalization cancelled. The scorecard remains editable.")
       return
     }
