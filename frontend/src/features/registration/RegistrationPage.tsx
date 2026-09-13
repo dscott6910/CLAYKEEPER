@@ -1001,7 +1001,7 @@ export function RegistrationPage() {
   }
 
   async function setNoShow(registration: RegistrationRecord) {
-    const nextStatus = registration.status === "no_show" ? "registered" : "no_show"
+    const nextStatus = registration.status === "withdrawn" ? "registered" : "withdrawn"
     setUpdatingRegistrationId(registration.id)
     setErrorMessage("")
     setSuccessMessage("")
@@ -1011,7 +1011,7 @@ export function RegistrationPage() {
         .update({ status: nextStatus })
         .eq("id", registration.id)
       if (error) throw error
-      setSuccessMessage(nextStatus === "no_show" ? "Participant marked as no-show." : "Participant restored to registered.")
+      setSuccessMessage(nextStatus === "withdrawn" ? "Participant marked as no-show." : "Participant restored to registered.")
       await loadSelectedEventData()
     } catch (error) {
       setErrorMessage(`Registration status could not be updated: ${getErrorMessage(error)}`)
@@ -1908,7 +1908,7 @@ export function RegistrationPage() {
                                 disabled={saving || isUpdating}
                               >
                                 <UserX className="h-4 w-4" />
-                                {registration.status === "no_show" ? "Restore" : "No-Show"}
+                                {registration.status === "withdrawn" ? "Restore" : "No-Show"}
                               </Button>
                             </div>
                           )}

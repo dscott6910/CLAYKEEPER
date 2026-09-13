@@ -61,7 +61,7 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
     .filter((enrollment) => {
       if (["withdrawn", "cancelled"].includes(enrollment.status)) return false
       const registration = registrationById.get(enrollment.registration_id)
-      return registration?.status !== "no_show"
+      return registration?.status !== "withdrawn"
     })
     .map((enrollment) => {
       const registration = registrationById.get(enrollment.registration_id)
