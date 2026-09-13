@@ -1184,7 +1184,8 @@ function measureBubble(
   rowHeight: number,
 ) {
   const radius = Math.min(cellWidth * 0.32, rowHeight * 0.23)
-  const innerRadius = radius * 0.72
+  // Keep blurred outlines outside the sampled center.
+  const innerRadius = radius * 0.60
   const backgroundRadius = Math.min(cellWidth, rowHeight) * 0.40
   let innerPixels = 0
   let innerInk = 0
@@ -1210,7 +1211,8 @@ function measureBubble(
 
   const innerAverage = innerPixels ? innerLuminance / innerPixels : 255
   const backgroundAverage = backgroundPixels ? backgroundLuminance / backgroundPixels : 255
-  const inkThreshold = Math.min(190, backgroundAverage - 22)
+  // Pale pencil still needs to be darker than the surrounding paper.
+  const inkThreshold = Math.min(220, backgroundAverage - 22)
 
   for (let y = Math.floor(centerY - innerRadius); y <= Math.ceil(centerY + innerRadius); y += 1) {
     for (let x = Math.floor(centerX - innerRadius); x <= Math.ceil(centerX + innerRadius); x += 1) {
@@ -1267,11 +1269,13 @@ export function analyzeBubbleScorecard(
   })
 
   const scores = measured.map((reading) => reading.score).sort((a, b) => a - b)
-  const baseline = scores.slice(0, Math.max(1, Math.floor(scores.length * 0.60)))
+  // Estimate paper noise from clear empty centers only. A high-scoring card
+  // may have almost no empty bubbles; filled bubbles cannot be its baseline.
+  const baseline = scores.filter((score) => score < 0.14)
   const baselineMedian = baseline[Math.floor(baseline.length / 2)] ?? 0
   const deviations = baseline.map((value) => Math.abs(value - baselineMedian)).sort((a, b) => a - b)
   const medianDeviation = deviations[Math.floor(deviations.length / 2)] ?? 0
-  const filledThreshold = Math.max(0.34, baselineMedian + Math.max(0.20, medianDeviation * 7))
+  const filledThreshold = Math.max(0.40, baselineMedian + Math.max(0.20, medianDeviation * 7))
   const reviewThreshold = Math.max(0.14, baselineMedian + Math.max(0.09, medianDeviation * 4))
 
   return measured.map((reading) => ({
