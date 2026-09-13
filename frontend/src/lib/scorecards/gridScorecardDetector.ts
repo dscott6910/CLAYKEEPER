@@ -1211,6 +1211,11 @@ function measureBubble(
   const innerAverage = innerPixels ? innerLuminance / innerPixels : 255
   const backgroundAverage = backgroundPixels ? backgroundLuminance / backgroundPixels : 255
   const inkThreshold = Math.min(190, backgroundAverage - 22)
+  let inkX = 0
+  let inkY = 0
+  let inkXX = 0
+  let inkYY = 0
+  let inkXY = 0
 
   for (let y = Math.floor(centerY - innerRadius); y <= Math.ceil(centerY + innerRadius); y += 1) {
     for (let x = Math.floor(centerX - innerRadius); x <= Math.ceil(centerX + innerRadius); x += 1) {
@@ -1223,6 +1228,13 @@ function measureBubble(
         (sat > 0.30 && lum < backgroundAverage - 12)
       ) {
         innerInk += 1
+        const dx = x - centerX
+        const dy = y - centerY
+        inkX += dx
+        inkY += dy
+        inkXX += dx * dx
+        inkYY += dy * dy
+        inkXY += dx * dy
       }
     }
   }
@@ -1230,7 +1242,47 @@ function measureBubble(
   const fillRatio = innerPixels ? innerInk / innerPixels : 0
   const contrast = clamp((backgroundAverage - innerAverage) / 115)
   const score = clamp(fillRatio * 0.76 + contrast * 0.24)
-  return { fillRatio, contrast, score }
+  // A miss slash leaves a narrow diagonal through an otherwise empty center.
+  // Measure its shape so light or incomplete fills still receive normal review.
+  let slash = false
+  if (innerInk >= 4 && fillRatio >= 0.06 && fillRatio <= 0.55) {
+    const meanX = inkX / innerInk
+    const meanY = inkY / innerInk
+    const xx = inkXX / innerInk - meanX * meanX
+    const yy = inkYY / innerInk - meanY * meanY
+    const xy = inkXY / innerInk - meanX * meanY
+    const spread = xx + yy
+    const major = (spread + Math.hypot(xx - yy, 2 * xy)) / 2
+    const angle = Math.atan2(2 * xy, xx - yy) / 2
+    const offset = -meanX * Math.sin(angle) + meanY * Math.cos(angle)
+    slash = spread > 0 && major / spread >= 0.92 &&
+      Math.sqrt(major) >= innerRadius * 0.40 &&
+      Math.abs(Math.sin(angle)) >= 0.25 && Math.abs(Math.cos(angle)) >= 0.25 &&
+      Math.abs(offset) <= innerRadius * 0.55
+    if (!slash && spread > 0 && major / spread >= 0.85 &&
+      Math.sqrt(major) >= innerRadius * 0.40 &&
+      Math.abs(Math.sin(angle)) >= 0.25 && Math.abs(Math.cos(angle)) >= 0.25) {
+      // An off-center slash can pick up part of the printed circle. Require
+      // the same stroke beyond both sides of the circle before calling a miss.
+      const ux = Math.cos(angle)
+      const uy = Math.sin(angle)
+      slash = [-1, 1].every((side) => {
+        let covered = 0
+        for (const distance of [1.35, 1.5, 1.65]) {
+          let found = false
+          for (let across = -2; across <= 2; across += 1) {
+            const px = centerX + side * distance * radius * ux - (offset + across) * uy
+            const py = centerY + side * distance * radius * uy + (offset + across) * ux
+            const value = pixel(image, Math.round(px), Math.round(py))
+            if (luminance(value.red, value.green, value.blue) < inkThreshold) found = true
+          }
+          if (found) covered += 1
+        }
+        return covered >= 2
+      })
+    }
+  }
+  return { fillRatio, contrast, score, slash }
 }
 
 export function analyzeBubbleScorecard(
@@ -1246,7 +1298,7 @@ export function analyzeBubbleScorecard(
   const headerHeight = template.headerHeight * image.height
   const rowHeight = template.rowHeight * image.height
   const birdWidth = (tableWidth - stationWidth - totalWidth - runningWidth) / template.birdColumns
-  const measured: BubbleCellReading[] = []
+  const measured: Array<BubbleCellReading & { slash: boolean }> = []
 
   template.stations.forEach((station, rowIndex) => {
     for (let birdIndex = 0; birdIndex < station.birdCount; birdIndex += 1) {
@@ -1266,7 +1318,7 @@ export function analyzeBubbleScorecard(
     }
   })
 
-  const scores = measured.map((reading) => reading.score).sort((a, b) => a - b)
+  const scores = measured.map((reading) => reading.slash ? 0 : reading.score).sort((a, b) => a - b)
   const baseline = scores.slice(0, Math.max(1, Math.floor(scores.length * 0.60)))
   const baselineMedian = baseline[Math.floor(baseline.length / 2)] ?? 0
   const deviations = baseline.map((value) => Math.abs(value - baselineMedian)).sort((a, b) => a - b)
@@ -1277,7 +1329,7 @@ export function analyzeBubbleScorecard(
   return measured.map((reading) => ({
     ...reading,
     state:
-      reading.score >= filledThreshold && reading.fillRatio >= 0.25
+      reading.slash ? "blank" : reading.score >= filledThreshold && reading.fillRatio >= 0.25
         ? "hit"
         : reading.score >= reviewThreshold || reading.fillRatio >= 0.12
           ? "review"

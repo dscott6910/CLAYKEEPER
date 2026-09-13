@@ -36,8 +36,10 @@ const markers = detector.detectRegistrationMarkers(image, centers)
 assert.equal(markers.length, 4, "All four markers must be detected")
 const corrected = detector.warpUsingMarkerTemplate(image, markers.map(marker => marker.center), centers, 1100, 1700)
 const readings = detector.analyzeBubbleScorecard(corrected, helpers.buildTemplate(stations))
+const mismatches = []
 for (const reading of readings) {
   const state = expected[reading.station - 1].hits.includes(reading.bird) ? "hit" : "blank"
-  assert.equal(reading.state, state, `Station ${reading.station}, bird ${reading.bird}`)
+  if (reading.state !== state) mismatches.push({ ...reading, expected: state })
 }
+assert.deepEqual(mismatches, [], "Bubble readings differ from reviewed marks")
 console.log(`Passed: 4 markers, ${readings.length} bubbles, ${readings.filter(reading => reading.state === "hit").length} hits; using the single/batch screen's actual calibration.`)
