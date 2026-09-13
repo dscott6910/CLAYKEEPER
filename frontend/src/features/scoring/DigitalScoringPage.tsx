@@ -804,7 +804,7 @@ export function DigitalScoringPage() {
       let saveShootId = shootId
       let saveCourseId = courseId
       let expectedUpdatedAt = scorecard?.updated_at ?? null
-      if (status === "finalized") {
+      if (status === "finalized" && !editingFinalized) {
         try {
           const latest = await loadDigitalScoring(eventId)
           const latestScorecard = latest.scorecards.find(
