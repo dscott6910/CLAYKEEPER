@@ -1227,11 +1227,17 @@ export function DigitalScoringPage() {
   }
 
   async function removeCurrentCourseScorecard() {
-    if (!scorecard || !data || !canEditFinalized) return
+    if (!data || !canEditFinalized) return
     if (!window.confirm(`Remove ${nameOf(participant?.athlete)}'s scorecard for this course? This cannot be undone.`)) return
     setSaving(true)
     try {
-      await deleteDigitalScorecard(scorecard.id, data.event.organization_id)
+      const localDraft = await getOfflineScorecardDraft(
+        offlineScorecardKey(eventId ?? "", memberId, courseId),
+      ).catch(() => null)
+      const serverScorecardId = scorecard?.id ?? localDraft?.scorecardId
+      if (serverScorecardId) {
+        await deleteDigitalScorecard(serverScorecardId, data.event.organization_id)
+      }
       await deleteOfflineScorecardDraft(
         offlineScorecardKey(eventId ?? "", memberId, courseId),
       ).catch(() => undefined)
@@ -1713,9 +1719,9 @@ export function DigitalScoringPage() {
               </div>
             ) : null}
 
-            {scorecard && !editingFinalized && canEditFinalized ? (
+            {(scorecard || pendingSync) && !editingFinalized && canEditFinalized ? (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                <span>{scorecard.status === "finalized" ? "This scorecard is finalized and locked." : "This course scorecard is saved as a draft."}</span>
+                <span>{scorecard?.status === "finalized" ? "This scorecard is finalized and locked." : "This course scorecard is saved on this device."}</span>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setEditingFinalized(true)}>
                     <ShieldCheck className="h-4 w-4" />
