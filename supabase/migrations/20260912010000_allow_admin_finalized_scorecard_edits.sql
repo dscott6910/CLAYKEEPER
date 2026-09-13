@@ -40,7 +40,7 @@ begin
     where id=p_scorecard_id and organization_id=p_organization_id and event_id=p_event_id
       and shoot_id=p_shoot_id and squad_member_id=p_squad_member_id and course_id=p_course_id
       and (status='draft' or v_is_admin)
-      and (p_expected_updated_at is null or updated_at=p_expected_updated_at)
+      and (p_expected_updated_at is null or public.digital_scorecards.updated_at=p_expected_updated_at)
     returning id into v_scorecard_id;
     if v_scorecard_id is null then raise exception 'CK_SCORECARD_CONFLICT'; end if;
   else
@@ -51,7 +51,8 @@ begin
     values (p_organization_id,p_event_id,p_shoot_id,p_squad_member_id,p_course_id,p_status,p_malfunction_count,nullif(trim(p_verified_by_1),''),nullif(trim(p_verified_by_2),''),nullif(trim(p_entered_by_name),''),nullif(trim(p_notes),''),v_total_score,v_total_targets,case when p_status='finalized' then v_updated_at else null end,v_updated_at)
     returning id into v_scorecard_id;
   end if;
-  delete from public.digital_scorecard_station_scores where scorecard_id=v_scorecard_id;
+  delete from public.digital_scorecard_station_scores as station_score
+  where station_score.scorecard_id=v_scorecard_id;
   insert into public.digital_scorecard_station_scores (organization_id,event_id,shoot_id,scorecard_id,station_id,hits,updated_at)
   select p_organization_id,p_event_id,p_shoot_id,v_scorecard_id,(row->>'stationId')::uuid,(row->>'hits')::integer,v_updated_at
   from jsonb_array_elements(coalesce(p_station_scores,'[]'::jsonb)) row;
