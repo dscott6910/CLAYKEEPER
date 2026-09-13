@@ -743,9 +743,12 @@ function drawCutLine(pdf: jsPDF) {
 }
 
 function drawRegistrationMarker(pdf: jsPDF, centerX: number, centerY: number) {
-  const outer = 0.18
-  const middle = 0.105
-  const inner = 0.048
+  const outer = 0.30
+  const middle = outer * (0.105 / 0.18)
+  const inner = outer * (0.048 / 0.18)
+  const clearance = outer + 0.06
+  pdf.setFillColor(255, 255, 255)
+  pdf.rect(centerX - clearance / 2, centerY - clearance / 2, clearance, clearance, "F")
   pdf.setFillColor(0, 0, 0)
   pdf.rect(centerX - outer / 2, centerY - outer / 2, outer, outer, "F")
   pdf.setFillColor(255, 255, 255)
@@ -765,7 +768,10 @@ async function drawScorecard(
   shootName: string,
 ) {
   const width = 5.5
-  const margin = 0.16
+  const margin = 0.30
+  // Keep every grid/marker coordinate affine-equivalent to existing printed cards.
+  const gridScaleX = (width - margin * 2) / (width - 0.16 * 2)
+  const gridScaleY = 0.86
 
   pdf.setDrawColor(20)
   pdf.setLineWidth(0.012)
@@ -833,10 +839,10 @@ async function drawScorecard(
 
   const tableX = x + margin
   const tableY = y + 1.22
-  const rowH = 0.34
-  const stationW = 0.62
-  const totalW = 0.68
-  const runningW = 0.62
+  const rowH = 0.34 * gridScaleY
+  const stationW = 0.62 * gridScaleX
+  const totalW = 0.68 * gridScaleX
+  const runningW = 0.62 * gridScaleX
   const activeStations = stations.filter((station) => station.bird_count > 0)
   const printableStations = activeStations.length > 0 ? activeStations : stations.slice(0, 1)
   const birdColumns = Math.min(
@@ -911,7 +917,7 @@ async function drawScorecard(
     for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
-        pdf.circle(cellX + birdW / 2, rowY + rowH / 2, 0.08)
+        pdf.ellipse(cellX + birdW / 2, rowY + rowH / 2, 0.08 * gridScaleX, 0.08 * gridScaleY)
       }
     }
 
@@ -922,10 +928,10 @@ async function drawScorecard(
   const subtotalY = tableY + rowH * (printableStations.length + 1)
   pdf.rect(tableX, subtotalY, tableW, rowH)
   pdf.setFontSize(5.8)
-  pdf.text("SUB", tableX + stationW / 2, subtotalY + 0.14, {
+  pdf.text("SUB", tableX + 0.44, subtotalY + 0.14, {
     align: "center",
   })
-  pdf.text("TOTAL", tableX + stationW / 2, subtotalY + 0.27, {
+  pdf.text("TOTAL", tableX + 0.44, subtotalY + 0.27, {
     align: "center",
   })
   pdf.rect(stationTotalX, subtotalY, totalW, rowH)
@@ -937,10 +943,10 @@ async function drawScorecard(
     align: "center",
   })
 
-  const footerY = subtotalY + rowH + 0.18
+  const footerY = subtotalY + rowH + 0.18 * gridScaleY
   pdf.setFontSize(7)
   pdf.setFont("helvetica", "bold")
-  pdf.text("MALFUNCTIONS", tableX + 0.26, footerY)
+  pdf.text("MALFUNCTIONS", tableX + 0.34, footerY)
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 1.21 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
@@ -952,18 +958,19 @@ async function drawScorecard(
   })
   pdf.line(
     stationTotalX + totalW + 0.05,
-    footerY + 0.04,
+    footerY + 0.13,
     stationTotalX + totalW + runningW - 0.05,
-    footerY + 0.04,
+    footerY + 0.13,
   )
 
   pdf.setFont("helvetica", "normal")
   pdf.setFontSize(6.4)
   pdf.text(
-    "Verified by:  #1________________  #2________________    Entered by:________________",
+    "Verified by:  #1____________  #2____________",
     tableX,
     footerY + 0.34,
   )
+  pdf.text("Entered by:________________", tableX, footerY + 0.52)
 
   const identityY = footerY + 0.86
   const participantLabel =
@@ -976,20 +983,20 @@ async function drawScorecard(
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8.4)
   pdf.text(`Shoot: ${shootLabel}`, tableX, identityY, {
-    maxWidth: width - margin * 2,
+    maxWidth: 2.2,
   })
 
   pdf.setFontSize(8.8)
   pdf.text(`Participant: ${participantLabel}`, tableX, identityY + 0.34, {
-    maxWidth: 3.0,
+    maxWidth: 2.2,
   })
 
   pdf.text(`Team: ${teamLabel}`, tableX, identityY + 0.62, {
-    maxWidth: 3.0,
+    maxWidth: 2.2,
   })
 
   pdf.text(`Squad: ${squadLabel}`, tableX, identityY + 0.90)
-  pdf.text(`Post: ${postLabel}`, tableX + 1.72, identityY + 0.90)
+  pdf.text(`Post: ${postLabel}`, tableX + 1.25, identityY + 0.90)
 
   if (card) {
     const scoringUrl = new URL(
@@ -1002,20 +1009,20 @@ async function drawScorecard(
     scoringUrl.searchParams.set("courseId", course.id)
 
     const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 3,
-      width: 768,
+      margin: 4,
+      width: 1200,
       errorCorrectionLevel: "M",
     })
     const qrY = footerY + 0.22
-    const qrSize = Math.min(1.95, 8.28 - qrY)
-    const qrX = x + width - qrSize - 0.16
+    const qrSize = Math.min(2.55, 8.20 - qrY)
+    const qrX = x + width - qrSize - margin
     pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
   }
 
-  const markerLeft = x + 0.24
-  const markerRight = x + width - 0.24
-  const markerTop = tableY - 0.12
-  const markerBottom = subtotalY + rowH + 0.10
+  const markerLeft = tableX + 0.08 * gridScaleX
+  const markerRight = tableX + tableW - 0.08 * gridScaleX
+  const markerTop = tableY - 0.12 * gridScaleY
+  const markerBottom = subtotalY + rowH + 0.10 * gridScaleY
   drawRegistrationMarker(pdf, markerLeft, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerBottom)
