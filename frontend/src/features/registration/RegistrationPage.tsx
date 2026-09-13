@@ -1696,7 +1696,6 @@ export function RegistrationPage() {
                       ["fees", "Fees"],
                       ["payment", "Payment"],
                       ["checkin", "Check-In"],
-                      ["actions", "Actions"],
                     ] as const).map(([key, label]) => (
                       <th key={key} className="px-5 py-3 font-medium">
                         <button
@@ -1709,6 +1708,7 @@ export function RegistrationPage() {
                         </button>
                       </th>
                     ))}
+                    <th className="px-5 py-3 font-medium">Actions</th>
                   </tr>
 
                   <tr className="border-t bg-background normal-case tracking-normal">
@@ -1720,11 +1720,9 @@ export function RegistrationPage() {
                       ["fees", "Filter fees"],
                       ["payment", "Filter payment"],
                       ["checkin", "Filter check-in"],
-                      ["actions", ""],
                     ] as const).map(([key, placeholder]) => (
                       <th key={key} className="px-3 py-2">
                         <input
-                          disabled={key === "actions"}
                           value={registrationFilters[key]}
                           onChange={(event) =>
                             setRegistrationFilters((current) => ({
@@ -1737,6 +1735,7 @@ export function RegistrationPage() {
                         />
                       </th>
                     ))}
+                    <th className="px-3 py-2" />
                   </tr>
                 </thead>
 
