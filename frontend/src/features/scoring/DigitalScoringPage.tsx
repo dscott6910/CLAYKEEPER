@@ -48,6 +48,7 @@ import {
   requestPersistentOfflineStorage,
   type OfflineScorecardDraft,
 } from "@/lib/services/offlineDigitalScoring"
+import { getCurrentOrganizationContext } from "@/lib/services/organizationContext"
 
 function nameOf(athlete: DigitalScoringData["athletes"][number] | undefined) {
   if (!athlete) return "Unknown participant"
@@ -152,6 +153,8 @@ export function DigitalScoringPage() {
   const [usingOfflineData, setUsingOfflineData] = useState(false)
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null)
   const [syncConflict, setSyncConflict] = useState<SyncConflict | null>(null)
+  const [organizationRole, setOrganizationRole] = useState<string | null>(null)
+  const [editingFinalized, setEditingFinalized] = useState(false)
   const [lastSaveError, setLastSaveError] = useState("")
   const enteredByInputRef = useRef<HTMLInputElement | null>(null)
   const [lastServerConfirmation, setLastServerConfirmation] = useState<{
@@ -455,7 +458,18 @@ export function DigitalScoringPage() {
   const scorecard = data?.scorecards.find(
     (row) => row.squad_member_id === memberId,
   )
-  const locked = scorecard?.status === "finalized"
+  const canEditFinalized = organizationRole === "owner" || organizationRole === "admin"
+  const locked = scorecard?.status === "finalized" && !editingFinalized
+
+  useEffect(() => {
+    setEditingFinalized(false)
+  }, [memberId])
+
+  useEffect(() => {
+    void getCurrentOrganizationContext()
+      .then((context) => setOrganizationRole(context.role))
+      .catch(() => setOrganizationRole(null))
+  }, [])
 
   useEffect(() => {
     if (!data || !memberId) return
@@ -845,7 +859,7 @@ export function DigitalScoringPage() {
           enteredByName: enteredBy,
           notes,
           status,
-          expectedUpdatedAt: status === "finalized" ? null : expectedUpdatedAt,
+            expectedUpdatedAt: status === "finalized" ? null : expectedUpdatedAt,
           stationScores: stationRows
             .filter((row) => row.parsed !== null)
             .map((row) => ({
@@ -1669,6 +1683,23 @@ export function DigitalScoringPage() {
               <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                 <Lock className="h-5 w-5" />
                 This scorecard was finalized and is locked.
+              </div>
+            ) : null}
+
+            {scorecard?.status === "finalized" && editingFinalized ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <span>Admin edit mode is active. Save to replace the finalized scorecard.</span>
+                <Button variant="outline" onClick={() => setEditingFinalized(false)}>Cancel edit</Button>
+              </div>
+            ) : null}
+
+            {scorecard?.status === "finalized" && !editingFinalized && canEditFinalized ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                <span>This scorecard is finalized and locked.</span>
+                <Button variant="outline" onClick={() => setEditingFinalized(true)}>
+                  <ShieldCheck className="h-4 w-4" />
+                  Edit finalized scorecard
+                </Button>
               </div>
             ) : null}
 
