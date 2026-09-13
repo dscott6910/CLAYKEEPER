@@ -1277,12 +1277,7 @@ export function analyzeBubbleScorecard(
   return measured.map((reading) => ({
     ...reading,
     state:
-      // Real cards are often filled with a quick pen mark rather than a solid
-      // disk. Keep the review band for ambiguous marks, but accept the lower
-      // coverage typical of a clearly dark hand-filled bubble.
-      (reading.score >= filledThreshold && reading.fillRatio >= 0.25) ||
-      (reading.score >= Math.max(0.16, baselineMedian + 0.06) &&
-        reading.fillRatio >= 0.14)
+      reading.score >= filledThreshold && reading.fillRatio >= 0.25
         ? "hit"
         : reading.score >= reviewThreshold || reading.fillRatio >= 0.12
           ? "review"
