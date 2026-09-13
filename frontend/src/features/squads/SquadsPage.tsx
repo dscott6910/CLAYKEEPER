@@ -83,6 +83,7 @@ export function SquadsPage() {
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState("")
   const [squadSearch, setSquadSearch] = useState("")
+  const [courseFilter, setCourseFilter] = useState("all")
   const [loading, setLoading] = useState(true)
   const [loadingShoot, setLoadingShoot] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -155,11 +156,17 @@ export function SquadsPage() {
     return map
   }, [members])
 
+  const courseOptions = useMemo(
+    () => Array.from(new Set(squads.map((squad) => squad.course_name).filter((course): course is string => Boolean(course)))).sort(),
+    [squads],
+  )
+
   const visibleSquads = useMemo(() => {
     const query = squadSearch.trim().toLowerCase()
-    if (!query) return squads
+    if (!query && courseFilter === "all") return squads
 
     return squads.filter((squad) => {
+      if (courseFilter !== "all" && squad.course_name !== courseFilter) return false
       const squadMembers = membersBySquad.get(squad.id) ?? []
 
       const participantText = squadMembers
@@ -201,6 +208,7 @@ export function SquadsPage() {
     })
   }, [
     squads,
+    courseFilter,
     squadSearch,
     membersBySquad,
     enrollmentById,
@@ -439,7 +447,17 @@ export function SquadsPage() {
                         Search without changing squad or post order.
                       </p>
                     </div>
-                    <div className="relative w-full sm:max-w-md">
+                    <div className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row">
+                      <select
+                        className="rounded-lg border px-3 py-2 text-sm"
+                        value={courseFilter}
+                        onChange={(e) => setCourseFilter(e.target.value)}
+                        title="Filter squads by course"
+                      >
+                        <option value="all">All courses</option>
+                        {courseOptions.map((course) => <option key={course} value={course}>{course}</option>)}
+                      </select>
+                      <div className="relative flex-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                       <input
                         className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm"
@@ -447,6 +465,7 @@ export function SquadsPage() {
                         value={squadSearch}
                         onChange={(e) => setSquadSearch(e.target.value)}
                       />
+                      </div>
                     </div>
                   </div>
                 </div>
