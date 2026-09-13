@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button"
 import {
   isDigitalScorecardConflictError,
   loadDigitalScoring,
+  deleteDigitalScorecard,
   saveDigitalScorecard,
   type DigitalScoringData,
 } from "@/lib/services/digitalScoring"
@@ -1225,6 +1226,22 @@ export function DigitalScoringPage() {
     await save("finalized")
   }
 
+  async function removeCurrentCourseScorecard() {
+    if (!scorecard || !data || !canEditFinalized) return
+    if (!window.confirm(`Remove ${nameOf(participant?.athlete)}'s scorecard for this course? This cannot be undone.`)) return
+    setSaving(true)
+    try {
+      await deleteDigitalScorecard(scorecard.id, data.event.organization_id)
+      setEditingFinalized(false)
+      await load({ silent: true })
+      toast.success("Scorecard removed from this course.")
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "Scorecard could not be removed.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
 
   if (loading) {
     return (
@@ -1696,10 +1713,15 @@ export function DigitalScoringPage() {
             {scorecard?.status === "finalized" && !editingFinalized && canEditFinalized ? (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
                 <span>This scorecard is finalized and locked.</span>
-                <Button variant="outline" onClick={() => setEditingFinalized(true)}>
-                  <ShieldCheck className="h-4 w-4" />
-                  Edit finalized scorecard
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditingFinalized(true)}>
+                    <ShieldCheck className="h-4 w-4" />
+                    Edit finalized scorecard
+                  </Button>
+                  <Button variant="outline" className="text-red-600" onClick={() => void removeCurrentCourseScorecard()}>
+                    Remove this course
+                  </Button>
+                </div>
               </div>
             ) : null}
 

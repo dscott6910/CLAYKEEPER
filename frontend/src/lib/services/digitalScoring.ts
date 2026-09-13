@@ -336,3 +336,15 @@ export async function saveDigitalScorecard(input: {
 
   return scorecardId
 }
+
+export async function deleteDigitalScorecard(
+  scorecardId: string,
+  organizationId: string,
+) {
+  const { error } = await supabase
+    .from("digital_scorecards")
+    .delete()
+    .eq("id", scorecardId)
+    .eq("organization_id", organizationId)
+  check(error)
+}
