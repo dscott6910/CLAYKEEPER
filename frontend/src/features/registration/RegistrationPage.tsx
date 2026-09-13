@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ClipboardList,
   DollarSign,
+  Edit3,
   Loader2,
   Plus,
   RefreshCw,
@@ -301,6 +302,10 @@ export function RegistrationPage() {
   })
   const [showRegistrationForm, setShowRegistrationForm] =
     useState(false)
+  const [editingRegistrationId, setEditingRegistrationId] =
+    useState<string | null>(null)
+  const [editingClassId, setEditingClassId] = useState("")
+  const [editingTeamId, setEditingTeamId] = useState("")
 
   const [loadingInitialData, setLoadingInitialData] = useState(true)
   const [loadingEventData, setLoadingEventData] = useState(false)
@@ -946,6 +951,52 @@ export function RegistrationPage() {
     setForm(initialFormState)
     setErrorMessage("")
     setShowRegistrationForm(false)
+  }
+
+  function openRegistrationEditor(registration: RegistrationRecord) {
+    setEditingRegistrationId(registration.id)
+    setEditingClassId(registration.class_id ?? "")
+    setEditingTeamId(registration.team_id ?? "")
+    setErrorMessage("")
+    setSuccessMessage("")
+  }
+
+  function closeRegistrationEditor() {
+    setEditingRegistrationId(null)
+    setEditingClassId("")
+    setEditingTeamId("")
+  }
+
+  async function saveRegistrationEdit() {
+    if (!editingRegistrationId) return
+
+    setSaving(true)
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    try {
+      const { error } = await supabase
+        .from("registrations")
+        .update({
+          team_id: editingTeamId || null,
+          class_id: editingClassId || null,
+        })
+        .eq("id", editingRegistrationId)
+
+      if (error) {
+        throw new Error(
+          `Registration could not be updated: ${getErrorMessage(error)}`,
+        )
+      }
+
+      setSuccessMessage("Registration updated successfully.")
+      closeRegistrationEditor()
+      await loadSelectedEventData()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function createRegistration() {
@@ -1645,6 +1696,7 @@ export function RegistrationPage() {
                       ["fees", "Fees"],
                       ["payment", "Payment"],
                       ["checkin", "Check-In"],
+                      ["actions", "Actions"],
                     ] as const).map(([key, label]) => (
                       <th key={key} className="px-5 py-3 font-medium">
                         <button
@@ -1668,9 +1720,11 @@ export function RegistrationPage() {
                       ["fees", "Filter fees"],
                       ["payment", "Filter payment"],
                       ["checkin", "Filter check-in"],
+                      ["actions", ""],
                     ] as const).map(([key, placeholder]) => (
                       <th key={key} className="px-3 py-2">
                         <input
+                          disabled={key === "actions"}
                           value={registrationFilters[key]}
                           onChange={(event) =>
                             setRegistrationFilters((current) => ({
@@ -1741,6 +1795,8 @@ export function RegistrationPage() {
 
                     const isUpdating =
                       updatingRegistrationId === registration.id
+                    const isEditing =
+                      editingRegistrationId === registration.id
 
                     return (
                       <tr
@@ -1756,6 +1812,74 @@ export function RegistrationPage() {
                           <div className="text-xs text-muted-foreground">
                             {formatDate(registrationDate)}
                           </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          {isEditing ? (
+                            <div className="flex min-w-56 flex-col gap-2">
+                              <select
+                                value={editingClassId}
+                                onChange={(event) =>
+                                  setEditingClassId(event.target.value)
+                                }
+                                className="h-9 rounded-md border bg-background px-2 text-xs"
+                              >
+                                <option value="">No class</option>
+                                {classes.map((competitionClass) => (
+                                  <option
+                                    key={competitionClass.id}
+                                    value={competitionClass.id}
+                                  >
+                                    {competitionClass.code} - {competitionClass.display_name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={editingTeamId}
+                                onChange={(event) =>
+                                  setEditingTeamId(event.target.value)
+                                }
+                                className="h-9 rounded-md border bg-background px-2 text-xs"
+                              >
+                                <option value="">No team</option>
+                                {teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void saveRegistrationEdit()}
+                                  disabled={saving}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={closeRegistrationEditor}
+                                  disabled={saving}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openRegistrationEditor(registration)}
+                              disabled={saving || isUpdating}
+                            >
+                              <Edit3 className="h-4 w-4" />
+                              Edit
+                            </Button>
+                          )}
                         </td>
 
                         <td className="px-5 py-4">
