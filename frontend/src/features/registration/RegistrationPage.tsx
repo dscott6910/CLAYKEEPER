@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   UserPlus,
+  UserX,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -999,6 +1000,26 @@ export function RegistrationPage() {
     }
   }
 
+  async function setNoShow(registration: RegistrationRecord) {
+    const nextStatus = registration.status === "no_show" ? "registered" : "no_show"
+    setUpdatingRegistrationId(registration.id)
+    setErrorMessage("")
+    setSuccessMessage("")
+    try {
+      const { error } = await supabase
+        .from("registrations")
+        .update({ status: nextStatus })
+        .eq("id", registration.id)
+      if (error) throw error
+      setSuccessMessage(nextStatus === "no_show" ? "Participant marked as no-show." : "Participant restored to registered.")
+      await loadSelectedEventData()
+    } catch (error) {
+      setErrorMessage(`Registration status could not be updated: ${getErrorMessage(error)}`)
+    } finally {
+      setUpdatingRegistrationId(null)
+    }
+  }
+
   async function createRegistration() {
     if (!organizationId) {
       setErrorMessage("No organization is currently selected.")
@@ -1868,16 +1889,28 @@ export function RegistrationPage() {
                               </div>
                             </div>
                           ) : (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openRegistrationEditor(registration)}
-                              disabled={saving || isUpdating}
-                            >
-                              <Edit3 className="h-4 w-4" />
-                              Edit
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openRegistrationEditor(registration)}
+                                disabled={saving || isUpdating}
+                              >
+                                <Edit3 className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void setNoShow(registration)}
+                                disabled={saving || isUpdating}
+                              >
+                                <UserX className="h-4 w-4" />
+                                {registration.status === "no_show" ? "Restore" : "No-Show"}
+                              </Button>
+                            </div>
                           )}
                         </td>
 

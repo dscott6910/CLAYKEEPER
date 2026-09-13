@@ -58,7 +58,11 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
   const shootOffByKey = new Map(report.shootOffScores.map((score) => [`${score.squad_member_id}:${score.shoot_off_round_id}`, score.score]))
 
   return report.enrollments
-    .filter((enrollment) => !["withdrawn", "cancelled"].includes(enrollment.status))
+    .filter((enrollment) => {
+      if (["withdrawn", "cancelled"].includes(enrollment.status)) return false
+      const registration = registrationById.get(enrollment.registration_id)
+      return registration?.status !== "no_show"
+    })
     .map((enrollment) => {
       const registration = registrationById.get(enrollment.registration_id)
       const athlete = athleteById.get(registration?.athlete_id || "")
