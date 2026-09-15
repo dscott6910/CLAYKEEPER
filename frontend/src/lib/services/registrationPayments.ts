@@ -17,6 +17,7 @@ export type RegistrationSetting = {
   capacity: number | null
   waitlist_enabled: boolean
   base_fee: number
+  organization_fee: number
   payment_provider: "manual" | "stripe"
   stripe_price_id: string | null
   confirmation_message: string | null
@@ -97,7 +98,7 @@ export async function loadRegistrationPaymentCenter(eventId?: string) {
     supabase
       .from("event_registration_settings")
       .select(
-        "id, event_id, public_registration_enabled, registration_opens_at, registration_closes_at, capacity, waitlist_enabled, base_fee, payment_provider, stripe_price_id, confirmation_message, terms_url",
+        "id, event_id, public_registration_enabled, registration_opens_at, registration_closes_at, capacity, waitlist_enabled, base_fee, organization_fee, payment_provider, stripe_price_id, confirmation_message, terms_url",
       )
       .eq("organization_id", organizationId)
       .eq("event_id", selectedEventId),

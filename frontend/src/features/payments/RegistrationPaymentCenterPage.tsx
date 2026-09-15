@@ -46,6 +46,7 @@ export function RegistrationPaymentCenterPage() {
     capacity: null,
     waitlist_enabled: true,
     base_fee: 0,
+    organization_fee: 2,
     payment_provider: "manual",
     stripe_price_id: null,
     confirmation_message: null,
@@ -93,6 +94,7 @@ export function RegistrationPaymentCenterPage() {
       capacity: current.capacity,
       waitlist_enabled: current.waitlist_enabled,
       base_fee: Number(current.base_fee || 0),
+      organization_fee: Number(current.organization_fee || 0),
       payment_provider: current.payment_provider,
       stripe_price_id: current.stripe_price_id,
       confirmation_message: current.confirmation_message,
@@ -104,6 +106,7 @@ export function RegistrationPaymentCenterPage() {
       capacity: null,
       waitlist_enabled: true,
       base_fee: 0,
+      organization_fee: 2,
       payment_provider: "manual",
       stripe_price_id: null,
       confirmation_message: null,
@@ -120,6 +123,7 @@ export function RegistrationPaymentCenterPage() {
   const eventTransactions = useMemo(() => data.transactions.filter((item) => eventRegistrationIds.has(item.registration_id)), [data.transactions, eventRegistrationIds])
   const summary = useMemo(() => {
     const eventFee = Number(settings.base_fee || 0)
+    const organizationFee = Number(settings.organization_fee || 0)
     const checkedInRegistrations = eventRegistrations.filter((row) => row.checked_in)
     const expected = checkedInRegistrations.reduce(
       (sum, row) =>
@@ -127,14 +131,14 @@ export function RegistrationPaymentCenterPage() {
         Math.max(
           0,
           eventFee +
-            Number(row.organization_fees || 0) -
+            organizationFee -
             Number(row.discount_amount || 0)
         ),
       0
     )
     const paid = checkedInRegistrations.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0)
     return { registrations: checkedInRegistrations.length, expected, paid, balance: Math.max(0, expected - paid) }
-  }, [eventRegistrations, settings.base_fee])
+  }, [eventRegistrations, settings.base_fee, settings.organization_fee])
 
   async function saveSettings() {
     if (!eventId) return
@@ -217,6 +221,7 @@ export function RegistrationPaymentCenterPage() {
                 <Field label="Closes" type="datetime-local" value={settings.registration_closes_at?.slice(0,16) || ""} onChange={(value) => setSettings({ ...settings, registration_closes_at: value ? new Date(value).toISOString() : null })} />
                 <Field label="Capacity" type="number" value={settings.capacity ?? ""} onChange={(value) => setSettings({ ...settings, capacity: value ? Number(value) : null })} />
                 <Field label="Event fee" type="number" value={settings.base_fee} onChange={(value) => setSettings({ ...settings, base_fee: Number(value || 0) })} />
+                <Field label="Org fee" type="number" value={settings.organization_fee} onChange={(value) => setSettings({ ...settings, organization_fee: Number(value || 0) })} />
                 <label className="space-y-1 text-sm font-medium">Payment provider<select className="w-full rounded-lg border bg-white px-3 py-2" value={settings.payment_provider} onChange={(event) => setSettings({ ...settings, payment_provider: event.target.value as "manual" | "stripe" })}><option value="manual">Manual / pay later</option><option value="stripe">Stripe</option></select></label>
                 <Field label="Stripe Price ID" value={settings.stripe_price_id || ""} onChange={(value) => setSettings({ ...settings, stripe_price_id: value || null })} placeholder="price_..." />
               </div>
