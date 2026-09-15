@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, BadgeDollarSign, CalendarDays, CheckCircle2, ClipboardCheck, Clock3, ExternalLink, RefreshCw, Siren, Target, Trophy, Users } from "lucide-react"
+import { AlertTriangle, BadgeDollarSign, CalendarDays, CheckCircle2, ClipboardCheck, Clock3, ExternalLink, RefreshCw, Siren, Target, Trophy, Users, Crosshair } from "lucide-react"
 import { AppHeader } from "@/app/AppHeader"
 import { Button } from "@/components/ui/button"
 import { loadEventOperations, type EventOperationsSnapshot, type OperationsAlert } from "@/lib/services/eventOperations"
@@ -36,6 +36,7 @@ export function EventOperationsPage() {
     ["Check-in", selectedEventId ? `/events/${selectedEventId}/check-in` : "/registration", ClipboardCheck],
     ["Squadding", "/squads", Users],
     ["Digital Scoring", selectedEventId ? `/events/${selectedEventId}/digital-scoring` : "/scoring", Target],
+    ["Round Score Entry", selectedEventId ? `/events/${selectedEventId}/live-scoring` : "/event-operations", Crosshair],
     ["Awards", selectedEventId ? `/events/${selectedEventId}/awards` : "/awards", Trophy],
     ["Treasurer", "/treasurer", BadgeDollarSign],
     ["Reports", selectedEventId ? `/events/${selectedEventId}/reports` : "/reports", CalendarDays],
