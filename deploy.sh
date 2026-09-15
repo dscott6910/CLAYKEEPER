@@ -48,7 +48,12 @@ fi
 echo
 echo "3. Applying database migrations..."
 cd "$REPO_DIR"
-supabase db push --linked
+if command -v supabase >/dev/null 2>&1; then
+    supabase db push --linked
+else
+    echo "Supabase CLI not found globally; using npx fallback..."
+    npx --yes supabase db push --linked
+fi
 
 echo
 echo "4. Installing exact project dependencies..."
