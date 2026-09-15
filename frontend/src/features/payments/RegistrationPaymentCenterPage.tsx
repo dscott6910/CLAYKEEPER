@@ -111,7 +111,10 @@ export function RegistrationPaymentCenterPage() {
     })
   }, [data.settings, eventId])
 
-  const eventRegistrations = useMemo(() => data.registrations.filter((registration) => registration.event_id === eventId), [data.registrations, eventId])
+  const eventRegistrations = useMemo(() => data.registrations
+    .filter((registration) => registration.event_id === eventId)
+    .slice()
+    .sort((left, right) => left.athlete_name.localeCompare(right.athlete_name)), [data.registrations, eventId])
   const eventCodes = useMemo(() => data.codes.filter((item) => !item.event_id || item.event_id === eventId), [data.codes, eventId])
   const eventRegistrationIds = useMemo(() => new Set(eventRegistrations.map((item) => item.id)), [eventRegistrations])
   const eventTransactions = useMemo(() => data.transactions.filter((item) => eventRegistrationIds.has(item.registration_id)), [data.transactions, eventRegistrationIds])
@@ -237,7 +240,7 @@ export function RegistrationPaymentCenterPage() {
           <section className="rounded-2xl border bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Record Payment or Refund</h2><p className="mb-4 text-sm text-slate-500">Manual transactions update the selected registration's amount paid and payment status.</p>
             <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-              <select className="rounded-lg border bg-white px-3 py-2" value={registrationId} onChange={(event) => setRegistrationId(event.target.value)}><option value="">Select registration</option>{eventRegistrations.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0,8)} · {item.payment_status} · paid {money(item.amount_paid)}</option>)}</select>
+              <select className="rounded-lg border bg-white px-3 py-2" value={registrationId} onChange={(event) => setRegistrationId(event.target.value)}><option value="">Select shooter</option>{eventRegistrations.map((item) => <option key={item.id} value={item.id}>{item.athlete_name} · {item.payment_status.replaceAll("_", " ")} · paid {money(item.amount_paid)} · {item.id.slice(0, 8)}</option>)}</select>
               <select className="rounded-lg border bg-white px-3 py-2" value={transactionType} onChange={(event) => setTransactionType(event.target.value as typeof transactionType)}><option value="payment">Payment</option><option value="refund">Refund</option><option value="adjustment">Adjustment</option></select>
               <input className="rounded-lg border px-3 py-2" type="number" min="0.01" step="0.01" placeholder="Amount" value={transactionAmount || ""} onChange={(event) => setTransactionAmount(Number(event.target.value || 0))} />
               <select className="rounded-lg border bg-white px-3 py-2" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="cash">Cash</option><option value="check">Check</option><option value="credit_card">Credit card</option><option value="debit_card">Debit card</option><option value="other">Other</option></select>
