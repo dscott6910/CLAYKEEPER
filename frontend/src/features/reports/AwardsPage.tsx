@@ -78,6 +78,9 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
         digitalScorecard &&
         digitalScorecard.total_targets > 0,
       )
+      const roundTotal = scores.reduce((sum, score) => sum + (score.score ?? 0), 0)
+      const hasRoundScore = entered > 0
+      const roundComplete = entered >= (shoot?.number_of_rounds || 0)
       return {
         enrollmentId: enrollment.id,
         memberId: member?.id,
@@ -88,13 +91,15 @@ function buildRows(report: ReportPayload, shoot?: ReportShoot): AwardParticipant
         squad: squad ? `Squad ${squad.squad_number}` : "Unassigned",
         total: historical
           ? enrollment.historical_total_score!
-          : digitalComplete
-            ? digitalScorecard!.total_score
-            : scores.reduce((sum, score) => sum + (score.score ?? 0), 0),
+          : hasRoundScore
+            ? roundTotal
+            : digitalComplete
+              ? digitalScorecard!.total_score
+              : roundTotal,
         complete:
           historical ||
-          digitalComplete ||
-          entered >= (shoot?.number_of_rounds || 0),
+          roundComplete ||
+          (!hasRoundScore && digitalComplete),
         shootOffs: member ? report.shootOffRounds.map((round) => shootOffByKey.get(`${member.id}:${round.id}`) ?? -1) : [],
       }
     })
