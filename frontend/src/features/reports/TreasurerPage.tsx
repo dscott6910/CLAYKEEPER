@@ -10,6 +10,7 @@ import {
   type TreasurerClass,
   type TreasurerEnrollment,
   type TreasurerEvent,
+  type TreasurerEventRegistrationSetting,
   type TreasurerNamedRecord,
   type TreasurerRegistration,
   type TreasurerSeason,
@@ -22,6 +23,7 @@ type Data = {
   shoots: TreasurerShoot[]
   registrations: TreasurerRegistration[]
   enrollments: TreasurerEnrollment[]
+  settings: TreasurerEventRegistrationSetting[]
   athletes: TreasurerAthlete[]
   teams: TreasurerNamedRecord[]
   classes: TreasurerClass[]
@@ -41,7 +43,6 @@ type LedgerRow = {
   paymentMethod: string
   registrationSource: string
   eventFee: number
-  shootFees: number
   organizationFees: number
   adjustments: number
   expected: number
@@ -49,7 +50,7 @@ type LedgerRow = {
   balance: number
 }
 
-const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], athletes: [], teams: [], classes: [] }
+const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], settings: [], athletes: [], teams: [], classes: [] }
 const inactiveStatuses = new Set(["withdrawn", "cancelled"])
 
 function money(value: number) {
@@ -112,21 +113,22 @@ export function TreasurerPage() {
     const teams = new Map(data.teams.map((team) => [team.id, team]))
     const classes = new Map(data.classes.map((cls) => [cls.id, cls]))
     const shoots = new Map(data.shoots.map((shoot) => [shoot.id, shoot]))
+    const settingsByEvent = new Map(data.settings.map((setting) => [setting.event_id, setting]))
     const enrollmentsByRegistration = new Map<string, TreasurerEnrollment[]>()
     for (const enrollment of data.enrollments) {
       if (inactiveStatuses.has(enrollment.status)) continue
       enrollmentsByRegistration.set(enrollment.registration_id, [...(enrollmentsByRegistration.get(enrollment.registration_id) || []), enrollment])
     }
 
-    return data.registrations.filter((registration) => !inactiveStatuses.has(registration.status)).map((registration) => {
+    return data.registrations.filter((registration) => !inactiveStatuses.has(registration.status) && registration.checked_in).map((registration) => {
       const event = events.get(registration.event_id)
+      const settings = settingsByEvent.get(registration.event_id)
       const athlete = athletes.get(registration.athlete_id)
       const registrationEnrollments = enrollmentsByRegistration.get(registration.id) || []
-      const eventFee = Math.max(0, Number(registration.registration_fee || 0) - Number(registration.discount_amount || 0))
-      const shootFees = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.entry_fee || 0), 0)
-      const organizationFees = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.organization_fee || 0), 0)
-      const adjustments = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.fee_adjustment || 0), 0)
-      const expected = eventFee + shootFees + organizationFees + adjustments
+      const eventFee = Math.max(0, Number(settings?.base_fee || 0) - Number(registration.discount_amount || 0))
+      const organizationFees = Math.max(0, Number(settings?.organization_fee || 0))
+      const adjustments = 0
+      const expected = eventFee + organizationFees
       const paid = Number(registration.amount_paid || 0)
       return {
         registrationId: registration.id,
@@ -142,7 +144,6 @@ export function TreasurerPage() {
         paymentMethod: registration.payment_method || "Not recorded",
         registrationSource: registration.registration_source,
         eventFee,
-        shootFees,
         organizationFees,
         adjustments,
         expected,

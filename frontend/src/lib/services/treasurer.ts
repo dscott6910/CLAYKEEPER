@@ -31,12 +31,19 @@ export type TreasurerRegistration = {
   team_id: string | null
   class_id: string | null
   status: string
+  checked_in: boolean
   payment_status: string
   payment_method: string | null
   registration_fee: number
   discount_amount: number
   amount_paid: number
   registration_source: string
+}
+
+export type TreasurerEventRegistrationSetting = {
+  event_id: string
+  base_fee: number
+  organization_fee: number
 }
 
 export type TreasurerEnrollment = {
@@ -94,7 +101,7 @@ async function loadAllRows<T>(
 export async function loadTreasurerData() {
   const organizationId = await getCurrentOrganizationId()
 
-  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes] = await Promise.all([
+  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes, settings] = await Promise.all([
     loadAllRows<TreasurerSeason>(
       "seasons",
       "id, name, start_date, end_date, status",
@@ -112,7 +119,7 @@ export async function loadTreasurerData() {
     ),
     loadAllRows<TreasurerRegistration>(
       "registrations",
-      "id, event_id, athlete_id, team_id, class_id, status, payment_status, payment_method, registration_fee, discount_amount, amount_paid, registration_source",
+      "id, event_id, athlete_id, team_id, class_id, status, checked_in, payment_status, payment_method, registration_fee, discount_amount, amount_paid, registration_source",
       organizationId,
     ),
     loadAllRows<TreasurerEnrollment>(
@@ -135,6 +142,11 @@ export async function loadTreasurerData() {
       "id, code, display_name",
       organizationId,
     ),
+    loadAllRows<TreasurerEventRegistrationSetting>(
+      "event_registration_settings",
+      "event_id, base_fee, organization_fee",
+      organizationId,
+    ),
   ])
 
   seasons.sort((a, b) => b.start_date.localeCompare(a.start_date))
@@ -150,5 +162,6 @@ export async function loadTreasurerData() {
     athletes,
     teams,
     classes,
+    settings,
   }
 }
