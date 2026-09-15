@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Expand, Minimize, RefreshCw, Trophy, Users } from "lucide-react"
+import { Link } from "react-router-dom"
+import { rankIndividuals } from "@/lib/services/awardsEngine"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -37,6 +39,8 @@ type LeaderboardData = {
 }
 
 type LeaderRow = {
+  memberId?: string
+  squadId?: string
   enrollmentId: string
   name: string
   team: string
@@ -158,7 +162,7 @@ export function LeaderboardPage() {
         .filter((scorecard) => scorecard.status === "finalized")
         .map((scorecard) => [scorecard.squad_member_id, scorecard]),
     )
-    const shootOffScoreByKey = new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score ?? 0]))
+    const shootOffScoreByKey = new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score ?? -1]))
 
     return data.enrollments.map((enrollment) => {
       const registration = registrationById.get(enrollment.registration_id)
@@ -177,15 +181,19 @@ export function LeaderboardPage() {
       )
       const total = historical
         ? enrollment.historical_total_score!
-        : digitalComplete
+        : enteredRounds > 0
+          ? memberScores.reduce((sum, score) => sum + (score.score ?? 0), 0)
+          : digitalComplete
           ? digitalScorecard!.total_score
           : memberScores.reduce((sum, score) => sum + (score.score ?? 0), 0)
       const complete =
         historical ||
-        digitalComplete ||
+        (enteredRounds === 0 && digitalComplete) ||
         enteredRounds >= (selectedShoot?.number_of_rounds ?? 0)
-      const shootOffs = member ? data.shootOffRounds.map((round) => shootOffScoreByKey.get(`${member.id}:${round.id}`) ?? 0) : []
+      const shootOffs = member ? data.shootOffRounds.map((round) => shootOffScoreByKey.get(`${member.id}:${round.id}`) ?? -1) : []
       return {
+        memberId: member?.id,
+        squadId: squad?.id,
         enrollmentId: enrollment.id,
         name: participantName(athlete),
         team: registration?.team_id ? teamById.get(registration.team_id)?.name ?? "No team" : "No team",
@@ -208,6 +216,16 @@ export function LeaderboardPage() {
       officialRank: index + 1,
     }))
   }, [data, selectedShoot])
+
+  const classTies = useMemo(() => Array.from(new Set(leaders.map((row) => row.classCode))).flatMap((classCode) =>
+    rankIndividuals(leaders.filter((row) => row.classCode === classCode), 3)
+      .filter((row) => row.unresolvedTie),
+  ), [leaders])
+
+  function scoreEntryUrl(row: LeaderRow) {
+    const query = new URLSearchParams({ shootId, squadId: row.squadId || "", memberId: row.memberId || "", focus: "shootOff" })
+    return `/events/${eventId}/live-scoring?${query}`
+  }
 
   const displayLeaders = useMemo(() => {
     if (isFullscreen) return [...leaders]
@@ -407,9 +425,10 @@ export function LeaderboardPage() {
               </div>
             )}
 
+            {!loading && classTies.length > 0 && <section className="mb-5 border border-amber-300 bg-amber-50 p-4 text-amber-950"><h2 className="font-bold">Class award ties requiring a shoot-off</h2><ul className="mt-3 space-y-2">{classTies.map((row) => <li key={row.enrollmentId}><Link className="font-semibold underline underline-offset-4" to={scoreEntryUrl(row)}>{row.name}</Link> · {row.classCode} · Place {row.place} · {row.total} · {row.squad}</li>)}</ul></section>}
             {loading ? <div className="py-20 text-center text-slate-500">Loading live standings…</div> : leaders.length === 0 ? <div className="py-20 text-center"><Trophy className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold">No standings available yet</h2><p className="mt-2 text-slate-500">Register participants, assign squads, and enter scores to populate the leaderboard.</p></div> : (
               <div className={`grid gap-5 ${displayMode === "overall" ? "grid-cols-1" : "xl:grid-cols-2"}`}>
-                {groupedLeaders.map((group) => <div key={group.label} className={`overflow-hidden rounded-2xl border ${isFullscreen ? "border-slate-800 bg-slate-950" : "bg-white"}`}><div className={`border-b px-5 py-4 ${isFullscreen ? "border-slate-800" : "bg-slate-50"}`}><h2 className={isFullscreen ? "text-2xl font-bold" : "text-lg font-semibold"}>{group.label}</h2></div><div className="divide-y divide-slate-200/20">{group.rows.map((row) => <div key={row.enrollmentId} className={`grid grid-cols-[64px_1fr_auto] items-center gap-4 px-5 py-4 ${isFullscreen ? "text-xl" : ""}`}><div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold ${row.displayRank === 1 ? "bg-amber-400 text-slate-950" : row.displayRank === 2 ? "bg-slate-300 text-slate-950" : row.displayRank === 3 ? "bg-amber-700 text-white" : isFullscreen ? "bg-slate-800" : "bg-slate-100"}`}>{row.displayRank}</div><div><p className="font-bold">{row.name}</p><p className={`${isFullscreen ? "text-sm text-slate-400" : "text-xs text-slate-500"}`}>{row.team} · {row.classCode} · {row.squad}</p></div><div className="text-right"><p className={`${isFullscreen ? "text-4xl" : "text-2xl"} font-black`}>{row.total}</p>{row.shootOffs.some((score) => score > 0) && <p className="text-xs font-semibold text-amber-500">SO {row.shootOffs.join(" / ")}</p>}</div></div>)}</div></div>)}
+                {groupedLeaders.map((group) => <div key={group.label} className={`overflow-hidden rounded-2xl border ${isFullscreen ? "border-slate-800 bg-slate-950" : "bg-white"}`}><div className={`border-b px-5 py-4 ${isFullscreen ? "border-slate-800" : "bg-slate-50"}`}><h2 className={isFullscreen ? "text-2xl font-bold" : "text-lg font-semibold"}>{group.label}</h2></div><div className="divide-y divide-slate-200/20">{group.rows.map((row) => <div key={row.enrollmentId} className={`grid grid-cols-[64px_1fr_auto] items-center gap-4 px-5 py-4 ${isFullscreen ? "text-xl" : ""}`}><div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold ${row.displayRank === 1 ? "bg-amber-400 text-slate-950" : row.displayRank === 2 ? "bg-slate-300 text-slate-950" : row.displayRank === 3 ? "bg-amber-700 text-white" : isFullscreen ? "bg-slate-800" : "bg-slate-100"}`}>{row.displayRank}</div><div><p className="font-bold"><Link className="underline decoration-dotted underline-offset-4 hover:text-emerald-600" to={scoreEntryUrl(row)}>{row.name}</Link></p><p className={`${isFullscreen ? "text-sm text-slate-400" : "text-xs text-slate-500"}`}>{row.team} · {row.classCode} · {row.squad}</p></div><div className="text-right"><p className={`${isFullscreen ? "text-4xl" : "text-2xl"} font-black`}>{row.total}</p>{row.shootOffs.some((score) => score >= 0) && <p className="text-xs font-semibold text-amber-500">SO {row.shootOffs.filter((score) => score >= 0).join(" / ")}</p>}</div></div>)}</div></div>)}
               </div>
             )}
 
