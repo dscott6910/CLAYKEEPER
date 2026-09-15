@@ -319,10 +319,7 @@ export function AwardsPage() {
   const incompleteCount = rows.filter((row) => !row.complete).length
   const unresolvedTieCount = useMemo(() => {
     const individual = individualGroups.reduce((sum, group) => sum + group.rows.filter((row) => row.unresolvedTie).length, 0)
-    const squads = squadResults.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).length
-    const teams = stateTeams.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).length
-    const series = seriesTeams.filter((row) => row.unresolvedTie).length
-    return individual + squads + teams + series
+    return individual
   }, [individualGroups, squadResults, stateTeams, seriesTeams])
   const readinessIssues = useMemo(() => {
     const issues: Array<{ id: string; title: string; detail: string; action: string; tab?: TabKey; correctionUrl?: string }> = []
@@ -342,30 +339,6 @@ export function AwardsPage() {
       action: "Enter this participant's shoot-off score",
       correctionUrl: `/scoring?eventId=${encodeURIComponent(eventId)}&shootId=${encodeURIComponent(shootId)}&squadId=${encodeURIComponent(row.squadId || "")}&memberId=${encodeURIComponent(row.memberId || "")}&focus=shootOff`,
     })))
-
-    squadResults.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).forEach((row) => issues.push({
-      id: `squad-${row.category}-${row.label}`,
-      title: `Squad tie: ${row.category} place ${row.place}`,
-      detail: `${row.label} is tied at ${row.total}. The current rules do not define an automatic squad tie-breaker; review the tied squads and record the official decision.`,
-      action: "View Squad Awards",
-      tab: "squad",
-    }))
-
-    stateTeams.filter((row) => row.eligible && row.place !== null && row.unresolvedTie).forEach((row) => issues.push({
-      id: `team-${row.category}-${row.label}`,
-      title: `State team tie: ${row.category} place ${row.place}`,
-      detail: `${row.label} is tied at ${row.total}. Review the contributing shooters and tie-break score before publishing.`,
-      action: "View State Team Awards",
-      tab: "stateTeam",
-    }))
-
-    seriesTeams.filter((row) => row.unresolvedTie).forEach((row) => issues.push({
-      id: `series-${row.category}-${row.team}`,
-      title: `Series standings tie: ${row.category}`,
-      detail: `${row.team} is tied with ${row.points} points. A final series tie-break rule has not been configured, so an official decision is required.`,
-      action: "View Series Standings",
-      tab: "seriesTeam",
-    }))
 
     if (publication?.status !== "published") issues.push({
       id: "publication",

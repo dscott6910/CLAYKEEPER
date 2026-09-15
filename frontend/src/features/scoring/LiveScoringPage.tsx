@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle, CheckCircle2, Plus, RefreshCw, Save, Trash2, Trophy, Users } from "lucide-react"
 import { useParams } from "react-router-dom"
 import { toast } from "sonner"
+import { rankIndividuals, type AwardParticipant } from "@/lib/services/awardsEngine"
 
 import { AppHeader } from "@/app/AppHeader"
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -83,16 +84,34 @@ export function LiveScoringPage() {
   const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
   const tiedMembers = useMemo(() => {
     if (!selectedShoot) return [] as Array<{ total: number; names: string[] }>
-    const groups = new Map<number, string[]>()
-    squadMembers.forEach((member) => {
+    const classes = new Map<string, AwardParticipant[]>()
+    data.members.forEach((member) => {
       const scores = Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`))
       if (scores.some((score) => score === undefined || score === null)) return
       const numericScores = scores as number[]
       const total = numericScores.reduce((sum, score) => sum + score, 0)
-      groups.set(total, [...(groups.get(total) ?? []), displayName(participantFor(member).athlete)])
+      const participant = participantFor(member)
+      const classCode = participant.cls?.code.toUpperCase() || "Unclassified"
+      const squad = data.squads.find((row) => row.id === member.squad_id)
+      const row: AwardParticipant = {
+        enrollmentId: member.registration_shoot_id, memberId: member.id,
+        name: displayName(participant.athlete), classCode, total, complete: true,
+        team: participant.team?.name || "", squad: `Squad ${squad?.squad_number || ""}`,
+        shootOffs: data.shootOffRounds.map((round) => shootOffScoreMap.get(`${member.id}:${round.id}`) ?? -1),
+      }
+      classes.set(classCode, [...(classes.get(classCode) ?? []), row])
     })
-    return [...groups.entries()].filter(([, names]) => names.length > 1).map(([total, names]) => ({ total, names }))
-  }, [scoreMap, selectedShoot, squadMembers])
+    return [...classes].flatMap(([classCode, rows]) => {
+      const ties = new Map<number, AwardParticipant[]>()
+      rankIndividuals(rows, 3).filter((row) => row.unresolvedTie).forEach((row) => {
+        ties.set(row.place, [...(ties.get(row.place) ?? []), row])
+      })
+      return [...ties].map(([place, tied]) => ({
+        total: tied[0].total,
+        names: tied.map((row) => `${classCode} - place ${place}: ${row.name} (${row.squad})`),
+      }))
+    })
+  }, [scoreMap, selectedShoot, data.members, data.squads, data.shootOffRounds, shootOffScoreMap, enrollmentById, registrationById, athleteById, teamById, classById])
 
   async function loadBase() {
     setLoading(true); setError("")
