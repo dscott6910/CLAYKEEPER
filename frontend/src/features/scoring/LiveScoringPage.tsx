@@ -66,13 +66,14 @@ export function LiveScoringPage() {
   const eventShoots = useMemo(() => shoots.filter((shoot) => shoot.event_id === eventId), [shoots, eventId])
   const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
   const selectedSquad = data.squads.find((squad) => squad.id === squadId)
-  const squadMembers = useMemo(() => data.members.filter((member) => member.squad_id === squadId).sort((a, b) => a.position - b.position), [data.members, squadId])
-
   const enrollmentById = useMemo(() => new Map(data.enrollments.map((row) => [row.id, row])), [data.enrollments])
   const registrationById = useMemo(() => new Map(data.registrations.map((row) => [row.id, row])), [data.registrations])
   const athleteById = useMemo(() => new Map(data.athletes.map((row) => [row.id, row])), [data.athletes])
   const teamById = useMemo(() => new Map(data.teams.map((row) => [row.id, row])), [data.teams])
   const classById = useMemo(() => new Map(data.classes.map((row) => [row.id, row])), [data.classes])
+  const squadMembers = useMemo(() => data.members
+    .filter((member) => member.squad_id === squadId && participantFor(member).registration?.checked_in)
+    .sort((a, b) => a.position - b.position), [data.members, squadId, enrollmentById, registrationById])
   const scoreMap = useMemo(() => {
     const map = new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row.score]))
     if (selectedShoot?.discipline?.toLowerCase().includes("sporting") && selectedShoot.number_of_rounds === 1) {
@@ -88,7 +89,7 @@ export function LiveScoringPage() {
   const tiedMembers = useMemo(() => {
     if (!selectedShoot) return [] as Array<{ total: number; names: string[] }>
     const classes = new Map<string, AwardParticipant[]>()
-    data.members.forEach((member) => {
+    data.members.filter((member) => participantFor(member).registration?.checked_in).forEach((member) => {
       const scores = Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`))
       if (scores.some((score) => score === undefined || score === null)) return
       const numericScores = scores as number[]
