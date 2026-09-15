@@ -79,6 +79,7 @@ export function LiveScoringPage() {
     }
     return map
   }, [data.digitalTotals, data.scores, selectedShoot])
+  const checkedInMemberCount = useMemo(() => data.members.filter((member) => participantFor(member).registration?.checked_in).length, [data.members, data.enrollments, data.registrations])
   const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
 
   async function loadBase() {
@@ -167,8 +168,10 @@ export function LiveScoringPage() {
     finally { setSavingKey("") }
   }
 
-  const completedScores = data.scores.filter((score) => score.score !== null).length
-  const expectedScores = data.members.length * (selectedShoot?.number_of_rounds ?? 0)
+  const scoredMemberIds = new Set<string>(data.scores.filter((score) => score.score !== null).map((score) => score.squad_member_id))
+  data.digitalTotals.filter((row) => row.total_score !== null).forEach((row) => scoredMemberIds.add(row.squad_member_id))
+  const completedScores = scoredMemberIds.size
+  const expectedScores = checkedInMemberCount * (selectedShoot?.number_of_rounds ?? 0)
 
   return (
     <div className="min-h-screen">
@@ -184,7 +187,7 @@ export function LiveScoringPage() {
           {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Round score entry could not load.</strong><p>{error}</p></div></div> : null}
 
           <section className="grid gap-3 sm:grid-cols-3">
-            <Stat icon={Users} label="Participants" value={data.members.length} />
+            <Stat icon={Users} label="Participants (checked in)" value={checkedInMemberCount} />
             <Stat icon={CheckCircle2} label="Scores entered" value={`${completedScores} / ${expectedScores}`} />
             <Stat icon={Trophy} label="Shoot-offs" value={data.shootOffRounds.length} />
           </section>
