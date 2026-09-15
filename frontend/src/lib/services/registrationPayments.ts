@@ -56,10 +56,12 @@ export type RegistrationSummary = {
   athlete_id: string
   athlete_name: string
   payment_status: string
+  checked_in: boolean
   amount_paid: number
   registration_fee: number
   discount_amount: number
   shoot_fees: number
+  organization_fees: number
 }
 
 function check(error: { message?: string } | null) {
@@ -112,7 +114,7 @@ export async function loadRegistrationPaymentCenter(eventId?: string) {
     supabase
       .from("registrations")
       .select(
-        "id, event_id, athlete_id, payment_status, amount_paid, registration_fee, discount_amount",
+        "id, event_id, athlete_id, payment_status, checked_in, amount_paid, registration_fee, discount_amount",
       )
       .eq("organization_id", organizationId)
       .eq("event_id", selectedEventId),
@@ -169,6 +171,7 @@ export async function loadRegistrationPaymentCenter(eventId?: string) {
   check(transactions.error)
 
   const feesByRegistration = new Map<string, number>()
+  const organizationFeesByRegistration = new Map<string, number>()
 
   for (const row of shootFees.data ?? []) {
     const registrationId = row.registration_id as string
@@ -187,12 +190,17 @@ export async function loadRegistrationPaymentCenter(eventId?: string) {
       registrationId,
       (feesByRegistration.get(registrationId) || 0) + fee,
     )
+    organizationFeesByRegistration.set(
+      registrationId,
+      (organizationFeesByRegistration.get(registrationId) || 0) + Number(row.organization_fee || 0),
+    )
   }
 
   const registrationSummaries = registrationRows.map((row) => ({
     ...row,
     athlete_name: athleteNames.get(row.athlete_id) || "Unnamed participant",
     shoot_fees: feesByRegistration.get(row.id) || 0,
+    organization_fees: organizationFeesByRegistration.get(row.id) || 0,
   })) as RegistrationSummary[]
 
   return {

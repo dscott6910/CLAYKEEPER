@@ -119,20 +119,22 @@ export function RegistrationPaymentCenterPage() {
   const eventRegistrationIds = useMemo(() => new Set(eventRegistrations.map((item) => item.id)), [eventRegistrations])
   const eventTransactions = useMemo(() => data.transactions.filter((item) => eventRegistrationIds.has(item.registration_id)), [data.transactions, eventRegistrationIds])
   const summary = useMemo(() => {
-    const expected = eventRegistrations.reduce(
+    const eventFee = Number(settings.base_fee || 0)
+    const checkedInRegistrations = eventRegistrations.filter((row) => row.checked_in)
+    const expected = checkedInRegistrations.reduce(
       (sum, row) =>
         sum +
         Math.max(
           0,
-          Number(row.shoot_fees || 0) +
-            Number(row.registration_fee || 0) -
+          eventFee +
+            Number(row.organization_fees || 0) -
             Number(row.discount_amount || 0)
         ),
       0
     )
-    const paid = eventRegistrations.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0)
-    return { registrations: eventRegistrations.length, expected, paid, balance: Math.max(0, expected - paid) }
-  }, [eventRegistrations])
+    const paid = checkedInRegistrations.reduce((sum, row) => sum + Number(row.amount_paid || 0), 0)
+    return { registrations: checkedInRegistrations.length, expected, paid, balance: Math.max(0, expected - paid) }
+  }, [eventRegistrations, settings.base_fee])
 
   async function saveSettings() {
     if (!eventId) return
