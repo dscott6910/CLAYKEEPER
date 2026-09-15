@@ -81,6 +81,18 @@ export function LiveScoringPage() {
   }, [data.digitalTotals, data.scores, selectedShoot])
   const checkedInMemberCount = useMemo(() => data.members.filter((member) => participantFor(member).registration?.checked_in).length, [data.members, data.enrollments, data.registrations])
   const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
+  const tiedMembers = useMemo(() => {
+    if (!selectedShoot) return [] as Array<{ total: number; names: string[] }>
+    const groups = new Map<number, string[]>()
+    squadMembers.forEach((member) => {
+      const scores = Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`))
+      if (scores.some((score) => score === undefined || score === null)) return
+      const numericScores = scores as number[]
+      const total = numericScores.reduce((sum, score) => sum + score, 0)
+      groups.set(total, [...(groups.get(total) ?? []), displayName(participantFor(member).athlete)])
+    })
+    return [...groups.entries()].filter(([, names]) => names.length > 1).map(([total, names]) => ({ total, names }))
+  }, [scoreMap, selectedShoot, squadMembers])
 
   async function loadBase() {
     setLoading(true); setError("")
@@ -185,6 +197,8 @@ export function LiveScoringPage() {
           </section>
 
           {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Round score entry could not load.</strong><p>{error}</p></div></div> : null}
+
+          {tiedMembers.length > 0 ? <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><Trophy className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>{tiedMembers.length === 1 ? "Tie detected" : `${tiedMembers.length} ties detected`}</strong><p className="mt-1">{tiedMembers.map((tie) => `${tie.names.join(", ")} (${tie.total})`).join(" · ")}</p><p className="mt-2">Enter the shoot-off score in the SO column for each tied participant. Add a shoot-off round if needed.</p></div></div></section> : null}
 
           <section className="grid gap-3 sm:grid-cols-3">
             <Stat icon={Users} label="Participants (checked in)" value={checkedInMemberCount} />
