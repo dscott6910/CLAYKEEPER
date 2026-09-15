@@ -11,6 +11,7 @@ export type ScoringAthlete = { id: string; first_name: string | null; last_name:
 export type ScoringNamedRecord = { id: string; name: string }
 export type ScoringClass = { id: string; code: string; display_name: string }
 export type ScoreEntry = { id: string; squad_member_id: string; round_number: number; score: number | null; status: string }
+export type DigitalScoreTotal = { squad_member_id: string; total_score: number | null; status: string }
 export type ShootOffRound = { id: string; round_number: number; label: string | null }
 export type ShootOffScore = { id: string; shoot_off_round_id: string; squad_member_id: string; score: number | null }
 
@@ -30,7 +31,7 @@ export async function loadScoringBaseData() {
 }
 
 export async function loadShootScoringData(organizationId: string, eventId: string, shootId: string) {
-  const [squads, members, enrollments, registrations, athletes, teams, classes, scores, shootOffRounds, shootOffScores] = await Promise.all([
+  const [squads, members, enrollments, registrations, athletes, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores] = await Promise.all([
     supabase.from("squads").select("id, shoot_id, squad_number, name, house_number, course_name, station_name, status, sort_order").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
     supabase.from("squad_members").select("id, squad_id, registration_shoot_id, position, position_label, status").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
     supabase.rpc("get_operational_registration_shoots", {
@@ -45,10 +46,11 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
     supabase.from("teams").select("id, name").eq("organization_id", organizationId),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId),
     supabase.from("score_entries").select("id, squad_member_id, round_number, score, status").eq("organization_id", organizationId).eq("shoot_id", shootId),
+    supabase.from("digital_scorecards").select("squad_member_id,total_score,status").eq("organization_id", organizationId).eq("event_id", eventId).eq("shoot_id", shootId).eq("status", "finalized"),
     supabase.from("shoot_off_rounds").select("id, round_number, label").eq("organization_id", organizationId).eq("shoot_id", shootId).order("round_number"),
     supabase.from("shoot_off_scores").select("id, shoot_off_round_id, squad_member_id, score").eq("organization_id", organizationId).eq("shoot_id", shootId),
   ])
-  for (const result of [squads, members, enrollments, registrations, athletes, teams, classes, scores, shootOffRounds, shootOffScores]) throwIfError(result.error)
+  for (const result of [squads, members, enrollments, registrations, athletes, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores]) throwIfError(result.error)
 
   const registrationRows = (registrations.data ?? []) as ScoringRegistration[]
   const athleteIds = [
@@ -77,7 +79,7 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
       (row: { shoot_id: string }) => row.shoot_id === shootId,
     ) as ScoringEnrollment[],
     registrations: registrationRows, athletes: athleteRows, teams: (teams.data ?? []) as ScoringNamedRecord[], classes: (classes.data ?? []) as ScoringClass[],
-    scores: (scores.data ?? []) as ScoreEntry[], shootOffRounds: (shootOffRounds.data ?? []) as ShootOffRound[], shootOffScores: (shootOffScores.data ?? []) as ShootOffScore[],
+    scores: (scores.data ?? []) as ScoreEntry[], digitalTotals: (digitalTotals.data ?? []) as DigitalScoreTotal[], shootOffRounds: (shootOffRounds.data ?? []) as ShootOffRound[], shootOffScores: (shootOffScores.data ?? []) as ShootOffScore[],
   }
 }
 

@@ -14,6 +14,7 @@ import {
   saveRoundScore,
   saveShootOffScore,
   type ScoreEntry,
+  type DigitalScoreTotal,
   type ScoringAthlete,
   type ScoringClass,
   type ScoringEnrollment,
@@ -36,11 +37,12 @@ type ShootData = {
   teams: ScoringNamedRecord[]
   classes: ScoringClass[]
   scores: ScoreEntry[]
+  digitalTotals: DigitalScoreTotal[]
   shootOffRounds: ShootOffRound[]
   shootOffScores: ShootOffScore[]
 }
 
-const emptyData: ShootData = { squads: [], members: [], enrollments: [], registrations: [], athletes: [], teams: [], classes: [], scores: [], shootOffRounds: [], shootOffScores: [] }
+const emptyData: ShootData = { squads: [], members: [], enrollments: [], registrations: [], athletes: [], teams: [], classes: [], scores: [], digitalTotals: [], shootOffRounds: [], shootOffScores: [] }
 
 export function LiveScoringPage() {
   const { eventId: routeEventId } = useParams()
@@ -67,7 +69,16 @@ export function LiveScoringPage() {
   const athleteById = useMemo(() => new Map(data.athletes.map((row) => [row.id, row])), [data.athletes])
   const teamById = useMemo(() => new Map(data.teams.map((row) => [row.id, row])), [data.teams])
   const classById = useMemo(() => new Map(data.classes.map((row) => [row.id, row])), [data.classes])
-  const scoreMap = useMemo(() => new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row.score])), [data.scores])
+  const scoreMap = useMemo(() => {
+    const map = new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row.score]))
+    if (selectedShoot?.discipline?.toLowerCase().includes("sporting") && selectedShoot.number_of_rounds === 1) {
+      data.digitalTotals.forEach((row) => {
+        const key = `${row.squad_member_id}:1`
+        if (!map.has(key) && row.total_score !== null) map.set(key, row.total_score)
+      })
+    }
+    return map
+  }, [data.digitalTotals, data.scores, selectedShoot])
   const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
 
   async function loadBase() {
