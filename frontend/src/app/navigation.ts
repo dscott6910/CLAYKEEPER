@@ -21,7 +21,6 @@ import {
   Users,
   UserRound,
   Globe2,
-  Smartphone,
   CreditCard,
   FileInput,
   UserCheck,
@@ -112,12 +111,6 @@ export const navigationSections: NavigationSection[] = [
   {
     label: "Management",
     items: [
-      {
-        label: "Mobile Operations",
-        path: "/mobile",
-        icon: Smartphone,
-        capability: "operateEvents",
-      },
       {
         label: "Event Operations",
         path: "/event-operations",
