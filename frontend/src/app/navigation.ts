@@ -102,7 +102,7 @@ export const navigationSections: NavigationSection[] = [
         capability: "operateEvents",
       },
       {
-        label: "Digital Scoring",
+        label: "Score Entry",
         path: "/scoring",
         icon: Trophy,
           capability: "score",

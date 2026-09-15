@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarDays, Loader2, RefreshCw, Target } from "lucide-react"
+import { CalendarDays, FileScan, Loader2, RefreshCw, Target, Smartphone } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { PageContainer } from "@/components/layout/PageContainer"
@@ -164,12 +164,17 @@ export function LiveScoringEventSelectorPage() {
                   </span>
                 </div>
 
-                <Link
-                  to={`/events/${event.id}/digital-scoring`}
-                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  Open Digital Scoring
-                </Link>
+                <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                  <Link to={`/events/${event.id}/live-scoring`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-center text-xs font-semibold text-white hover:bg-slate-800">
+                    <Target className="h-4 w-4" /> Round totals
+                  </Link>
+                  <Link to={`/events/${event.id}/digital-scoring`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-center text-xs font-semibold text-slate-800 hover:bg-slate-50">
+                    <Smartphone className="h-4 w-4" /> Mobile scoring
+                  </Link>
+                  <Link to="/scorecard-scan-lab" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 text-center text-xs font-semibold text-slate-800 hover:bg-slate-50">
+                    <FileScan className="h-4 w-4" /> Paper import
+                  </Link>
+                </div>
               </article>
             ))}
           </section>
@@ -182,4 +187,3 @@ export function LiveScoringEventSelectorPage() {
     </PageContainer>
   )
 }
-
