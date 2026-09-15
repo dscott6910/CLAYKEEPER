@@ -487,7 +487,7 @@ export function AwardsPage() {
           </section>}
 
           <section id="awards-report" className={`awards-print-area scroll-mt-6 rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
-            <div className="award-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+            <div className={`award-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5 ${tvMode ? "rounded-xl bg-white px-5 pt-4 text-slate-950" : ""}`}>
               <div className="flex min-w-0 items-center gap-4">
                 <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="h-20 w-28 shrink-0 object-contain" />
                 <div className="min-w-0">
