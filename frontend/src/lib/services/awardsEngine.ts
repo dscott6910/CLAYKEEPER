@@ -60,21 +60,28 @@ export function individualPlacementCount(meetType: MeetType, classCode: string) 
 }
 
 export function rankIndividuals(rows: AwardParticipant[], limit: number): RankedParticipant[] {
-  const sorted = rows.filter((row) => row.complete).slice().sort(compareParticipants)
+  const complete = rows.filter((row) => row.complete)
+  const rounds = Math.max(0, ...complete.map((row) => row.shootOffs.length))
+  function resolve(group: AwardParticipant[], round: number): AwardParticipant[][] {
+    if (group.length < 2 || round >= rounds) return [group]
+    const values = group.map((row) => row.shootOffs[round] ?? -1)
+    // A global shoot-off round may belong to another class or an earlier tie.
+    if (values.every((score) => score < 0)) return resolve(group, round + 1)
+    if (values.some((score) => score < 0)) return [group]
+    return [...new Set(values)].sort((a, b) => b - a).flatMap((score) =>
+      resolve(group.filter((row) => row.shootOffs[round] === score), round + 1),
+    )
+  }
+  const groups = [...new Set(complete.map((row) => row.total))].sort((a, b) => b - a)
+    .flatMap((total) => resolve(complete.filter((row) => row.total === total), 0))
   const ranked: RankedParticipant[] = []
-  let index = 0
-
-  while (index < sorted.length) {
-    const groupStart = index
-    const representative = sorted[groupStart]
-    while (index < sorted.length && sameCompetitiveScore(sorted[index], representative)) index += 1
-
-    // Use competition ranking: a four-way tie for first consumes places 1-4.
-    const place = groupStart + 1
+  let place = 1
+  for (const group of groups) {
     if (place > limit) break
-
-    const unresolvedTie = index - groupStart > 1
-    sorted.slice(groupStart, index).forEach((row) => ranked.push({ ...row, place, unresolvedTie }))
+    group.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach((row) =>
+      ranked.push({ ...row, place, unresolvedTie: group.length > 1 }),
+    )
+    place += group.length
   }
 
   return ranked

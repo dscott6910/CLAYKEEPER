@@ -83,7 +83,7 @@ export function LeaderboardPage() {
   const [error, setError] = useState("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [displayMode, setDisplayMode] = useState<"overall" | "class" | "team">("overall")
+  const [displayMode, setDisplayMode] = useState<"overall" | "class" | "team">("class")
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [leaderSearch, setLeaderSearch] = useState("")
   const [leaderSortKey, setLeaderSortKey] = useState<"rank" | "name" | "team" | "class" | "squad" | "total" | "status">("rank")
@@ -227,6 +227,18 @@ export function LeaderboardPage() {
     return `/events/${eventId}/live-scoring?${query}`
   }
 
+  const shootOffWinners = useMemo(() => Array.from(new Set(leaders.map((row) => row.classCode))).flatMap((classCode) => {
+    const rows = leaders.filter((row) => row.classCode === classCode)
+    const originalTies = rankIndividuals(rows.map((row) => ({ ...row, shootOffs: [] })), 3).filter((row) => row.unresolvedTie)
+    return [...new Set(originalTies.map((row) => row.total))].flatMap((total) => {
+      const contenders = rows.filter((row) => row.total === total)
+      const ranked = rankIndividuals(contenders, contenders.length)
+      if (!ranked.length || ranked.some((row) => row.unresolvedTie)) return []
+      const winner = ranked[0]
+      return [{ ...winner, awardPlace: originalTies.find((row) => row.total === total)!.place }]
+    })
+  }), [leaders])
+
   const displayLeaders = useMemo(() => {
     if (isFullscreen) return [...leaders]
 
@@ -297,7 +309,16 @@ export function LeaderboardPage() {
     const officialCategoryRank = new Map<string, number>()
     const categoryCounts = new Map<string, number>()
 
+    if (displayMode === "class") {
+      for (const classCode of new Set(leaders.map((row) => row.classCode))) {
+        rankIndividuals(leaders.filter((row) => row.classCode === classCode), 3).forEach((row) =>
+          officialCategoryRank.set(`${classCode}:${row.enrollmentId}`, row.place),
+        )
+      }
+    }
+
     for (const row of leaders) {
+      if (displayMode === "class") continue
       const key = keyFor(row)
       const nextRank = (categoryCounts.get(key) ?? 0) + 1
       categoryCounts.set(key, nextRank)
@@ -308,7 +329,7 @@ export function LeaderboardPage() {
 
     for (const row of displayLeaders) {
       const key = keyFor(row)
-      const rank = officialCategoryRank.get(`${key}:${row.enrollmentId}`) ?? 0
+      const rank = officialCategoryRank.get(`${key}:${row.enrollmentId}`) ?? Infinity
       const limit = displayMode === "class" ? 3 : 5
 
       if (rank > limit) continue
@@ -426,6 +447,7 @@ export function LeaderboardPage() {
             )}
 
             {!loading && classTies.length > 0 && <section className="mb-5 border border-amber-300 bg-amber-50 p-4 text-amber-950"><h2 className="font-bold">Class award ties requiring a shoot-off</h2><ul className="mt-3 space-y-2">{classTies.map((row) => <li key={row.enrollmentId}><Link className="font-semibold underline underline-offset-4" to={scoreEntryUrl(row)}>{row.name}</Link> · {row.classCode} · Place {row.place} · {row.total} · {row.squad}</li>)}</ul></section>}
+            {!loading && shootOffWinners.length > 0 && <section className="mb-5 border border-emerald-300 bg-emerald-50 p-4 text-emerald-950"><h2 className="font-bold">Shoot-off results</h2><ul className="mt-3 space-y-2">{shootOffWinners.map((row) => <li key={row.enrollmentId}><strong>{row.classCode} · Place {row.awardPlace} winner: </strong><Link className="font-semibold underline underline-offset-4" to={scoreEntryUrl(row)}>{row.name}</Link> · Score {row.total} · Shoot-off {row.shootOffs.filter((score) => score >= 0).join(" / ")}</li>)}</ul></section>}
             {loading ? <div className="py-20 text-center text-slate-500">Loading live standings…</div> : leaders.length === 0 ? <div className="py-20 text-center"><Trophy className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold">No standings available yet</h2><p className="mt-2 text-slate-500">Register participants, assign squads, and enter scores to populate the leaderboard.</p></div> : (
               <div className={`grid gap-5 ${displayMode === "overall" ? "grid-cols-1" : "xl:grid-cols-2"}`}>
                 {groupedLeaders.map((group) => <div key={group.label} className={`overflow-hidden rounded-2xl border ${isFullscreen ? "border-slate-800 bg-slate-950" : "bg-white"}`}><div className={`border-b px-5 py-4 ${isFullscreen ? "border-slate-800" : "bg-slate-50"}`}><h2 className={isFullscreen ? "text-2xl font-bold" : "text-lg font-semibold"}>{group.label}</h2></div><div className="divide-y divide-slate-200/20">{group.rows.map((row) => <div key={row.enrollmentId} className={`grid grid-cols-[64px_1fr_auto] items-center gap-4 px-5 py-4 ${isFullscreen ? "text-xl" : ""}`}><div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold ${row.displayRank === 1 ? "bg-amber-400 text-slate-950" : row.displayRank === 2 ? "bg-slate-300 text-slate-950" : row.displayRank === 3 ? "bg-amber-700 text-white" : isFullscreen ? "bg-slate-800" : "bg-slate-100"}`}>{row.displayRank}</div><div><p className="font-bold"><Link className="underline decoration-dotted underline-offset-4 hover:text-emerald-600" to={scoreEntryUrl(row)}>{row.name}</Link></p><p className={`${isFullscreen ? "text-sm text-slate-400" : "text-xs text-slate-500"}`}>{row.team} · {row.classCode} · {row.squad}</p></div><div className="text-right"><p className={`${isFullscreen ? "text-4xl" : "text-2xl"} font-black`}>{row.total}</p>{row.shootOffs.some((score) => score >= 0) && <p className="text-xs font-semibold text-amber-500">SO {row.shootOffs.filter((score) => score >= 0).join(" / ")}</p>}</div></div>)}</div></div>)}
