@@ -61,14 +61,23 @@ export function individualPlacementCount(meetType: MeetType, classCode: string) 
 
 export function rankIndividuals(rows: AwardParticipant[], limit: number): RankedParticipant[] {
   const sorted = rows.filter((row) => row.complete).slice().sort(compareParticipants)
-  return sorted.slice(0, limit).map((row, index) => ({
-    ...row,
-    place: index + 1,
-    unresolvedTie: Boolean(
-      (sorted[index - 1] && sameCompetitiveScore(row, sorted[index - 1])) ||
-      (sorted[index + 1] && sameCompetitiveScore(row, sorted[index + 1])),
-    ),
-  }))
+  const ranked: RankedParticipant[] = []
+  let index = 0
+
+  while (index < sorted.length) {
+    const groupStart = index
+    const representative = sorted[groupStart]
+    while (index < sorted.length && sameCompetitiveScore(sorted[index], representative)) index += 1
+
+    // Use competition ranking: a four-way tie for first consumes places 1-4.
+    const place = groupStart + 1
+    if (place > limit) break
+
+    const unresolvedTie = index - groupStart > 1
+    sorted.slice(groupStart, index).forEach((row) => ranked.push({ ...row, place, unresolvedTie }))
+  }
+
+  return ranked
 }
 
 export function classAwardGroups(rows: AwardParticipant[], meetType: MeetType) {
