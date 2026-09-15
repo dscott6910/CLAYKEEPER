@@ -214,7 +214,7 @@ export function RegistrationPaymentCenterPage() {
                 <Field label="Opens" type="datetime-local" value={settings.registration_opens_at?.slice(0,16) || ""} onChange={(value) => setSettings({ ...settings, registration_opens_at: value ? new Date(value).toISOString() : null })} />
                 <Field label="Closes" type="datetime-local" value={settings.registration_closes_at?.slice(0,16) || ""} onChange={(value) => setSettings({ ...settings, registration_closes_at: value ? new Date(value).toISOString() : null })} />
                 <Field label="Capacity" type="number" value={settings.capacity ?? ""} onChange={(value) => setSettings({ ...settings, capacity: value ? Number(value) : null })} />
-                <Field label="Base fee" type="number" value={settings.base_fee} onChange={(value) => setSettings({ ...settings, base_fee: Number(value || 0) })} />
+                <Field label="Event fee" type="number" value={settings.base_fee} onChange={(value) => setSettings({ ...settings, base_fee: Number(value || 0) })} />
                 <label className="space-y-1 text-sm font-medium">Payment provider<select className="w-full rounded-lg border bg-white px-3 py-2" value={settings.payment_provider} onChange={(event) => setSettings({ ...settings, payment_provider: event.target.value as "manual" | "stripe" })}><option value="manual">Manual / pay later</option><option value="stripe">Stripe</option></select></label>
                 <Field label="Stripe Price ID" value={settings.stripe_price_id || ""} onChange={(value) => setSettings({ ...settings, stripe_price_id: value || null })} placeholder="price_..." />
               </div>
