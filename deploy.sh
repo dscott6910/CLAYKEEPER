@@ -39,20 +39,24 @@ echo "2. Pulling the latest version from GitHub..."
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
-cd "$FRONTEND_DIR"
-
-if [[ ! -f ".env" ]]; then
+if [[ ! -f "$FRONTEND_DIR/.env" ]]; then
     echo "Deployment stopped: $FRONTEND_DIR/.env is missing."
     echo "The production environment file must exist before building."
     exit 1
 fi
 
 echo
-echo "3. Installing exact project dependencies..."
+echo "3. Applying database migrations..."
+cd "$REPO_DIR"
+supabase db push --linked
+
+echo
+echo "4. Installing exact project dependencies..."
+cd "$FRONTEND_DIR"
 npm ci
 
 echo
-echo "4. Building ClayKeeper..."
+echo "5. Building ClayKeeper..."
 npm run build
 
 if [[ ! -f "$FRONTEND_DIR/dist/index.html" ]]; then
