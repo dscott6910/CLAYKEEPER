@@ -80,6 +80,7 @@ export function TreasurerPage() {
   const [data, setData] = useState<Data>(emptyData)
   const [seasonId, setSeasonId] = useState("all")
   const [eventId, setEventId] = useState("all")
+  const [teamFilter, setTeamFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [search, setSearch] = useState("")
   const [ledgerSort, setLedgerSort] = useState<{ key: LedgerSortKey; direction: "asc" | "desc" }>({ key: "participant", direction: "asc" })
@@ -158,18 +159,25 @@ export function TreasurerPage() {
     }).sort((a, b) => (b.eventDate || "").localeCompare(a.eventDate || "") || a.participant.localeCompare(b.participant))
   }, [data])
 
+  const teamOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.team))).sort((left, right) => left.localeCompare(right)), [rows])
+
+  useEffect(() => {
+    if (teamFilter !== "all" && !teamOptions.includes(teamFilter)) setTeamFilter("all")
+  }, [teamFilter, teamOptions])
+
   const filteredRows = useMemo(() => {
     const eligibleEventIds = new Set(seasonEvents.map((event) => event.id))
     const needle = search.trim().toLowerCase()
     return rows.filter((row) => {
       if (seasonId !== "all" && !eligibleEventIds.has(row.eventId)) return false
       if (eventId !== "all" && row.eventId !== eventId) return false
+      if (teamFilter !== "all" && row.team !== teamFilter) return false
       if (paymentFilter === "balance" && row.balance <= 0) return false
       if (paymentFilter !== "all" && paymentFilter !== "balance" && row.paymentStatus !== paymentFilter) return false
       if (!needle) return true
       return [row.participant, row.cyssaNumber || "", row.team, row.classCode, row.eventName, row.shoots].some((value) => value.toLowerCase().includes(needle))
     })
-  }, [rows, seasonEvents, seasonId, eventId, paymentFilter, search])
+  }, [rows, seasonEvents, seasonId, eventId, teamFilter, paymentFilter, search])
 
   const sortedLedgerRows = useMemo(() => [...filteredRows].sort((left, right) => {
     const values: Record<LedgerSortKey, [string | number, string | number]> = {
@@ -238,7 +246,7 @@ export function TreasurerPage() {
       <AppHeader title="Treasurer Center" description="Review registration income, organization fees, payments, and outstanding balances by season and event" />
       <PageContainer>
         <div className="space-y-5">
-          <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm lg:grid-cols-[1fr_1fr_1fr_1.4fr_auto] print:hidden">
+          <section className="grid gap-3 rounded-2xl border bg-white p-4 shadow-sm lg:grid-cols-[1fr_1fr_1fr_1fr_1.4fr_auto] print:hidden">
             <label className="space-y-1 text-sm font-medium">Season
               <select className="w-full rounded-lg border bg-white px-3 py-2" value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
                 <option value="all">All seasons</option>
@@ -256,6 +264,12 @@ export function TreasurerPage() {
                 <option value="all">All payment statuses</option><option value="balance">Outstanding balance</option><option value="paid">Paid</option><option value="partial">Partial</option><option value="unpaid">Unpaid</option><option value="waived">Waived</option><option value="refunded">Refunded</option>
               </select>
             </label>
+            <label className="space-y-1 text-sm font-medium">Team / Club
+              <select className="w-full rounded-lg border bg-white px-3 py-2" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
+                <option value="all">All teams / clubs</option>
+                {teamOptions.map((team) => <option key={team} value={team}>{team}</option>)}
+              </select>
+            </label>
             <label className="space-y-1 text-sm font-medium">Search
               <input className="w-full rounded-lg border px-3 py-2" placeholder="Participant, team, event…" value={search} onChange={(event) => setSearch(event.target.value)} />
             </label>
@@ -269,10 +283,10 @@ export function TreasurerPage() {
           {error ? <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>Treasurer reports could not load.</strong><p>{error}</p></div></div> : null}
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Stat icon={Users} label="Registrations" value={summary.registrations} />
-            <Stat icon={ReceiptText} label="Expected revenue" value={money(summary.expected)} />
-            <Stat icon={Banknote} label="Amount paid" value={money(summary.paid)} />
-            <Stat icon={AlertCircle} label="Outstanding" value={money(summary.balance)} emphasis={summary.balance > 0} />
+            <Stat icon={Users} label={teamFilter === "all" ? "Registrations" : "Club participants"} value={summary.registrations} />
+            <Stat icon={ReceiptText} label={teamFilter === "all" ? "Expected revenue" : "Club expected"} value={money(summary.expected)} />
+            <Stat icon={Banknote} label={teamFilter === "all" ? "Amount paid" : "Club paid"} value={money(summary.paid)} />
+            <Stat icon={AlertCircle} label={teamFilter === "all" ? "Outstanding" : "Club balance"} value={money(summary.balance)} emphasis={summary.balance > 0} />
             <Stat icon={FileSpreadsheet} label="Organization fees" value={money(summary.organizationFees)} />
           </section>
 
