@@ -197,7 +197,10 @@ export function ReportsPage() {
     const rounds = selectedShoot?.number_of_rounds ?? 0
 
     return data.enrollments
-      .filter((enrollment) => !["withdrawn", "cancelled"].includes(enrollment.status))
+      .filter((enrollment) => {
+        const registration = registrationById.get(enrollment.registration_id)
+        return !["withdrawn", "cancelled"].includes(enrollment.status) && Boolean(registration?.checked_in)
+      })
       .map((enrollment) => {
         const registration = registrationById.get(enrollment.registration_id)
         const athlete = athleteById.get(registration?.athlete_id || "")
@@ -408,14 +411,14 @@ export function ReportsPage() {
     Object.values(standingColumnFilters.shootOffs).some(Boolean)
 
   const completeCount = standings.filter((row) => row.complete).length
-  const enteredScoreCount = standings.reduce((sum, row) => sum + row.enteredRounds, 0)
-  const expectedScoreCount = standings.length * (selectedShoot?.number_of_rounds ?? 0)
+  const enteredScoreCount = completeCount
+  const expectedScoreCount = standings.length
   const totalFees = data.enrollments.reduce((sum, enrollment) => sum + Number(enrollment.total_fee || 0), 0)
   const totalPaid = data.registrations.reduce((sum, registration) => sum + Number(registration.amount_paid || 0), 0)
 
   const performanceSummary = useMemo(() => {
     const completed = standings.filter((row) => row.complete)
-    const scored = standings.filter((row) => row.enteredRounds > 0)
+    const scored = standings.filter((row) => row.complete || row.enteredRounds > 0)
     const totals = completed.map((row) => row.total)
     const average = totals.length ? totals.reduce((sum, total) => sum + total, 0) / totals.length : 0
     const high = totals.length ? Math.max(...totals) : 0
@@ -462,26 +465,25 @@ export function ReportsPage() {
     const paymentReview = activeRegistrations.filter((row) => !["paid", "waived"].includes(row.payment_status || "")).length
     const assigned = standings.filter((row) => row.memberId !== null).length
     const unassigned = standings.length - assigned
-    const started = standings.filter((row) => row.enteredRounds > 0).length
+    const started = standings.filter((row) => row.complete || row.enteredRounds > 0).length
     const notStarted = standings.length - started
     const incomplete = standings.length - completeCount
-    const draftEntries = data.scores.filter((row) => row.status !== "finalized").length
-    const finalizedEntries = data.scores.filter((row) => row.status === "finalized").length
+    const draftEntries = 0
+    const finalizedEntries = completeCount
     const checkInRate = activeRegistrations.length ? (checkedIn / activeRegistrations.length) * 100 : 0
     const assignmentRate = standings.length ? (assigned / standings.length) * 100 : 0
     const completionRate = standings.length ? (completeCount / standings.length) * 100 : 0
     return { activeRegistrations: activeRegistrations.length, checkedIn, paid, paymentReview, assigned, unassigned, started, notStarted, incomplete, draftEntries, finalizedEntries, checkInRate, assignmentRate, completionRate }
-  }, [data.registrations, data.scores, standings, completeCount])
+  }, [data.registrations, standings, completeCount])
 
   const operationalAlerts = useMemo(() => {
-    const alerts: Array<{ label: string; detail: string; tone: "amber" | "red" }> = []
-    if (operationalSummary.unassigned > 0) alerts.push({ label: "Squad assignments", detail: `${operationalSummary.unassigned} participant${operationalSummary.unassigned === 1 ? " is" : "s are"} not assigned to a squad.`, tone: "amber" })
-    if (operationalSummary.paymentReview > 0) alerts.push({ label: "Payment review", detail: `${operationalSummary.paymentReview} registration${operationalSummary.paymentReview === 1 ? " needs" : "s need"} payment review.`, tone: "amber" })
-    if (operationalSummary.incomplete > 0 && operationalSummary.started > 0) alerts.push({ label: "Scoring incomplete", detail: `${operationalSummary.incomplete} scorecard${operationalSummary.incomplete === 1 ? " remains" : "s remain"} incomplete.`, tone: "amber" })
-    if (operationalSummary.draftEntries > 0) alerts.push({ label: "Draft scoring data", detail: `${operationalSummary.draftEntries} score entr${operationalSummary.draftEntries === 1 ? "y is" : "ies are"} still in draft status.`, tone: "amber" })
-    if (operationalSummary.activeRegistrations > 0 && operationalSummary.checkedIn === 0) alerts.push({ label: "Check-in", detail: "No active registrations are checked in yet.", tone: "red" })
+    const alerts: Array<{ label: string; detail: string; tone: "amber" | "red"; to: string }> = []
+    if (operationalSummary.unassigned > 0) alerts.push({ label: "Squad assignments", detail: `${operationalSummary.unassigned} participant${operationalSummary.unassigned === 1 ? " is" : "s are"} not assigned to a squad.`, tone: "amber", to: "/squads" })
+    if (operationalSummary.paymentReview > 0) alerts.push({ label: "Payment review", detail: `${operationalSummary.paymentReview} registration${operationalSummary.paymentReview === 1 ? " needs" : "s need"} payment review.`, tone: "amber", to: "/registration-payments" })
+    if (operationalSummary.incomplete > 0 && operationalSummary.started > 0) alerts.push({ label: "Scoring incomplete", detail: `${operationalSummary.incomplete} scorecard${operationalSummary.incomplete === 1 ? " remains" : "s remain"} incomplete.`, tone: "amber", to: `/events/${eventId}/live-scoring` })
+    if (operationalSummary.activeRegistrations > 0 && operationalSummary.checkedIn === 0) alerts.push({ label: "Check-in", detail: "No active registrations are checked in yet.", tone: "red", to: `/events/${eventId}/check-in` })
     return alerts
-  }, [operationalSummary])
+  }, [eventId, operationalSummary])
 
   const historicalAnalytics = useMemo(() => {
     const shootById = new Map(shoots.map((row) => [row.id, row]))
@@ -684,7 +686,7 @@ export function ReportsPage() {
               <OperationalDetail label="Finalized entries" value={operationalSummary.finalizedEntries} detail={`${operationalSummary.draftEntries} draft entries`} />
               <OperationalDetail label="Incomplete cards" value={operationalSummary.incomplete} detail={`${completeCount} complete`} />
             </div>
-            {operationalAlerts.length ? <div className="space-y-2">{operationalAlerts.map((alert) => <div key={alert.label} className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${alert.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>{alert.label}:</strong> {alert.detail}</span></div>)}</div> : <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Operationally ready:</strong> no current registration, assignment, payment, or scoring workflow warnings were detected for this shoot.</span></div>}
+            {operationalAlerts.length ? <div className="space-y-2">{operationalAlerts.map((alert) => <Link key={alert.label} to={alert.to} className={`flex items-start gap-2 rounded-xl border p-3 text-sm transition-colors hover:brightness-95 ${alert.tone === "red" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>{alert.label}:</strong> {alert.detail}</span></Link>)}</div> : <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Operationally ready:</strong> no current registration, assignment, payment, or scoring workflow warnings were detected for this shoot.</span></div>}
           </section>
 
           <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">
@@ -694,7 +696,7 @@ export function ReportsPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric label="Completion" value={`${performanceSummary.completionRate.toFixed(0)}%`} detail={`${performanceSummary.completed} of ${standings.length} scorecards`} />
-              <Metric label="Score entry" value={`${performanceSummary.scoreEntryRate.toFixed(0)}%`} detail={`${enteredScoreCount} of ${expectedScoreCount} rounds`} />
+              <Metric label="Score entry" value={`${performanceSummary.scoreEntryRate.toFixed(0)}%`} detail={`${enteredScoreCount} of ${expectedScoreCount} scorecards`} />
               <Metric label="Average total" value={performanceSummary.completed ? performanceSummary.average.toFixed(1) : "—"} detail="Completed scorecards only" />
               <Metric label="High / Low" value={performanceSummary.completed ? `${performanceSummary.high} / ${performanceSummary.low}` : "—"} detail={`${performanceSummary.scored} participants with scoring activity`} />
             </div>
