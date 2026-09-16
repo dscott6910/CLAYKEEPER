@@ -23,6 +23,7 @@ import {
   type ReportShootOffRound,
   type ReportShootOffScore,
   type ReportDigitalScorecard,
+  type ReportEventRegistrationSetting,
   type ReportSquad,
 } from "@/lib/services/reports"
 
@@ -38,6 +39,7 @@ type ReportData = {
   shootOffRounds: ReportShootOffRound[]
   shootOffScores: ReportShootOffScore[]
   digitalScorecards: ReportDigitalScorecard[]
+  settings: ReportEventRegistrationSetting | null
 }
 
 
@@ -99,7 +101,7 @@ type StandingRow = {
 }
 
 const emptyData: ReportData = {
-  registrations: [], enrollments: [], athletes: [], teams: [], classes: [], squads: [], members: [], scores: [], shootOffRounds: [], shootOffScores: [], digitalScorecards: [],
+  registrations: [], enrollments: [], athletes: [], teams: [], classes: [], squads: [], members: [], scores: [], shootOffRounds: [], shootOffScores: [], digitalScorecards: [], settings: null,
 }
 
 function athleteName(athlete: ReportAthlete | undefined) {
@@ -413,8 +415,20 @@ export function ReportsPage() {
   const completeCount = standings.filter((row) => row.complete).length
   const enteredScoreCount = completeCount
   const expectedScoreCount = standings.length
-  const totalFees = data.enrollments.reduce((sum, enrollment) => sum + Number(enrollment.total_fee || 0), 0)
-  const totalPaid = data.registrations.reduce((sum, registration) => sum + Number(registration.amount_paid || 0), 0)
+  const financialSummary = useMemo(() => {
+    const checkedInRegistrations = data.registrations.filter((registration) =>
+      registration.checked_in && !["cancelled", "withdrawn"].includes(registration.status),
+    )
+    const baseFee = Number(data.settings?.base_fee || 0)
+    const organizationFee = Number(data.settings?.organization_fee || 0)
+    const eventFees = checkedInRegistrations.reduce(
+      (sum, registration) => sum + Math.max(0, baseFee - Number(registration.discount_amount || 0)),
+      0,
+    )
+    const organizationFees = checkedInRegistrations.length * organizationFee
+    const paid = checkedInRegistrations.reduce((sum, registration) => sum + Number(registration.amount_paid || 0), 0)
+    return { eventFees, organizationFees, expected: eventFees + organizationFees, paid }
+  }, [data.registrations, data.settings])
 
   const performanceSummary = useMemo(() => {
     const completed = standings.filter((row) => row.complete)
@@ -584,8 +598,10 @@ export function ReportsPage() {
       ["Low completed total", performanceSummary.completed ? performanceSummary.low : null],
       [],
       ["Financial Summary"],
-      ["Shoot fees", money(totalFees)],
-      ["Amount paid", money(totalPaid)],
+      ["Event fees", money(financialSummary.eventFees)],
+      ["Organization fees", money(financialSummary.organizationFees)],
+      ["Expected fees", money(financialSummary.expected)],
+      ["Amount paid", money(financialSummary.paid)],
       [],
       ["Current Alerts"],
       ...(operationalAlerts.length ? operationalAlerts.map((alert) => [alert.label, alert.detail]) : [["Status", "No current operational warnings detected."]]),
@@ -665,8 +681,10 @@ export function ReportsPage() {
             <Stat icon={Users} label="Registered" value={standings.length} />
             <Stat icon={CheckCircle2} label="Completed" value={`${completeCount} / ${standings.length}`} />
             <Stat icon={BarChart3} label="Scores entered" value={`${enteredScoreCount} / ${expectedScoreCount}`} />
-            <Stat icon={DollarSign} label="Shoot fees" value={money(totalFees)} />
-            <Stat icon={DollarSign} label="Amount paid" value={money(totalPaid)} />
+            <Stat icon={DollarSign} label="Event fees" value={money(financialSummary.eventFees)} />
+            <Stat icon={DollarSign} label="Organization fees" value={money(financialSummary.organizationFees)} />
+            <Stat icon={DollarSign} label="Expected fees" value={money(financialSummary.expected)} />
+            <Stat icon={DollarSign} label="Amount paid" value={money(financialSummary.paid)} />
           </section>
 
           <section className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm">

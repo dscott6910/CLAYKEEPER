@@ -29,8 +29,15 @@ export type ReportRegistration = {
   payment_status: string
   amount_paid: number
   registration_fee: number
+  discount_amount: number
   checked_in: boolean
   status: string
+}
+
+export type ReportEventRegistrationSetting = {
+  event_id: string
+  base_fee: number
+  organization_fee: number
 }
 
 export type ReportEnrollment = {
@@ -96,8 +103,8 @@ export async function loadReportBaseData() {
 }
 
 export async function loadShootReportData(organizationId: string, eventId: string, shootId: string) {
-  const [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards] = await Promise.all([
-    supabase.from("registrations").select("id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, checked_in, status").eq("organization_id", organizationId).eq("event_id", eventId),
+  const [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards, settings] = await Promise.all([
+    supabase.from("registrations").select("id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, discount_amount, checked_in, status").eq("organization_id", organizationId).eq("event_id", eventId),
     supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status, historical_total_score, historical_first_100_total, result_note").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number").eq("organization_id", organizationId),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId),
@@ -108,9 +115,10 @@ export async function loadShootReportData(organizationId: string, eventId: strin
     supabase.from("shoot_off_rounds").select("id, round_number, label").eq("organization_id", organizationId).eq("shoot_id", shootId).order("round_number"),
     supabase.from("shoot_off_scores").select("shoot_off_round_id, squad_member_id, score").eq("organization_id", organizationId).eq("shoot_id", shootId),
     supabase.from("digital_scorecards").select("squad_member_id, status, total_score, total_targets").eq("organization_id", organizationId).eq("shoot_id", shootId),
+    supabase.from("event_registration_settings").select("event_id, base_fee, organization_fee").eq("organization_id", organizationId).eq("event_id", eventId).maybeSingle(),
   ])
 
-  for (const result of [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards]) {
+  for (const result of [registrations, enrollments, athletes, teams, classes, squads, members, scores, shootOffRounds, shootOffScores, digitalScorecards, settings]) {
     throwIfError(result.error)
   }
 
@@ -126,6 +134,7 @@ export async function loadShootReportData(organizationId: string, eventId: strin
     shootOffRounds: (shootOffRounds.data ?? []) as ReportShootOffRound[],
     shootOffScores: (shootOffScores.data ?? []) as ReportShootOffScore[],
     digitalScorecards: (digitalScorecards.data ?? []) as ReportDigitalScorecard[],
+    settings: (settings.data ?? null) as ReportEventRegistrationSetting | null,
   }
 }
 
@@ -133,7 +142,7 @@ export type HistoricalRegistration = ReportRegistration & { event_id: string }
 export type HistoricalEnrollment = ReportEnrollment
 export async function loadHistoricalReportData(organizationId: string) {
   const [registrations, enrollments] = await Promise.all([
-    supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, checked_in, status").eq("organization_id", organizationId),
+    supabase.from("registrations").select("id, event_id, athlete_id, team_id, class_id, payment_status, amount_paid, registration_fee, discount_amount, checked_in, status").eq("organization_id", organizationId),
     supabase.from("registration_shoots").select("id, registration_id, shoot_id, status, total_fee, squad_assignment_status, historical_total_score, historical_first_100_total, result_note").eq("organization_id", organizationId),
   ])
 
