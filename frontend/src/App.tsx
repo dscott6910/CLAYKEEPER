@@ -107,6 +107,12 @@ const EventWorkspace = lazy(() =>
   })),
 )
 
+const EventSetupWizardPage = lazy(() =>
+  import("@/features/events/EventSetupWizardPage").then((module) => ({
+    default: module.EventSetupWizardPage,
+  })),
+)
+
 const EventsPage = lazy(() =>
   import("@/features/events/EventsPage").then((module) => ({
     default: module.EventsPage,
@@ -611,6 +617,17 @@ function App() {
                     </LazyRoute>
                   }
                 />
+                </Route>
+
+                <Route element={<CapabilityRoute capability="manageEvents" />}>
+                  <Route
+                    path="events/:eventId/setup"
+                    element={
+                      <LazyRoute>
+                        <EventSetupWizardPage />
+                      </LazyRoute>
+                    }
+                  />
                 </Route>
 
                 <Route element={<CapabilityRoute capability="operateEvents" />}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 import { PageContainer } from "@/components/layout/PageContainer"
 import { supabase } from "@/lib/supabase"
@@ -261,6 +261,7 @@ function getStatusClasses(status: EventStatus): string {
 }
 
 export function EventsPage() {
+  const navigate = useNavigate()
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [events, setEvents] = useState<ClayEvent[]>([])
   const [shootCounts, setShootCounts] = useState<Record<string, number>>({})
@@ -278,6 +279,7 @@ export function EventsPage() {
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [startSetupAfterSave, setStartSetupAfterSave] = useState(false)
   const [form, setForm] = useState<EventForm>(EMPTY_FORM)
 
   const generatedEventName = useMemo(
@@ -394,8 +396,9 @@ export function EventsPage() {
     }
   }, [events, shootCounts])
 
-  function openCreateEditor() {
+  function openCreateEditor(startSetup = false) {
     setEditingEventId(null)
+    setStartSetupAfterSave(startSetup)
     setForm(EMPTY_FORM)
     setEditorOpen(true)
     setError(null)
@@ -440,6 +443,7 @@ export function EventsPage() {
 
     setEditorOpen(false)
     setEditingEventId(null)
+    setStartSetupAfterSave(false)
     setForm(EMPTY_FORM)
   }
 
@@ -540,11 +544,19 @@ export function EventsPage() {
           throw result.error
         }
       } else {
-        const result = await supabase.from("events").insert(payload)
+        const result = await supabase.from("events").insert(payload).select("id").single()
 
         if (result.error) {
           throw result.error
         }
+
+        const newEventId = result.data?.id as string | undefined
+        const launchSetup = startSetupAfterSave
+
+        closeEditor()
+        await loadEvents()
+        if (launchSetup && newEventId) navigate(`/events/${newEventId}/setup`)
+        return
       }
 
       closeEditor()
@@ -611,10 +623,10 @@ export function EventsPage() {
 
           <button
             type="button"
-            onClick={openCreateEditor}
+            onClick={() => openCreateEditor(true)}
             className="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
-            New Event
+            New Event Setup
           </button>
         </header>
 
@@ -700,10 +712,10 @@ export function EventsPage() {
               {events.length === 0 && (
                 <button
                   type="button"
-                  onClick={openCreateEditor}
+                  onClick={() => openCreateEditor(true)}
                   className="mt-5 rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  Create First Event
+                  Start Event Setup
                 </button>
               )}
             </div>
@@ -782,6 +794,13 @@ export function EventsPage() {
                         className="inline-flex min-h-10 items-center rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
                       >
                         Open Workspace
+                      </Link>
+
+                      <Link
+                        to={`/events/${event.id}/setup`}
+                        className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-white"
+                      >
+                        Setup Wizard
                       </Link>
 
                       <Link
