@@ -782,7 +782,7 @@ function buildTemplate(
     headerHeight: ROW_HEIGHT / CARD_HEIGHT,
     rowHeight: ROW_HEIGHT / CARD_HEIGHT,
     birdColumns: Math.min(
-      14,
+      20,
       Math.max(1, ...stations.map((station) => station.bird_count)),
     ),
   }

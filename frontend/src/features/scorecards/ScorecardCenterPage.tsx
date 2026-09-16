@@ -23,7 +23,7 @@ import {
 
 type PrintMode = "event" | "team" | "squad" | "athlete" | "generic"
 type WizardStep = 1 | 2 | 3 | 4 | 5
-const SCORECARD_BIRD_COLUMNS = 14
+const SCORECARD_BIRD_COLUMNS = 20
 
 type PrintableCard = {
   registration: ScorecardRegistration

@@ -17,7 +17,7 @@ import {
 type StationForm = { stationNumber: number; birdCount: number; notes: string; targetType: string }
 type CourseForm = { id: string | null; name: string; discipline: string; courseSide: CourseSide; templateName: string; stationCount: number; stations: StationForm[] }
 
-const MAX_BIRDS_PER_STATION = 14
+const MAX_BIRDS_PER_STATION = 20
 const MAX_STATIONS_PER_COURSE = 15
 const blankStations = () => Array.from({ length: 15 }, (_, index) => ({ stationNumber: index + 1, birdCount: MAX_BIRDS_PER_STATION, notes: "", targetType: "" }))
 const blankForm = (discipline = "sporting_clays"): CourseForm => ({ id: null, name: "Course", discipline, courseSide: "Custom", templateName: "", stationCount: MAX_STATIONS_PER_COURSE, stations: blankStations() })
@@ -118,7 +118,7 @@ export function CourseBuilderPage() {
   return <PageContainer><div className="space-y-6">
     <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
       <Link to={`/events/${eventId}`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900"><ArrowLeft size={16}/>Event Workspace</Link>
-      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-semibold text-emerald-700">Course Builder</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">{eventName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Configure up to 15 stations. Each station may contain zero to fourteen scoring birds.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void load()} disabled={saving}><RefreshCw className="h-4 w-4"/>Refresh</Button><Button variant="outline" onClick={newCourse}><Plus className="h-4 w-4"/>New Course</Button></div></div>
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-semibold text-emerald-700">Course Builder</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">{eventName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Configure up to 15 stations. Each station may contain zero to twenty scoring birds.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void load()} disabled={saving}><RefreshCw className="h-4 w-4"/>Refresh</Button><Button variant="outline" onClick={newCourse}><Plus className="h-4 w-4"/>New Course</Button></div></div>
     </header>
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
     {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{success}</div> : null}
