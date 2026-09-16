@@ -36,6 +36,11 @@ type PrintableCard = {
   shootName: string
 }
 
+type PrintableStation = {
+  station_number: number
+  bird_count: number
+}
+
 const STEPS: Array<{ step: WizardStep; label: string }> = [
   { step: 1, label: "Course" },
   { step: 2, label: "Shoot" },
@@ -75,6 +80,8 @@ export function ScorecardCenterPage() {
   const [squadFilter, setSquadFilter] = useState("")
   const [athleteFilter, setAthleteFilter] = useState("")
   const [genericCardCount, setGenericCardCount] = useState(2)
+  const [genericStationCount, setGenericStationCount] = useState(10)
+  const [genericBirdCount, setGenericBirdCount] = useState(10)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState("")
@@ -206,6 +213,14 @@ export function ScorecardCenterPage() {
     }
   }, [allCards, athleteFilter, printMode, squadFilter, teamFilter])
 
+  const genericStations = useMemo<PrintableStation[]>(
+    () => Array.from({ length: genericStationCount }, (_, index) => ({
+      station_number: index + 1,
+      bird_count: genericBirdCount,
+    })),
+    [genericBirdCount, genericStationCount],
+  )
+
   function choosePrintMode(mode: PrintMode) {
     setPrintMode(mode)
     setTeamFilter("")
@@ -261,9 +276,11 @@ export function ScorecardCenterPage() {
         format: "letter",
       })
 
-      const stations = data.stations
-        .filter((station) => station.course_id === selectedCourse.id)
-        .sort((a, b) => a.station_number - b.station_number)
+      const stations = printMode === "generic"
+        ? genericStations
+        : data.stations
+          .filter((station) => station.course_id === selectedCourse.id)
+          .sort((a, b) => a.station_number - b.station_number)
 
       const totalCards =
         printMode === "generic" ? genericCardCount : cards.length
@@ -406,6 +423,10 @@ export function ScorecardCenterPage() {
               setAthleteFilter={setAthleteFilter}
               genericCardCount={genericCardCount}
               setGenericCardCount={setGenericCardCount}
+              genericStationCount={genericStationCount}
+              setGenericStationCount={setGenericStationCount}
+              genericBirdCount={genericBirdCount}
+              setGenericBirdCount={setGenericBirdCount}
             />
           ) : null}
 
@@ -416,6 +437,8 @@ export function ScorecardCenterPage() {
               genericCardCount={genericCardCount}
               course={selectedCourse}
               shootName={selectedShoot?.name ?? ""}
+              genericStationCount={genericStationCount}
+              genericBirdCount={genericBirdCount}
             />
           ) : null}
 
@@ -586,6 +609,10 @@ function StepPrintMode(props: {
   setAthleteFilter: (value: string) => void
   genericCardCount: number
   setGenericCardCount: (value: number) => void
+  genericStationCount: number
+  setGenericStationCount: (value: number) => void
+  genericBirdCount: number
+  setGenericBirdCount: (value: number) => void
 }) {
   const options: Array<{ value: PrintMode; title: string; detail: string }> = [
     { value: "event", title: "Entire Shoot", detail: "Print every eligible participant" },
@@ -635,28 +662,14 @@ function StepPrintMode(props: {
           </select>
         ) : null}
         {props.mode === "generic" ? (
-          <label className="block text-sm font-medium text-slate-700">
-            Number of generic scorecards
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={props.genericCardCount}
-              onChange={(event) =>
-                props.setGenericCardCount(
-                  Math.max(
-                    1,
-                    Math.min(200, Number(event.target.value) || 1),
-                  ),
-                )
-              }
-              className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
-            />
-            <span className="mt-2 block text-xs leading-5 text-slate-500">
-              These cards use the selected course birds and stations,
-              but leave participant, team, squad, and post blank.
-            </span>
-          </label>
+          <div className="grid gap-4 rounded-xl border bg-slate-50 p-4 sm:grid-cols-3">
+            <NumberField label="Number of cards" value={props.genericCardCount} min={1} max={200} onChange={props.setGenericCardCount} />
+            <NumberField label="Stations per card" value={props.genericStationCount} min={1} max={15} onChange={props.setGenericStationCount} />
+            <NumberField label="Birds per station" value={props.genericBirdCount} min={1} max={20} onChange={props.setGenericBirdCount} />
+            <p className="sm:col-span-3 text-xs leading-5 text-slate-500">
+              Generic cards use this layout instead of the saved course. They include the selected event and shoot details, but leave the participant fields blank and do not include a QR code.
+            </p>
+          </div>
         ) : null}
       </div>
     </div>
@@ -669,6 +682,8 @@ function StepPreview(props: {
   genericCardCount: number
   course: ScorecardCourse | null
   shootName: string
+  genericStationCount: number
+  genericBirdCount: number
 }) {
   const generic = props.printMode === "generic"
 
@@ -676,15 +691,15 @@ function StepPreview(props: {
     <div>
       <h2 className="text-xl font-bold">4. Preview Print Queue</h2>
       <p className="mt-1 text-sm text-slate-500">
-        {generic ? props.genericCardCount : props.cards.length} scorecard{(generic ? props.genericCardCount : props.cards.length) === 1 ? "" : "s"} · {props.course?.name ?? "No course"} · {props.shootName}
+        {generic ? props.genericCardCount : props.cards.length} scorecard{(generic ? props.genericCardCount : props.cards.length) === 1 ? "" : "s"} · {generic ? `${props.genericStationCount} stations · ${props.genericBirdCount} birds each` : props.course?.name ?? "No course"} · {props.shootName}
       </p>
       <div className="mt-5 max-h-[520px] divide-y overflow-y-auto rounded-xl border">
         {generic ? (
           <div className="grid gap-2 p-4 text-sm sm:grid-cols-5">
             <span className="font-semibold">Generic scorecard</span>
-            <span>No shooter assigned</span>
-            <span>Team blank</span>
-            <span>Squad / post blank</span>
+            <span>{props.genericStationCount} stations</span>
+            <span>{props.genericBirdCount} birds each</span>
+            <span>Participant fields blank</span>
             <span className="text-slate-500">{props.shootName}</span>
           </div>
         ) : null}
@@ -700,6 +715,28 @@ function StepPreview(props: {
         {!generic && props.cards.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No scorecards are available for this selection.</p> : null}
       </div>
     </div>
+  )
+}
+
+function NumberField(props: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label className="block text-sm font-medium text-slate-700">
+      {props.label}
+      <input
+        type="number"
+        min={props.min}
+        max={props.max}
+        value={props.value}
+        onChange={(event) => props.onChange(Math.max(props.min, Math.min(props.max, Number(event.target.value) || props.min)))}
+        className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
+      />
+    </label>
   )
 }
 
@@ -763,7 +800,7 @@ async function drawScorecard(
   y: number,
   data: ScorecardCenterData,
   course: ScorecardCourse,
-  stations: ScorecardCenterData["stations"],
+  stations: PrintableStation[],
   card: PrintableCard | null,
   shootName: string,
 ) {
