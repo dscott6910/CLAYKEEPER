@@ -62,6 +62,7 @@ export type TreasurerAthlete = {
   first_name: string | null
   last_name: string | null
   preferred_name: string | null
+  participant_number: string | null
   cyssa_number: string | null
 }
 
@@ -129,7 +130,7 @@ export async function loadTreasurerData() {
     ),
     loadAllRows<TreasurerAthlete>(
       "athletes",
-      "id, first_name, last_name, preferred_name, cyssa_number",
+      "id, first_name, last_name, preferred_name, participant_number, cyssa_number",
       organizationId,
     ),
     loadAllRows<TreasurerNamedRecord>(
