@@ -44,6 +44,25 @@ cd ~/apps/CLAYKEEPER
 ./backup-production.sh --yes
 ```
 
+## Daily server backup
+
+Install the daily backup schedule once on the production server:
+
+```bash
+cd ~/apps/CLAYKEEPER
+chmod +x install-daily-backup.sh check-daily-backup.sh
+./install-daily-backup.sh
+./backup-production.sh --yes
+./check-daily-backup.sh
+```
+
+The installed job runs every day at 2:15 AM server time. It writes a dated
+database export to the local backup folder and appends its output to
+`~/CODEX/Logs/ClayKeeper/daily-backup.log`.
+
+This local backup protects against accidental data deletion. It is not an
+offsite copy, so configure a separate encrypted copy to cloud storage as well.
+
 The backup folder is created under:
 
 ```text
