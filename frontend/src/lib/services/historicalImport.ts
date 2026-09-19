@@ -692,6 +692,8 @@ export type TrapSeriesSheet = {
   sheetName: string
   rows: TrapSeriesRow[]
   hasSquadNumbers: boolean
+  numberOfRounds: number
+  targetsPerRound: number
 }
 
 export type ParsedTrapSeriesWorkbook = {
@@ -790,12 +792,17 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       .sort((a, b) => Number(a.match?.[1]) - Number(b.match?.[1]))
 
     const detectedRounds = new Set(roundIndexes.map((item) => Number(item.match?.[1])))
+    // Sporting-clays result exports commonly contain only a 100-target total.
+    // Preserve that as one round while retaining the four 25-target trap format.
+    const isTotalOnlyScorecard = detectedRounds.size <= 1
     const missingColumns: string[] = []
     if (lastIndex < 0) missingColumns.push("LASTNAME")
     if (firstIndex < 0) missingColumns.push("FIRSTNAME")
     if (totalIndex < 0) missingColumns.push("TOTALSCORE")
-    for (let round = 1; round <= 4; round += 1) {
-      if (!detectedRounds.has(round)) missingColumns.push(`TRAP ${round}`)
+    if (!isTotalOnlyScorecard) {
+      for (let round = 1; round <= 4; round += 1) {
+        if (!detectedRounds.has(round)) missingColumns.push(`TRAP ${round}`)
+      }
     }
     if (missingColumns.length) {
       workbookErrors.push(`${sheetName}: missing required column${missingColumns.length === 1 ? "" : "s"} ${missingColumns.join(", ")}`)
@@ -816,7 +823,10 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
       const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
       const suppliedTotal = numberValue(record[totalIndex])
-      const scores = requiredRoundIndexes.map((item) => numberValue(record[item.index]))
+      const importedRoundScores = requiredRoundIndexes.map((item) => numberValue(record[item.index]))
+      const scores = isTotalOnlyScorecard
+        ? [suppliedTotal]
+        : importedRoundScores
 
       if (!firstName && !lastName && !team && suppliedTotal === null && scores.every((score) => score === null)) continue
 
@@ -826,8 +836,9 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       if (!team) warnings.push("Team is blank")
       if (!classCode) warnings.push("Class is blank")
       if (!squadNumber) warnings.push("Squad number is blank; ClayKeeper will create an imported holding squad")
+      const maximumRoundScore = isTotalOnlyScorecard ? 100 : 25
       scores.forEach((score, index) => {
-        if (score !== null && (score < 0 || score > 25)) errors.push(`Round ${index + 1} score is outside 0-25`)
+        if (score !== null && (score < 0 || score > maximumRoundScore)) errors.push(`Round ${index + 1} score is outside 0-${maximumRoundScore}`)
       })
       const hasAnyScore = scores.some((score) => score !== null)
       const hasAllScores = scores.every((score) => score !== null)
@@ -860,10 +871,18 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       })
     }
 
-    if (rows.length) sheets.push({ sheetName, rows, hasSquadNumbers: squadIndex >= 0 })
+    if (rows.length) {
+      sheets.push({
+        sheetName,
+        rows,
+        hasSquadNumbers: squadIndex >= 0,
+        numberOfRounds: isTotalOnlyScorecard ? 1 : 4,
+        targetsPerRound: isTotalOnlyScorecard ? 100 : 25,
+      })
+    }
   }
 
-  if (!sheets.length && !workbookErrors.length) throw new Error("No participant worksheets were detected. Each shoot sheet must contain LASTNAME, FIRSTNAME, TOTALSCORE, and TRAP 1-4 columns.")
+  if (!sheets.length && !workbookErrors.length) throw new Error("No participant worksheets were detected. Each shoot sheet must contain LASTNAME, FIRSTNAME, and TOTALSCORE, with either a 100-target total or four trap-round columns.")
   return { kind: "trap_series", fileName: file.name, sheets, workbookErrors }
 }
 
@@ -1060,8 +1079,8 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
           shoot_date: options.eventDate,
           entry_fee: options.entryFee,
           organization_fee: options.organizationFee,
-          targets_per_round: 25,
-          number_of_rounds: 4,
+          targets_per_round: sheet.targetsPerRound,
+          number_of_rounds: sheet.numberOfRounds,
           status: hasAnyScores ? "completed" : "registration_open",
           allow_score_entry: !hasAnyScores,
           external_id: `trap-series:${importBatch.id}:${sheet.sheetName}`,
@@ -1073,6 +1092,8 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
           discipline: options.discipline,
           entry_fee: options.entryFee,
           organization_fee: options.organizationFee,
+          targets_per_round: sheet.targetsPerRound,
+          number_of_rounds: sheet.numberOfRounds,
           notes: `Updated from ${parsed.fileName}, worksheet ${sheet.sheetName}`,
         }
         if (hasAnyScores) Object.assign(shootUpdate, { status: "completed", allow_score_entry: false })

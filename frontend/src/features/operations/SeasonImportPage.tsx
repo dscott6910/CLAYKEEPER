@@ -571,7 +571,7 @@ export function SeasonImportPage() {
             <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${trapSetupComplete && !trapImportRunning ? "cursor-pointer border-slate-300 hover:border-amber-500 hover:bg-amber-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
               {busy ? <Loader2 className="h-8 w-8 animate-spin text-amber-600" /> : <Upload className="h-8 w-8 text-amber-600" />}
               <span className="mt-3 font-medium text-slate-800">Choose participant or score workbook</span>
-              <span className="mt-1 text-xs text-slate-500">Expected columns: last name, first name, team, class, squad number, four round scores, and total score. Blank score cells are allowed.</span>
+              <span className="mt-1 text-xs text-slate-500">Expected columns: last name, first name, team, class, squad number, and total score. Use either one 100-target total for sporting clays or four 25-target round scores for trap. Blank score cells are allowed.</span>
               <input className="hidden" type="file" accept=".xlsx,.xls" disabled={!trapSetupComplete || trapImportRunning} onChange={(e) => void handleTrapSeriesFile(e.target.files?.[0])} />
             </label>
 
