@@ -63,6 +63,41 @@ database export to the local backup folder and appends its output to
 This local backup protects against accidental data deletion. It is not an
 offsite copy, so configure a separate encrypted copy to cloud storage as well.
 
+## Encrypted Google Drive copy
+
+Use `rclone` to connect the server to Google Drive, then place an encrypted
+remote between ClayKeeper and the Drive folder. Do not use an unencrypted Drive
+remote for database exports.
+
+Install `rclone` on the production server, then run `rclone config` and create:
+
+1. A Google Drive remote named `claykeeper-drive`.
+2. A Crypt remote named `claykeeper-crypt` pointing to
+   `claykeeper-drive:ClayKeeper Encrypted Backups`.
+
+When asked to choose encryption, use standard filename encryption and encrypt
+directory names. Complete Google's browser sign-in using your own account.
+
+Store the encrypted remote name outside the project repository:
+
+```bash
+mkdir -p ~/.config/claykeeper
+chmod 700 ~/.config/claykeeper
+printf 'CLAYKEEPER_RCLONE_REMOTE="claykeeper-crypt:"\n' > ~/.config/claykeeper/backup.env
+chmod 600 ~/.config/claykeeper/backup.env
+```
+
+After configuring rclone, test the complete backup and copy:
+
+```bash
+cd ~/apps/CLAYKEEPER
+chmod +x run-daily-backup.sh sync-production-backups.sh
+./run-daily-backup.sh
+```
+
+Re-run `./install-daily-backup.sh` after deploying this change so the daily
+schedule uses the combined local-backup and encrypted-offsite-copy task.
+
 The backup folder is created under:
 
 ```text

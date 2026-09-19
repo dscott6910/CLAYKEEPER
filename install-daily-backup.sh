@@ -12,15 +12,15 @@ if ! command -v crontab >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -x "$PROJECT_ROOT/backup-production.sh" ]]; then
-  echo "[backup-schedule] ERROR: backup-production.sh is missing or not executable." >&2
+if [[ ! -x "$PROJECT_ROOT/run-daily-backup.sh" ]]; then
+  echo "[backup-schedule] ERROR: run-daily-backup.sh is missing or not executable." >&2
   exit 1
 fi
 
 mkdir -p "$BACKUP_ROOT" "$LOG_DIR"
 chmod 700 "$BACKUP_ROOT" "$LOG_DIR"
 
-CRON_LINE="$SCHEDULE cd \"$PROJECT_ROOT\" && /usr/bin/env bash \"$PROJECT_ROOT/backup-production.sh\" --yes >> \"$LOG_DIR/daily-backup.log\" 2>&1 $CRON_TAG"
+CRON_LINE="$SCHEDULE /usr/bin/env bash \"$PROJECT_ROOT/run-daily-backup.sh\" >> \"$LOG_DIR/daily-backup.log\" 2>&1 $CRON_TAG"
 CURRENT_CRONTAB="$(crontab -l 2>/dev/null || true)"
 
 {
