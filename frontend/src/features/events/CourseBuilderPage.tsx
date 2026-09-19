@@ -113,12 +113,31 @@ export function CourseBuilderPage() {
     finally { setSaving(false) }
   }
 
+  async function restoreSportingClaysCourses() {
+    if (!eventId || !organizationId) return
+    setSaving(true); setError(""); setSuccess("")
+    try {
+      await saveEventCourse({
+        organizationId, eventId, name: "JV", discipline: "sporting_clays", courseSide: "Custom", templateName: "JV 100-target recovery",
+        stations: Array.from({ length: 10 }, (_, index) => ({ stationNumber: index + 1, birdCount: 10, notes: "", targetType: "" })),
+      })
+      const varsityBirds = [8, 8, 10, 8, 8, 8, 8, 8, 8, 8, 10, 8]
+      await saveEventCourse({
+        organizationId, eventId, name: "Varsity", discipline: "sporting_clays", courseSide: "Custom", templateName: "Varsity 100-target recovery",
+        stations: varsityBirds.map((birdCount, index) => ({ stationNumber: index + 1, birdCount, notes: "", targetType: "" })),
+      })
+      setSuccess("JV and Varsity course layouts restored.")
+      await load()
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "The course layouts could not be restored.") }
+    finally { setSaving(false) }
+  }
+
   if (loading) return <PageContainer><div className="flex min-h-[420px] items-center justify-center gap-3 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Loading course builder…</div></PageContainer>
 
   return <PageContainer><div className="space-y-6">
     <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
       <Link to={`/events/${eventId}`} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900"><ArrowLeft size={16}/>Event Workspace</Link>
-      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-semibold text-emerald-700">Course Builder</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">{eventName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Configure up to 15 stations. Each station may contain zero to twenty scoring birds.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void load()} disabled={saving}><RefreshCw className="h-4 w-4"/>Refresh</Button><Button variant="outline" onClick={newCourse}><Plus className="h-4 w-4"/>New Course</Button></div></div>
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-sm font-semibold text-emerald-700">Course Builder</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">{eventName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-600">Configure up to 15 stations. Each station may contain zero to twenty scoring birds.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void load()} disabled={saving}><RefreshCw className="h-4 w-4"/>Refresh</Button>{courses.length === 0 && eventDiscipline === "sporting_clays" ? <Button variant="outline" onClick={() => void restoreSportingClaysCourses()} disabled={saving}>Restore JV / Varsity Courses</Button> : null}<Button variant="outline" onClick={newCourse}><Plus className="h-4 w-4"/>New Course</Button></div></div>
     </header>
     {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
     {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{success}</div> : null}

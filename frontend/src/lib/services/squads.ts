@@ -120,8 +120,8 @@ export async function loadShootSquaddingData(organizationId: string, eventId: st
   const [squadsResult, membersResult, enrollmentsResult, registrationsResult, teamsResult, classesResult] = await Promise.all([
     supabase.from("squads").select("id, organization_id, shoot_id, squad_number, name, house_number, course_name, station_name, flight_name, start_time, capacity, sort_order, assignment_method, status, is_locked, notes").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
     supabase.from("squad_members").select("id, organization_id, shoot_id, squad_id, registration_shoot_id, position, position_label, assignment_method, status, is_squad_leader, checked_in").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
-    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).in("status", ["pending", "registered"]),
-    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status, payment_status, checked_in").eq("organization_id", organizationId).eq("event_id", eventId).in("status", ["pending", "registered"]),
+    supabase.from("registration_shoots").select("id, organization_id, event_id, registration_id, shoot_id, status").eq("organization_id", organizationId).eq("shoot_id", shootId).in("status", ["pending", "registered", "completed"]),
+    supabase.from("registrations").select("id, athlete_id, team_id, class_id, registration_number, status, payment_status, checked_in").eq("organization_id", organizationId).eq("event_id", eventId).in("status", ["pending", "registered", "completed"]),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId).eq("active", true).order("name"),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId).eq("active", true).order("display_order"),
   ])
