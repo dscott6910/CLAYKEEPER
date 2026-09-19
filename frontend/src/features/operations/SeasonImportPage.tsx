@@ -19,6 +19,7 @@ export function SeasonImportPage() {
   const [busy, setBusy] = useState(false)
   const [parsed, setParsed] = useState<ParsedUsOpenWorkbook | null>(null)
   const [trapParsed, setTrapParsed] = useState<ParsedTrapSeriesWorkbook | null>(null)
+  const [selectedTrapSheetNames, setSelectedTrapSheetNames] = useState<string[]>([])
   const [seasonName, setSeasonName] = useState("2026 Season")
   const [seasonStart, setSeasonStart] = useState("2026-01-01")
   const [seasonEnd, setSeasonEnd] = useState("2026-12-31")
@@ -106,8 +107,13 @@ export function SeasonImportPage() {
     }
   }
 
+  const selectedTrapSheets = useMemo(
+    () => trapParsed?.sheets.filter((sheet) => selectedTrapSheetNames.includes(sheet.sheetName)) ?? [],
+    [selectedTrapSheetNames, trapParsed],
+  )
+
   const trapTotals = useMemo(() => {
-    const rows = trapParsed?.sheets.flatMap((sheet) => sheet.rows) ?? []
+    const rows = selectedTrapSheets.flatMap((sheet) => sheet.rows)
     return {
       rows: rows.length,
       ready: rows.filter((row) => !row.errors.length).length,
@@ -118,7 +124,7 @@ export function SeasonImportPage() {
       unresolved: rows.filter((row) => row.matchStatus === "possible" && !row.matchedParticipantId && !row.errors.length).length,
       withScores: rows.filter((row) => row.total !== null || row.scores.some((score) => score !== null)).length,
     }
-  }, [trapParsed])
+  }, [selectedTrapSheets])
 
   const trapRequiredFields = [
     { label: "Season", complete: Boolean(seasonId) },
@@ -229,6 +235,7 @@ export function SeasonImportPage() {
       const result = await parseTrapSeriesWorkbook(file)
       const review = await buildTrapSeriesReview(result)
       setTrapParsed(review.parsed)
+      setSelectedTrapSheetNames(review.parsed.sheets.map((sheet) => sheet.sheetName))
       setTrapParticipants(review.participants)
       const rowCount = review.parsed.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)
       toast.success(`${rowCount} participant rows found across ${review.parsed.sheets.length} shoot worksheet${review.parsed.sheets.length === 1 ? "" : "s"}`)
@@ -240,14 +247,14 @@ export function SeasonImportPage() {
   }
 
   async function handleTrapSeriesImport() {
-    if (!trapParsed || !seasonId || trapParsed.workbookErrors.length) return
+    if (!trapParsed || !seasonId || trapParsed.workbookErrors.length || !selectedTrapSheets.length) return
     trapCancelRef.current = false
     setTrapImportRunning(true)
     setBusy(true)
     setTrapImportMessage("Starting import…")
     setTrapImportProgress({ completedRows: 0, totalRows: trapTotals.ready, percent: 0, stage: "preparing" })
     try {
-      const result = await importTrapSeriesWorkbook(trapParsed, {
+      const result = await importTrapSeriesWorkbook({ ...trapParsed, sheets: selectedTrapSheets }, {
         seasonId,
         eventName: trapSeriesEventName,
         eventDate: trapSeriesDate,
@@ -267,6 +274,7 @@ export function SeasonImportPage() {
       setTrapImportProgress((current) => ({ ...current, completedRows: current.totalRows, percent: 100, stage: "completed" }))
       await refresh()
       setTrapParsed(null)
+      setSelectedTrapSheetNames([])
       setTrapParticipants([])
       setActiveTrapImportId(null)
     } catch (error) {
@@ -295,6 +303,7 @@ export function SeasonImportPage() {
   function handleClearTrapWorkbook() {
     if (trapImportRunning) return
     setTrapParsed(null)
+    setSelectedTrapSheetNames([])
     setTrapParticipants([])
     setTrapImportMessage("")
     setTrapImportProgress({ completedRows: 0, totalRows: 0, percent: 0, stage: "preparing" })
@@ -581,7 +590,7 @@ export function SeasonImportPage() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {trapParsed.sheets.map((sheet) => <div key={sheet.sheetName} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><strong>{sheet.sheetName}</strong><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">{sheet.rows.length} participants</span></div><p className="mt-2 text-xs text-slate-500">{sheet.rows.some((row) => row.total !== null || row.scores.some((score) => score !== null)) ? "Scores detected; saved scores will be added or updated" : "Roster-only upload; scores can be added later"}</p></div>)}
+                {trapParsed.sheets.map((sheet) => <label key={sheet.sheetName} className={`cursor-pointer rounded-xl border p-4 ${selectedTrapSheetNames.includes(sheet.sheetName) ? "border-emerald-400 bg-emerald-50" : "border-slate-200"}`}><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><input type="checkbox" checked={selectedTrapSheetNames.includes(sheet.sheetName)} onChange={(event) => setSelectedTrapSheetNames((current) => event.target.checked ? [...current, sheet.sheetName] : current.filter((name) => name !== sheet.sheetName))} disabled={trapImportRunning} /><strong>{sheet.sheetName}</strong></span><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">{sheet.rows.length} participants</span></div><p className="mt-2 text-xs text-slate-500">{sheet.rows.some((row) => row.total !== null || row.scores.some((score) => score !== null)) ? "Scores detected; saved scores will be added or updated" : "Roster-only upload; scores can be added later"}</p></label>)}
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -599,7 +608,7 @@ export function SeasonImportPage() {
               <div className="mt-5 max-h-[520px] overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Match</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
-                  <tbody>{trapParsed.sheets.flatMap((sheet) => sheet.rows.map((row) => (
+                  <tbody>{selectedTrapSheets.flatMap((sheet) => sheet.rows.map((row) => (
                     <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100">
                       <td className="px-3 py-2 font-medium">{sheet.sheetName}</td>
                       <td className="px-3 py-2">{row.rowNumber}</td>
@@ -654,7 +663,7 @@ export function SeasonImportPage() {
 
               <div className="mt-5 flex flex-wrap justify-end gap-3">
                 <Button variant="outline" onClick={handleClearTrapWorkbook} disabled={trapImportRunning}>{trapParsed.workbookErrors.length ? <XCircle className="mr-2 h-4 w-4" /> : <Trash2 className="mr-2 h-4 w-4" />}{trapParsed.workbookErrors.length ? "Remove faulty spreadsheet" : "Clear spreadsheet"}</Button>
-                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || trapTotals.ready === 0 || trapTotals.unresolved > 0 || !trapSetupComplete} title={trapTotals.unresolved > 0 ? "Review all possible participant matches first" : undefined}><Upload className="mr-2 h-4 w-4" />Import or update participants and scores</Button>}
+                {trapImportRunning ? <Button variant="destructive" onClick={handleCancelTrapImport} disabled={trapCancelRef.current}><Ban className="mr-2 h-4 w-4" />{trapCancelRef.current ? "Stopping…" : "Kill / Stop import"}</Button> : <Button onClick={handleTrapSeriesImport} disabled={busy || trapParsed.workbookErrors.length > 0 || selectedTrapSheets.length === 0 || trapTotals.ready === 0 || trapTotals.unresolved > 0 || !trapSetupComplete} title={trapTotals.unresolved > 0 ? "Review all possible participant matches first" : selectedTrapSheets.length === 0 ? "Select at least one worksheet" : undefined}><Upload className="mr-2 h-4 w-4" />Import or update participants and scores</Button>}
               </div>
             </>}
           </section>

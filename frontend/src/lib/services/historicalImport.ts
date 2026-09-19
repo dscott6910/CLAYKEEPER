@@ -799,20 +799,14 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
     if (lastIndex < 0) missingColumns.push("LASTNAME")
     if (firstIndex < 0) missingColumns.push("FIRSTNAME")
     if (totalIndex < 0) missingColumns.push("TOTALSCORE")
-    if (!isTotalOnlyScorecard) {
-      for (let round = 1; round <= 4; round += 1) {
-        if (!detectedRounds.has(round)) missingColumns.push(`TRAP ${round}`)
-      }
-    }
     if (missingColumns.length) {
       workbookErrors.push(`${sheetName}: missing required column${missingColumns.length === 1 ? "" : "s"} ${missingColumns.join(", ")}`)
       continue
     }
 
-    const requiredRoundIndexes = roundIndexes.filter((item) => {
-      const round = Number(item.match?.[1])
-      return round >= 1 && round <= 4
-    })
+    const requiredRoundIndexes = Array.from({ length: 4 }, (_, index) =>
+      roundIndexes.find((item) => Number(item.match?.[1]) === index + 1),
+    )
 
     const rows: TrapSeriesRow[] = []
     for (let rowIndex = headerRow + 1; rowIndex < matrix.length; rowIndex += 1) {
@@ -823,7 +817,7 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
       const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
       const suppliedTotal = numberValue(record[totalIndex])
-      const importedRoundScores = requiredRoundIndexes.map((item) => numberValue(record[item.index]))
+      const importedRoundScores = requiredRoundIndexes.map((item) => item ? numberValue(record[item.index]) : null)
       const scores = isTotalOnlyScorecard
         ? [suppliedTotal]
         : importedRoundScores
