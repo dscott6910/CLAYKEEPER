@@ -859,9 +859,9 @@ function StepGenerate(props: {
 function drawCutLine(pdf: jsPDF) {
   const centerX = 5.5
 
-  pdf.setDrawColor(120)
-  pdf.setLineWidth(0.006)
-  pdf.setLineDashPattern([0.08, 0.06], 0)
+  pdf.setDrawColor(45)
+  pdf.setLineWidth(0.014)
+  pdf.setLineDashPattern([0.1, 0.045], 0)
   pdf.line(centerX, 0.18, centerX, 8.32)
   pdf.setLineDashPattern([], 0)
 
@@ -912,40 +912,50 @@ async function drawScorecard(
   pdf.setLineWidth(0.012)
 
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(9.4)
-  pdf.text(data.event.name, x + margin, y + 0.3, {
-    maxWidth: 4.3,
-  })
-  pdf.setFontSize(7.8)
+  const scorecardTitle = data.event.name
+  const scorecardTitleWidth = width - margin * 2
+  let scorecardTitleSize = 11.2
+  pdf.setFontSize(scorecardTitleSize)
+  while (
+    scorecardTitleSize > 9 &&
+    pdf.getTextWidth(scorecardTitle) > scorecardTitleWidth
+  ) {
+    scorecardTitleSize -= 0.2
+    pdf.setFontSize(scorecardTitleSize)
+  }
+  pdf.text(scorecardTitle, x + width / 2, y + 0.3, { align: "center" })
+  pdf.setFontSize(8.8)
   pdf.setFont("helvetica", "normal")
   pdf.text(
     `${formatDate(data.event.start_date)}  |  ${
       data.event.location_name ?? "Location not set"
     }`,
     x + margin,
-    y + 0.48,
-    { maxWidth: 4.3 },
+    y + 0.5,
+    { maxWidth: scorecardTitleWidth },
   )
   pdf.text(
     `Host: ${data.event.host_sponsor ?? data.event.sponsor_name ?? "Not set"}`,
     x + margin,
-    y + 0.64,
-    { maxWidth: 4.3 },
+    y + 0.68,
+    { maxWidth: scorecardTitleWidth },
   )
-  pdf.text(`Course: ${course.name}`, x + margin, y + 0.8, { maxWidth: 4.3 })
+  pdf.text(`Course: ${course.name}`, x + margin, y + 0.86, {
+    maxWidth: scorecardTitleWidth,
+  })
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(8.4)
+  pdf.setFontSize(9.4)
   const instructionX = x + margin
-  const instructionY = y + 0.86
+  const instructionY = y + 0.94
   const instructionW = width - margin * 2
   const instructionH = 0.34
   pdf.setFillColor("#000000")
   pdf.rect(instructionX, instructionY, instructionW, instructionH, "F")
   pdf.setTextColor("#ffffff")
-  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.0, {
+  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.09, {
     align: "center",
   })
-  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.16, {
+  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.27, {
     align: "center",
   })
   pdf.setTextColor("#141414")
@@ -964,7 +974,7 @@ async function drawScorecard(
   }
 
   const tableX = x + margin
-  const tableY = y + 1.22
+  const tableY = y + 1.34
   const rowH = 0.34 * gridScaleY
   const stationW = 0.62 * gridScaleX
   const totalW = 0.68 * gridScaleX
@@ -982,7 +992,7 @@ async function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.rect(tableX, tableY, tableW, rowH)
-  pdf.setFontSize(5.9)
+  pdf.setFontSize(6.5)
   pdf.text("STATION", tableX + stationW / 2, tableY + 0.22, {
     align: "center",
   })
@@ -995,7 +1005,7 @@ async function drawScorecard(
       rowH,
     )
   }
-  pdf.setFontSize(6.8)
+  pdf.setFontSize(7.4)
   for (let bird = 1; bird <= birdColumns; bird += 1) {
     pdf.text(
       String(bird),
@@ -1007,7 +1017,7 @@ async function drawScorecard(
   const stationTotalX = tableX + stationW + birdW * birdColumns
   pdf.rect(stationTotalX, tableY, totalW, rowH)
   pdf.rect(stationTotalX + totalW, tableY, runningW, rowH)
-  pdf.setFontSize(5.2)
+  pdf.setFontSize(5.9)
   pdf.text("STATION", stationTotalX + totalW / 2, tableY + 0.16, {
     align: "center",
   })
@@ -1027,7 +1037,7 @@ async function drawScorecard(
     const rowY = tableY + rowH * (row + 1)
 
     pdf.rect(tableX, rowY, tableW, rowH)
-    pdf.setFontSize(6.8)
+    pdf.setFontSize(7.4)
     pdf.text(String(stationNumber), tableX + stationW / 2, rowY + 0.22, {
       align: "center",
     })
@@ -1060,7 +1070,7 @@ async function drawScorecard(
 
   const subtotalY = tableY + rowH * (printableStations.length + 1)
   pdf.rect(tableX, subtotalY, tableW, rowH)
-  pdf.setFontSize(5.8)
+  pdf.setFontSize(6.4)
   pdf.text("SUB", tableX + 0.44, subtotalY + 0.14, {
     align: "center",
   })
@@ -1077,18 +1087,12 @@ async function drawScorecard(
   })
 
   const footerY = subtotalY + rowH + 0.18 * gridScaleY
-  pdf.setFontSize(7)
+  pdf.setFontSize(7.6)
   pdf.setFont("helvetica", "bold")
   pdf.text("MALFUNCTIONS", tableX + 0.34, footerY)
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 1.21 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
-  pdf.text("GRAND", stationTotalX + totalW / 2, footerY - 0.04, {
-    align: "center",
-  })
-  pdf.text("TOTAL:", stationTotalX + totalW / 2, footerY + 0.08, {
-    align: "center",
-  })
   pdf.line(
     stationTotalX + totalW + 0.05,
     footerY + 0.13,
@@ -1097,7 +1101,7 @@ async function drawScorecard(
   )
 
   pdf.setFont("helvetica", "normal")
-  pdf.setFontSize(6.4)
+  pdf.setFontSize(7.1)
   pdf.text(
     "Verified by:  #1____________  #2____________",
     tableX,
@@ -1113,12 +1117,12 @@ async function drawScorecard(
   const postLabel = card?.postLabel?.replace(/^Post\s*/i, "") || "____"
 
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(8.4)
+  pdf.setFontSize(10)
   pdf.text(`Shoot: ${shootLabel}`, tableX, identityY, {
     maxWidth: 2.2,
   })
 
-  pdf.setFontSize(8.8)
+  pdf.setFontSize(10.2)
   pdf.text(`Participant: ${participantLabel}`, tableX, identityY + 0.34, {
     maxWidth: 2.2,
   })
