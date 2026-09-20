@@ -187,8 +187,7 @@ export function ScorecardCenterPage() {
     const assignedCards = allCards.filter(
       (card) => card.courseName.trim().toLocaleLowerCase() === selectedCourseName,
     )
-    const hasCourseAssignments = allCards.some((card) => card.courseName.trim())
-    return hasCourseAssignments ? assignedCards : allCards
+    return assignedCards
   }, [allCards, selectedCourse?.name])
 
   const hasCourseAssignments = useMemo(
@@ -657,7 +656,7 @@ function StepPrintMode(props: {
       <p className="mt-1 text-sm text-slate-500">
         {props.hasCourseAssignments
           ? `Participant cards are limited to squads assigned to Course ${props.selectedCourseName || "not selected"}.`
-          : "No squad course assignments are set yet. All participants will print with the selected course layout."}
+          : "No squads have a scorecard course assignment yet. Assign each squad to a course in Squadding before printing."}
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {options.map((option) => (

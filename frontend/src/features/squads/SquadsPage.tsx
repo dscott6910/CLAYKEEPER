@@ -79,6 +79,7 @@ export function SquadsPage() {
   const [athletes, setAthletes] = useState<AthleteSnapshot[]>([])
   const [teams, setTeams] = useState<NamedRecord[]>([])
   const [classes, setClasses] = useState<ClassSnapshot[]>([])
+  const [eventCourseNames, setEventCourseNames] = useState<string[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState("")
@@ -157,8 +158,11 @@ export function SquadsPage() {
   }, [members])
 
   const courseOptions = useMemo(
-    () => Array.from(new Set(squads.map((squad) => squad.course_name).filter((course): course is string => Boolean(course)))).sort(),
-    [squads],
+    () => Array.from(new Set([
+      ...eventCourseNames,
+      ...squads.map((squad) => squad.course_name).filter((course): course is string => Boolean(course)),
+    ])).sort(),
+    [eventCourseNames, squads],
   )
 
   const visibleSquads = useMemo(() => {
@@ -240,6 +244,24 @@ export function SquadsPage() {
   }, [organizationId, selectedEventId, selectedShootId])
 
   useEffect(() => { void loadBase() }, [loadBase])
+  useEffect(() => {
+    if (!organizationId || !selectedEventId) {
+      setEventCourseNames([])
+      return
+    }
+    let active = true
+    void supabase
+      .from("event_courses")
+      .select("name")
+      .eq("organization_id", organizationId)
+      .eq("event_id", selectedEventId)
+      .eq("active", true)
+      .order("created_at")
+      .then(({ data }) => {
+        if (active) setEventCourseNames((data ?? []).map((course) => course.name).filter(Boolean))
+      })
+    return () => { active = false }
+  }, [organizationId, selectedEventId])
   useEffect(() => {
     const first = eventShoots[0]?.id ?? ""
     if (!eventShoots.some((shoot) => shoot.id === selectedShootId)) setSelectedShootId(first)
@@ -473,18 +495,17 @@ export function SquadsPage() {
                 <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                   <h4 className="font-semibold text-amber-950">Scorecard course assignment</h4>
                   <p className="mt-1 text-sm text-amber-800">
-                    Enter the scorecard course for each squad exactly as it appears in the Scorecard Print Wizard, such as JV or VARSITY. This keeps those participants on the correct course-specific scorecards.
+                    Select the scorecard course for every squad. The choices below are the courses configured for this event, and they keep JV and VARSITY participants on separate scorecards.
                   </p>
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {visibleSquads.map((squad) => (
                       <label key={squad.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3 text-sm">
                         <span className="font-semibold">{squad.name || `Squad ${squad.squad_number}`}</span>
-                        <input
-                          className="w-36 rounded-lg border px-2 py-1.5"
-                          defaultValue={squad.course_name ?? ""}
-                          placeholder="JV or VARSITY"
+                        <select
+                          className="w-36 rounded-lg border bg-white px-2 py-1.5"
+                          value={squad.course_name ?? ""}
                           disabled={busy}
-                          onBlur={(event) => {
+                          onChange={(event) => {
                             const courseName = event.currentTarget.value.trim()
                             if (courseName === (squad.course_name ?? "")) return
                             void runAction(
@@ -492,7 +513,10 @@ export function SquadsPage() {
                               courseName ? `${squad.name || `Squad ${squad.squad_number}`} assigned to ${courseName}.` : "Squad course assignment cleared.",
                             )
                           }}
-                        />
+                        >
+                          <option value="">Choose course</option>
+                          {courseOptions.map((courseName) => <option key={courseName} value={courseName}>{courseName}</option>)}
+                        </select>
                       </label>
                     ))}
                   </div>
