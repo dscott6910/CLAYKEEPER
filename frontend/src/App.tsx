@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react"
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom"
 import { Toaster } from "sonner"
 
 import { AppShell } from "@/app/AppShell"
@@ -263,12 +263,6 @@ const CoachPortalPage = lazy(() =>
   })),
 )
 
-const CheckInCenterPage = lazy(() =>
-  import("@/features/events/CheckInCenterPage").then((module) => ({
-    default: module.CheckInCenterPage,
-  })),
-)
-
 const DirectorDashboardPage = lazy(() =>
   import("@/features/events/DirectorDashboardPage").then((module) => ({
     default: module.DirectorDashboardPage,
@@ -384,6 +378,12 @@ function LazyRoute({ children }: { children: ReactNode }) {
       {children}
     </Suspense>
   )
+}
+
+function CheckInCenterRedirect() {
+  const { eventId } = useParams()
+  const eventQuery = eventId ? `?eventId=${encodeURIComponent(eventId)}` : ""
+  return <Navigate to={`/registration${eventQuery}`} replace />
 }
 
 function App() {
@@ -633,11 +633,7 @@ function App() {
                 <Route element={<CapabilityRoute capability="operateEvents" />}>
                   <Route
                   path="events/:eventId/check-in"
-                  element={
-                    <LazyRoute>
-                      <CheckInCenterPage />
-                    </LazyRoute>
-                  }
+                  element={<CheckInCenterRedirect />}
                 />
                 </Route>
 

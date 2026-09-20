@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   AlertTriangle,
   BadgeCheck,
@@ -260,6 +261,8 @@ async function loadAllRegistrationPages<T>(
 }
 
 export function RegistrationPage() {
+  const [searchParams] = useSearchParams()
+  const requestedEventId = searchParams.get("eventId") ?? ""
   const [organizationId, setOrganizationId] = useState<string | null>(
     null,
   )
@@ -629,6 +632,15 @@ export function RegistrationPage() {
     }).length
   }, [registrations])
 
+  const expectedRegistrations = useMemo(
+    () =>
+      registrations.filter(
+        (registration) =>
+          registration.status === "registered" && !registration.checked_in,
+      ),
+    [registrations],
+  )
+
   const eventFeeTotal = useMemo(() => {
     const registrationFeeTotal = registrations.reduce(
       (total, registration) => {
@@ -880,6 +892,16 @@ export function RegistrationPage() {
   useEffect(() => {
     void loadOrganizationData()
   }, [loadOrganizationData])
+
+  useEffect(() => {
+    if (
+      requestedEventId &&
+      events.some((event) => event.id === requestedEventId) &&
+      selectedEventId !== requestedEventId
+    ) {
+      setSelectedEventId(requestedEventId)
+    }
+  }, [events, requestedEventId, selectedEventId])
 
   useEffect(() => {
     void loadSelectedEventData()
@@ -1245,6 +1267,51 @@ export function RegistrationPage() {
     }
   }
 
+  async function checkInAllExpected() {
+    if (!organizationId || expectedRegistrations.length === 0) return
+    if (
+      !window.confirm(
+        `Check in all ${expectedRegistrations.length} expected participant${
+          expectedRegistrations.length === 1 ? "" : "s"
+        }?`,
+      )
+    ) {
+      return
+    }
+
+    setSaving(true)
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    try {
+      const { error } = await supabase.rpc("update_registration_attendance", {
+        p_organization_id: organizationId,
+        p_registration_ids: expectedRegistrations.map(
+          (registration) => registration.id,
+        ),
+        p_attendance_status: "checked_in",
+        p_attendance_notes: null,
+      })
+
+      if (error) {
+        throw new Error(
+          `Participants could not be checked in: ${getErrorMessage(error)}`,
+        )
+      }
+
+      setSuccessMessage(
+        `${expectedRegistrations.length} participant${
+          expectedRegistrations.length === 1 ? " was" : "s were"
+        } checked in.`,
+      )
+      await loadSelectedEventData()
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (loadingInitialData) {
     return (
       <PageContainer>
@@ -1273,8 +1340,8 @@ export function RegistrationPage() {
             </h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Register athletes, select shoots, track fees, and
-              manage event check-in.
+              Register athletes, select shoots, track fees, and manage all
+              event check-in from one desk.
             </p>
           </div>
 
@@ -1305,6 +1372,25 @@ export function RegistrationPage() {
             >
               <UserPlus className="h-4 w-4" />
               Add Registration
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void checkInAllExpected()}
+              disabled={
+                !selectedEventId ||
+                saving ||
+                loadingEventData ||
+                expectedRegistrations.length === 0
+              }
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Users className="h-4 w-4" />
+              )}
+              Check In All Expected ({expectedRegistrations.length})
             </Button>
           </div>
         </header>
