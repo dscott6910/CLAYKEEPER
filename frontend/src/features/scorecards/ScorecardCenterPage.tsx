@@ -896,27 +896,6 @@ function drawCutLine(pdf: jsPDF) {
   pdf.text("✂", centerX, 8.46, { align: "center" })
 }
 
-function drawRegistrationMarker(pdf: jsPDF, centerX: number, centerY: number) {
-  const outer = 0.3
-  const middle = outer * (0.105 / 0.18)
-  const inner = outer * (0.048 / 0.18)
-  const clearance = outer + 0.06
-  pdf.setFillColor(255, 255, 255)
-  pdf.rect(
-    centerX - clearance / 2,
-    centerY - clearance / 2,
-    clearance,
-    clearance,
-    "F",
-  )
-  pdf.setFillColor(0, 0, 0)
-  pdf.rect(centerX - outer / 2, centerY - outer / 2, outer, outer, "F")
-  pdf.setFillColor(255, 255, 255)
-  pdf.rect(centerX - middle / 2, centerY - middle / 2, middle, middle, "F")
-  pdf.setFillColor(0, 0, 0)
-  pdf.rect(centerX - inner / 2, centerY - inner / 2, inner, inner, "F")
-}
-
 async function drawScorecard(
   pdf: jsPDF,
   x: number,
@@ -1094,24 +1073,26 @@ async function drawScorecard(
   }
 
   const subtotalY = tableY + rowH * (printableStations.length + 1)
-  pdf.rect(tableX, subtotalY, tableW, rowH)
-  pdf.setFontSize(6.4)
-  pdf.text("SUB", tableX + 0.44, subtotalY + 0.14, {
+  const totalRowH = rowH * 1.35
+  pdf.rect(tableX, subtotalY, tableW, totalRowH)
+  pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(8)
+  pdf.text("SUB", tableX + 0.44, subtotalY + totalRowH * 0.38, {
     align: "center",
   })
-  pdf.text("TOTAL", tableX + 0.44, subtotalY + 0.27, {
+  pdf.text("TOTAL", tableX + 0.44, subtotalY + totalRowH * 0.78, {
     align: "center",
   })
-  pdf.rect(stationTotalX, subtotalY, totalW, rowH)
-  pdf.rect(stationTotalX + totalW, subtotalY, runningW, rowH)
-  pdf.text("GRAND", stationTotalX + totalW / 2, subtotalY + 0.14, {
+  pdf.rect(stationTotalX, subtotalY, totalW, totalRowH)
+  pdf.rect(stationTotalX + totalW, subtotalY, runningW, totalRowH)
+  pdf.text("GRAND", stationTotalX + totalW / 2, subtotalY + totalRowH * 0.38, {
     align: "center",
   })
-  pdf.text("TOTAL", stationTotalX + totalW / 2, subtotalY + 0.27, {
+  pdf.text("TOTAL", stationTotalX + totalW / 2, subtotalY + totalRowH * 0.78, {
     align: "center",
   })
 
-  const footerY = subtotalY + rowH + 0.18 * gridScaleY
+  const footerY = subtotalY + totalRowH + 0.18 * gridScaleY
   pdf.setFontSize(7.6)
   pdf.setFont("helvetica", "bold")
   pdf.text("MALFUNCTIONS", tableX + 0.34, footerY)
@@ -1189,13 +1170,4 @@ async function drawScorecard(
     })
     pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
   }
-
-  const markerLeft = tableX + 0.08 * gridScaleX
-  const markerRight = tableX + tableW - 0.08 * gridScaleX
-  const markerTop = tableY - 0.12 * gridScaleY
-  const markerBottom = subtotalY + rowH + 0.1 * gridScaleY
-  drawRegistrationMarker(pdf, markerLeft, markerTop)
-  drawRegistrationMarker(pdf, markerRight, markerTop)
-  drawRegistrationMarker(pdf, markerRight, markerBottom)
-  drawRegistrationMarker(pdf, markerLeft, markerBottom)
 }
