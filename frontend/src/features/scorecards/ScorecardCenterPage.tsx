@@ -1140,8 +1140,8 @@ async function drawScorecard(
       pdf.setFontSize(fontSize)
     }
     const lines = pdf.splitTextToSize(text, identityWidth)
-    pdf.text(lines, tableX, yPosition, { lineHeightFactor: 1.45 })
-    return yPosition + (lines.length * fontSize * 1.45) / 72 + 0.1
+    pdf.text(lines, tableX, yPosition, { lineHeightFactor: 1.2 })
+    return yPosition + (lines.length * fontSize * 1.2) / 72 + 0.045
   }
 
   pdf.setFont("helvetica", "bold")
