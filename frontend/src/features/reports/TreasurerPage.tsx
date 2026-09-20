@@ -10,7 +10,6 @@ import {
   type TreasurerClass,
   type TreasurerEnrollment,
   type TreasurerEvent,
-  type TreasurerEventRegistrationSetting,
   type TreasurerNamedRecord,
   type TreasurerRegistration,
   type TreasurerSeason,
@@ -23,7 +22,6 @@ type Data = {
   shoots: TreasurerShoot[]
   registrations: TreasurerRegistration[]
   enrollments: TreasurerEnrollment[]
-  settings: TreasurerEventRegistrationSetting[]
   athletes: TreasurerAthlete[]
   teams: TreasurerNamedRecord[]
   classes: TreasurerClass[]
@@ -43,7 +41,8 @@ type LedgerRow = {
   paymentStatus: string
   paymentMethod: string
   registrationSource: string
-  eventFee: number
+  registrationFee: number
+  shootFees: number
   organizationFees: number
   adjustments: number
   expected: number
@@ -51,10 +50,10 @@ type LedgerRow = {
   balance: number
 }
 
-type LedgerSortKey = "participant" | "event" | "teamClass" | "shoots" | "payment" | "eventFee" | "organizationFees" | "expected" | "paid" | "balance"
+type LedgerSortKey = "participant" | "event" | "teamClass" | "shoots" | "payment" | "registrationFee" | "shootFees" | "organizationFees" | "adjustments" | "expected" | "paid" | "balance"
 
-const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], settings: [], athletes: [], teams: [], classes: [] }
-const inactiveStatuses = new Set(["withdrawn", "cancelled"])
+const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], athletes: [], teams: [], classes: [] }
+const inactiveStatuses = new Set(["withdrawn", "cancelled", "disqualified"])
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0)
@@ -118,22 +117,21 @@ export function TreasurerPage() {
     const teams = new Map(data.teams.map((team) => [team.id, team]))
     const classes = new Map(data.classes.map((cls) => [cls.id, cls]))
     const shoots = new Map(data.shoots.map((shoot) => [shoot.id, shoot]))
-    const settingsByEvent = new Map(data.settings.map((setting) => [setting.event_id, setting]))
     const enrollmentsByRegistration = new Map<string, TreasurerEnrollment[]>()
     for (const enrollment of data.enrollments) {
       if (inactiveStatuses.has(enrollment.status)) continue
       enrollmentsByRegistration.set(enrollment.registration_id, [...(enrollmentsByRegistration.get(enrollment.registration_id) || []), enrollment])
     }
 
-    return data.registrations.filter((registration) => !inactiveStatuses.has(registration.status) && registration.checked_in).map((registration) => {
+    return data.registrations.filter((registration) => !inactiveStatuses.has(registration.status)).map((registration) => {
       const event = events.get(registration.event_id)
-      const settings = settingsByEvent.get(registration.event_id)
       const athlete = athletes.get(registration.athlete_id)
       const registrationEnrollments = enrollmentsByRegistration.get(registration.id) || []
-      const eventFee = Math.max(0, Number(settings?.base_fee || 0) - Number(registration.discount_amount || 0))
-      const organizationFees = Math.max(0, Number(settings?.organization_fee || 0))
-      const adjustments = 0
-      const expected = eventFee + organizationFees
+      const registrationFee = Math.max(0, Number(registration.registration_fee || 0) - Number(registration.discount_amount || 0))
+      const shootFees = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.entry_fee || 0), 0)
+      const organizationFees = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.organization_fee || 0), 0)
+      const adjustments = registrationEnrollments.reduce((sum, enrollment) => sum + Number(enrollment.fee_adjustment || 0), 0)
+      const expected = Math.max(0, registrationFee + shootFees + organizationFees + adjustments)
       const paid = Number(registration.amount_paid || 0)
       return {
         registrationId: registration.id,
@@ -149,7 +147,8 @@ export function TreasurerPage() {
         paymentStatus: registration.payment_status,
         paymentMethod: registration.payment_method || "Not recorded",
         registrationSource: registration.registration_source,
-        eventFee,
+        registrationFee,
+        shootFees,
         organizationFees,
         adjustments,
         expected,
@@ -186,8 +185,10 @@ export function TreasurerPage() {
       teamClass: [`${left.team} ${left.classCode}`, `${right.team} ${right.classCode}`],
       shoots: [left.shoots, right.shoots],
       payment: [left.paymentStatus, right.paymentStatus],
-      eventFee: [left.eventFee, right.eventFee],
+      registrationFee: [left.registrationFee, right.registrationFee],
+      shootFees: [left.shootFees, right.shootFees],
       organizationFees: [left.organizationFees, right.organizationFees],
+      adjustments: [left.adjustments, right.adjustments],
       expected: [left.expected, right.expected],
       paid: [left.paid, right.paid],
       balance: [left.balance, right.balance],
@@ -229,9 +230,9 @@ export function TreasurerPage() {
   }, [filteredRows])
 
   function exportCsv() {
-    const headers = ["Event", "Date", "Participant", "Participant Number", "Team", "Class", "Shoots", "Payment Status", "Payment Method", "Source", "Event Fee", "Organization Fees", "Adjustments", "Expected", "Paid", "Balance"]
+    const headers = ["Event", "Date", "Participant", "Participant Number", "Team", "Class", "Shoots", "Payment Status", "Payment Method", "Source", "Registration Fee", "Shoot Fees", "Organization Fees", "Adjustments", "Expected", "Paid", "Balance"]
     const lines = [headers.map(csvValue).join(",")]
-    for (const row of sortedLedgerRows) lines.push([row.eventName, row.eventDate, row.participant, row.participantNumber, row.team, row.classCode, row.shoots, row.paymentStatus, row.paymentMethod, row.registrationSource, row.eventFee, row.organizationFees, row.adjustments, row.expected, row.paid, row.balance].map(csvValue).join(","))
+    for (const row of sortedLedgerRows) lines.push([row.eventName, row.eventDate, row.participant, row.participantNumber, row.team, row.classCode, row.shoots, row.paymentStatus, row.paymentMethod, row.registrationSource, row.registrationFee, row.shootFees, row.organizationFees, row.adjustments, row.expected, row.paid, row.balance].map(csvValue).join(","))
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
@@ -284,7 +285,7 @@ export function TreasurerPage() {
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Stat icon={Users} label={teamFilter === "all" ? "Registrations" : "Club participants"} value={summary.registrations} />
-            <Stat icon={ReceiptText} label={teamFilter === "all" ? "Expected revenue" : "Club expected"} value={money(summary.expected)} />
+            <Stat icon={ReceiptText} label={teamFilter === "all" ? "Total fees due" : "Club fees due"} value={money(summary.expected)} />
             <Stat icon={Banknote} label={teamFilter === "all" ? "Amount paid" : "Club paid"} value={money(summary.paid)} />
             <Stat icon={AlertCircle} label={teamFilter === "all" ? "Outstanding" : "Club balance"} value={money(summary.balance)} emphasis={summary.balance > 0} />
             <Stat icon={FileSpreadsheet} label="Organization fees" value={money(summary.organizationFees)} />
@@ -297,7 +298,7 @@ export function TreasurerPage() {
 
           <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
             <header className="border-b px-5 py-4"><h2 className="text-lg font-semibold">Participant Ledger</h2><p className="text-sm text-slate-500">One row per event registration, including every enrolled shoot and fee snapshot.</p></header>
-            {sortedLedgerRows.length === 0 ? <div className="p-10 text-center text-slate-500">No participant ledger records match the selected filters.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><LedgerHeader label="Participant" sortKey="participant" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Event" sortKey="event" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Team / Class" sortKey="teamClass" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Shoots" sortKey="shoots" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Payment" sortKey="payment" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Event Fee" sortKey="eventFee" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Org Fees" sortKey="organizationFees" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Expected" sortKey="expected" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Paid" sortKey="paid" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Balance" sortKey="balance" state={ledgerSort} onSort={toggleLedgerSort} align="right"/></tr></thead><tbody>{sortedLedgerRows.map((row) => <tr key={row.registrationId} className="border-t align-top"><td className="px-4 py-3"><p className="font-semibold">{row.participant}</p><p className="text-xs text-slate-500">{row.participantNumber ? `Participant # ${row.participantNumber}` : "No participant number"}</p></td><td className="px-4 py-3"><p className="font-medium">{row.eventName}</p><p className="text-xs text-slate-500">{formatDate(row.eventDate)}</p></td><td className="px-4 py-3"><p>{row.team}</p><p className="text-xs text-slate-500">Class {row.classCode}</p></td><td className="max-w-[260px] px-4 py-3 text-slate-600">{row.shoots}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.balance > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{row.paymentStatus}</span><p className="mt-1 text-xs text-slate-500">{row.paymentMethod}</p></td><td className="px-4 py-3 text-right">{money(row.eventFee)}</td><td className="px-4 py-3 text-right">{money(row.organizationFees)}</td><td className="px-4 py-3 text-right font-semibold">{money(row.expected)}</td><td className="px-4 py-3 text-right font-semibold text-emerald-700">{money(row.paid)}</td><td className="px-4 py-3 text-right font-semibold text-amber-700">{money(row.balance)}</td></tr>)}</tbody></table></div>}
+            {sortedLedgerRows.length === 0 ? <div className="p-10 text-center text-slate-500">No participant ledger records match the selected filters.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[1450px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><LedgerHeader label="Participant" sortKey="participant" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Event" sortKey="event" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Team / Class" sortKey="teamClass" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Shoots" sortKey="shoots" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Payment" sortKey="payment" state={ledgerSort} onSort={toggleLedgerSort}/><LedgerHeader label="Registration" sortKey="registrationFee" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Shoot Fees" sortKey="shootFees" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Org Fees" sortKey="organizationFees" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Adjustments" sortKey="adjustments" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Total Due" sortKey="expected" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Paid" sortKey="paid" state={ledgerSort} onSort={toggleLedgerSort} align="right"/><LedgerHeader label="Balance" sortKey="balance" state={ledgerSort} onSort={toggleLedgerSort} align="right"/></tr></thead><tbody>{sortedLedgerRows.map((row) => <tr key={row.registrationId} className="border-t align-top"><td className="px-4 py-3"><p className="font-semibold">{row.participant}</p><p className="text-xs text-slate-500">{row.participantNumber ? `Participant # ${row.participantNumber}` : "No participant number"}</p></td><td className="px-4 py-3"><p className="font-medium">{row.eventName}</p><p className="text-xs text-slate-500">{formatDate(row.eventDate)}</p></td><td className="px-4 py-3"><p>{row.team}</p><p className="text-xs text-slate-500">Class {row.classCode}</p></td><td className="max-w-[260px] px-4 py-3 text-slate-600">{row.shoots}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.balance > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{row.paymentStatus}</span><p className="mt-1 text-xs text-slate-500">{row.paymentMethod}</p></td><td className="px-4 py-3 text-right">{money(row.registrationFee)}</td><td className="px-4 py-3 text-right">{money(row.shootFees)}</td><td className="px-4 py-3 text-right">{money(row.organizationFees)}</td><td className="px-4 py-3 text-right">{money(row.adjustments)}</td><td className="px-4 py-3 text-right font-semibold">{money(row.expected)}</td><td className="px-4 py-3 text-right font-semibold text-emerald-700">{money(row.paid)}</td><td className="px-4 py-3 text-right font-semibold text-amber-700">{money(row.balance)}</td></tr>)}</tbody></table></div>}
           </section>
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 print:hidden"><strong>Historical import note:</strong> The 2026 US Open contains competition fees, but the source workbook may not contain actual payment transactions. Expected revenue will be populated from imported fees; Amount Paid remains zero until payment information is imported or entered.</div>

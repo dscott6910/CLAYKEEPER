@@ -40,12 +40,6 @@ export type TreasurerRegistration = {
   registration_source: string
 }
 
-export type TreasurerEventRegistrationSetting = {
-  event_id: string
-  base_fee: number
-  organization_fee: number
-}
-
 export type TreasurerEnrollment = {
   id: string
   registration_id: string
@@ -102,7 +96,7 @@ async function loadAllRows<T>(
 export async function loadTreasurerData() {
   const organizationId = await getCurrentOrganizationId()
 
-  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes, settings] = await Promise.all([
+  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes] = await Promise.all([
     loadAllRows<TreasurerSeason>(
       "seasons",
       "id, name, start_date, end_date, status",
@@ -143,11 +137,6 @@ export async function loadTreasurerData() {
       "id, code, display_name",
       organizationId,
     ),
-    loadAllRows<TreasurerEventRegistrationSetting>(
-      "event_registration_settings",
-      "event_id, base_fee, organization_fee",
-      organizationId,
-    ),
   ])
 
   seasons.sort((a, b) => b.start_date.localeCompare(a.start_date))
@@ -163,6 +152,5 @@ export async function loadTreasurerData() {
     athletes,
     teams,
     classes,
-    settings,
   }
 }
