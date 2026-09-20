@@ -1921,86 +1921,6 @@ export function RegistrationPage() {
                         </td>
 
                         <td className="px-5 py-4">
-                          {isEditing ? (
-                            <div className="flex min-w-56 flex-col gap-2">
-                              <select
-                                value={editingClassId}
-                                onChange={(event) =>
-                                  setEditingClassId(event.target.value)
-                                }
-                                className="h-9 rounded-md border bg-background px-2 text-xs"
-                              >
-                                <option value="">No class</option>
-                                {classes.map((competitionClass) => (
-                                  <option
-                                    key={competitionClass.id}
-                                    value={competitionClass.id}
-                                  >
-                                    {competitionClass.code} - {competitionClass.display_name}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                value={editingTeamId}
-                                onChange={(event) =>
-                                  setEditingTeamId(event.target.value)
-                                }
-                                className="h-9 rounded-md border bg-background px-2 text-xs"
-                              >
-                                <option value="">No team</option>
-                                {teams.map((team) => (
-                                  <option key={team.id} value={team.id}>
-                                    {team.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => void saveRegistrationEdit()}
-                                  disabled={saving}
-                                >
-                                  Save
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={closeRegistrationEditor}
-                                  disabled={saving}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openRegistrationEditor(registration)}
-                                disabled={saving || isUpdating}
-                              >
-                                <Edit3 className="h-4 w-4" />
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void setNoShow(registration)}
-                                disabled={saving || isUpdating}
-                              >
-                                <UserX className="h-4 w-4" />
-                                {registration.status === "withdrawn" ? "Restore" : "No-Show"}
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-5 py-4">
                           <div className="font-medium">
                             {athlete
                               ? athleteDisplayName(athlete)
@@ -2101,6 +2021,86 @@ export function RegistrationPage() {
                               ? "Checked In"
                               : "Check In"}
                           </Button>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          {isEditing ? (
+                            <div className="flex min-w-56 flex-col gap-2">
+                              <select
+                                value={editingClassId}
+                                onChange={(event) =>
+                                  setEditingClassId(event.target.value)
+                                }
+                                className="h-9 rounded-md border bg-background px-2 text-xs"
+                              >
+                                <option value="">No class</option>
+                                {classes.map((competitionClass) => (
+                                  <option
+                                    key={competitionClass.id}
+                                    value={competitionClass.id}
+                                  >
+                                    {competitionClass.code} - {competitionClass.display_name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={editingTeamId}
+                                onChange={(event) =>
+                                  setEditingTeamId(event.target.value)
+                                }
+                                className="h-9 rounded-md border bg-background px-2 text-xs"
+                              >
+                                <option value="">No team</option>
+                                {teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void saveRegistrationEdit()}
+                                  disabled={saving}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={closeRegistrationEditor}
+                                  disabled={saving}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openRegistrationEditor(registration)}
+                                disabled={saving || isUpdating}
+                              >
+                                <Edit3 className="h-4 w-4" />
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void setNoShow(registration)}
+                                disabled={saving || isUpdating}
+                              >
+                                <UserX className="h-4 w-4" />
+                                {registration.status === "withdrawn" ? "Restore" : "No-Show"}
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )
