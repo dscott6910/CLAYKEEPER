@@ -25,7 +25,7 @@ import { Link, useParams } from "react-router-dom"
 import { PageContainer } from "@/components/layout/PageContainer"
 import { Button } from "@/components/ui/button"
 import {
-  checkInSquad,
+  checkInRegistrations,
   loadCheckInCenter,
   updateAttendance,
   updateRefund,
@@ -110,7 +110,7 @@ function buildRegistrationRows(data: CheckInData): RegistrationRow[] {
       athleteName: athleteName(athlete),
       cyssa: athlete?.cyssa_number ?? "",
       teamName: registration.team_id
-        ? teamMap.get(registration.team_id)?.name ?? "Unassigned"
+        ? (teamMap.get(registration.team_id)?.name ?? "Unassigned")
         : "Unassigned",
       squadNumber: squad?.squad_number ?? "",
       postLabel:
@@ -160,7 +160,10 @@ export function CheckInCenterPage() {
     return () => window.clearTimeout(timer)
   }, [scanNotice])
 
-  const allRows = useMemo(() => (data ? buildRegistrationRows(data) : []), [data])
+  const allRows = useMemo(
+    () => (data ? buildRegistrationRows(data) : []),
+    [data],
+  )
 
   const rows = useMemo(() => {
     return allRows
@@ -222,8 +225,7 @@ export function CheckInCenterPage() {
         .length,
       late: registrations.filter((row) => status(row) === "late_arrival")
         .length,
-      noShows: registrations.filter((row) => status(row) === "no_show")
-        .length,
+      noShows: registrations.filter((row) => status(row) === "no_show").length,
       refundsPending: registrations.filter(
         (row) =>
           row.refund_status === "pending_review" ||
@@ -231,6 +233,19 @@ export function CheckInCenterPage() {
       ).length,
     }
   }, [data?.registrations])
+
+  const expectedRegistrationIds = useMemo(
+    () =>
+      allRows
+        .filter((row) => {
+          const status =
+            row.registration.attendance_status ??
+            (row.registration.checked_in ? "checked_in" : "expected")
+          return status === "expected"
+        })
+        .map((row) => row.registration.id),
+    [allRows],
+  )
 
   async function setAttendance(
     registration: CheckInRegistration,
@@ -262,7 +277,7 @@ export function CheckInCenterPage() {
     setSavingId("squad")
 
     try {
-      await checkInSquad({
+      await checkInRegistrations({
         organizationId: data.event.organization_id,
         registrationIds: allRows
           .filter((row) => row.squadNumber === squadFilter)
@@ -272,6 +287,38 @@ export function CheckInCenterPage() {
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Squad check-in failed.",
+      )
+    } finally {
+      setSavingId("")
+    }
+  }
+
+  async function checkInAllExpected() {
+    if (!data || expectedRegistrationIds.length === 0) return
+    if (
+      !window.confirm(
+        `Check in all ${expectedRegistrationIds.length} expected participant${
+          expectedRegistrationIds.length === 1 ? "" : "s"
+        }?`,
+      )
+    ) {
+      return
+    }
+
+    setSavingId("all")
+    setError("")
+
+    try {
+      await checkInRegistrations({
+        organizationId: data.event.organization_id,
+        registrationIds: expectedRegistrationIds,
+      })
+      await load()
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "All participants could not be checked in.",
       )
     } finally {
       setSavingId("")
@@ -419,6 +466,19 @@ export function CheckInCenterPage() {
 
             <div className="flex flex-wrap gap-2">
               <Button
+                onClick={() => void checkInAllExpected()}
+                disabled={
+                  savingId === "all" || expectedRegistrationIds.length === 0
+                }
+              >
+                {savingId === "all" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Users className="h-4 w-4" />
+                )}
+                Check In All Expected ({expectedRegistrationIds.length})
+              </Button>
+              <Button
                 onClick={() => {
                   setError("")
                   setScanNotice(null)
@@ -559,9 +619,7 @@ export function CheckInCenterPage() {
                 {rows.map((row) => {
                   const attendance =
                     row.registration.attendance_status ??
-                    (row.registration.checked_in
-                      ? "checked_in"
-                      : "expected")
+                    (row.registration.checked_in ? "checked_in" : "expected")
                   const busy = savingId === row.registration.id
 
                   return (
@@ -571,8 +629,8 @@ export function CheckInCenterPage() {
                         <p className="text-xs text-slate-500">
                           {row.cyssa
                             ? `Participant # ${row.cyssa}`
-                            : row.registration.registration_number ??
-                              "No number"}
+                            : (row.registration.registration_number ??
+                              "No number")}
                         </p>
                       </td>
                       <td className="p-4">{row.teamName}</td>
@@ -629,10 +687,7 @@ export function CheckInCenterPage() {
                           <Button
                             size="sm"
                             onClick={() =>
-                              void setAttendance(
-                                row.registration,
-                                "checked_in",
-                              )
+                              void setAttendance(row.registration, "checked_in")
                             }
                             disabled={busy}
                           >
@@ -873,7 +928,8 @@ function QrScannerDialog(props: {
           <div>
             <h2 className="text-xl font-bold">Scan Scorecard QR</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Point the camera at the QR code printed on the participant scorecard.
+              Point the camera at the QR code printed on the participant
+              scorecard.
             </p>
           </div>
           <button
@@ -933,10 +989,7 @@ function QrScannerDialog(props: {
   )
 }
 
-function ScanNoticeToast(props: {
-  notice: ScanNotice
-  close: () => void
-}) {
+function ScanNoticeToast(props: { notice: ScanNotice; close: () => void }) {
   const styles =
     props.notice.kind === "success"
       ? "border-emerald-300 bg-emerald-50 text-emerald-950"
@@ -969,9 +1022,7 @@ function ScanNoticeToast(props: {
 
           <div className="min-w-0 flex-1">
             <h3 className="text-lg font-bold">{props.notice.title}</h3>
-            <p className="mt-1 text-sm font-semibold">
-              {props.notice.message}
-            </p>
+            <p className="mt-1 text-sm font-semibold">{props.notice.message}</p>
             {props.notice.details?.length ? (
               <div className="mt-2 space-y-0.5 text-sm opacity-85">
                 {props.notice.details.map((detail) => (
@@ -1011,9 +1062,7 @@ function RefundDialog(props: {
   const [amount, setAmount] = useState(
     String(props.registration.refund_amount ?? 0),
   )
-  const [reason, setReason] = useState(
-    props.registration.refund_reason ?? "",
-  )
+  const [reason, setReason] = useState(props.registration.refund_reason ?? "")
   const [notes, setNotes] = useState(props.registration.refund_notes ?? "")
 
   return (

@@ -24,6 +24,10 @@ import {
 type PrintMode = "event" | "team" | "squad" | "athlete" | "generic"
 type WizardStep = 1 | 2 | 3 | 4 | 5
 const SCORECARD_BIRD_COLUMNS = 20
+// At the printed 2.55-inch size this provides roughly 118 DPI and about five
+// source pixels per QR module for the longest scoring URLs. Keeping this
+// compact is important: a full-event print embeds one unique QR per card.
+const SCORECARD_QR_SIZE_PX = 300
 
 type PrintableCard = {
   registration: ScorecardRegistration
@@ -54,9 +58,7 @@ function athleteName(
 ) {
   if (!athlete) return "Unknown Participant"
   const first =
-    athlete.preferred_name?.trim() ||
-    athlete.first_name?.trim() ||
-    ""
+    athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""
   return `${first} ${athlete.last_name?.trim() || ""}`.trim()
 }
 
@@ -96,12 +98,12 @@ export function ScorecardCenterPage() {
       setSelectedCourseId((current) =>
         current && next.courses.some((course) => course.id === current)
           ? current
-          : next.courses[0]?.id ?? "",
+          : (next.courses[0]?.id ?? ""),
       )
       setSelectedShootId((current) =>
         current && next.shoots.some((shoot) => shoot.id === current)
           ? current
-          : next.shoots[0]?.id ?? "",
+          : (next.shoots[0]?.id ?? ""),
       )
     } catch (caught) {
       setError(
@@ -120,14 +122,12 @@ export function ScorecardCenterPage() {
 
   const selectedCourse = useMemo(
     () =>
-      data?.courses.find((course) => course.id === selectedCourseId) ??
-      null,
+      data?.courses.find((course) => course.id === selectedCourseId) ?? null,
     [data?.courses, selectedCourseId],
   )
 
   const selectedShoot = useMemo(
-    () =>
-      data?.shoots.find((shoot) => shoot.id === selectedShootId) ?? null,
+    () => data?.shoots.find((shoot) => shoot.id === selectedShootId) ?? null,
     [data?.shoots, selectedShootId],
   )
 
@@ -160,12 +160,11 @@ export function ScorecardCenterPage() {
           shootId: selectedShootId,
           athleteName: athleteName(athleteMap.get(registration.athlete_id)),
           teamName: registration.team_id
-            ? teamMap.get(registration.team_id)?.name ?? "Unassigned"
+            ? (teamMap.get(registration.team_id)?.name ?? "Unassigned")
             : "Unassigned",
           squadNumber: squad?.squad_number ?? "",
           postLabel:
-            member?.position_label ??
-            (member ? `Post ${member.position}` : ""),
+            member?.position_label ?? (member ? `Post ${member.position}` : ""),
           shootName: selectedShoot?.name ?? "",
         }
       })
@@ -214,10 +213,11 @@ export function ScorecardCenterPage() {
   }, [allCards, athleteFilter, printMode, squadFilter, teamFilter])
 
   const genericStations = useMemo<PrintableStation[]>(
-    () => Array.from({ length: genericStationCount }, (_, index) => ({
-      station_number: index + 1,
-      bird_count: genericBirdCount,
-    })),
+    () =>
+      Array.from({ length: genericStationCount }, (_, index) => ({
+        station_number: index + 1,
+        bird_count: genericBirdCount,
+      })),
     [genericBirdCount, genericStationCount],
   )
 
@@ -276,11 +276,12 @@ export function ScorecardCenterPage() {
         format: "letter",
       })
 
-      const stations = printMode === "generic"
-        ? genericStations
-        : data.stations
-          .filter((station) => station.course_id === selectedCourse.id)
-          .sort((a, b) => a.station_number - b.station_number)
+      const stations =
+        printMode === "generic"
+          ? genericStations
+          : data.stations
+              .filter((station) => station.course_id === selectedCourse.id)
+              .sort((a, b) => a.station_number - b.station_number)
 
       const totalCards =
         printMode === "generic" ? genericCardCount : cards.length
@@ -368,8 +369,8 @@ export function ScorecardCenterPage() {
                 {data.event.name}
               </h1>
               <p className="mt-2 text-sm text-slate-600">
-                Select the course, shoot, and print group before creating
-                the final two-up landscape PDF.
+                Select the course, shoot, and print group before creating the
+                final two-up landscape PDF.
               </p>
             </div>
             <Button
@@ -444,11 +445,7 @@ export function ScorecardCenterPage() {
 
           {step === 5 ? (
             <StepGenerate
-              count={
-                printMode === "generic"
-                  ? genericCardCount
-                  : cards.length
-              }
+              count={printMode === "generic" ? genericCardCount : cards.length}
               generic={printMode === "generic"}
               courseName={selectedCourse?.name ?? ""}
               shootName={selectedShoot?.name ?? ""}
@@ -615,11 +612,23 @@ function StepPrintMode(props: {
   setGenericBirdCount: (value: number) => void
 }) {
   const options: Array<{ value: PrintMode; title: string; detail: string }> = [
-    { value: "event", title: "Entire Shoot", detail: "Print every eligible participant" },
+    {
+      value: "event",
+      title: "Entire Shoot",
+      detail: "Print every eligible participant",
+    },
     { value: "team", title: "One Team", detail: "Print one selected team" },
     { value: "squad", title: "One Squad", detail: "Print one selected squad" },
-    { value: "athlete", title: "One Participant", detail: "Print or reprint one card" },
-    { value: "generic", title: "Generic Blank Cards", detail: "Print cards without assigned shooters" },
+    {
+      value: "athlete",
+      title: "One Participant",
+      detail: "Print or reprint one card",
+    },
+    {
+      value: "generic",
+      title: "Generic Blank Cards",
+      detail: "Print cards without assigned shooters",
+    },
   ]
   return (
     <div>
@@ -644,30 +653,77 @@ function StepPrintMode(props: {
 
       <div className="mt-5 max-w-xl">
         {props.mode === "team" ? (
-          <select value={props.teamFilter} onChange={(e) => props.setTeamFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+          <select
+            value={props.teamFilter}
+            onChange={(e) => props.setTeamFilter(e.target.value)}
+            className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
+          >
             <option value="">Select a team</option>
-            {props.teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+            {props.teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
           </select>
         ) : null}
         {props.mode === "squad" ? (
-          <select value={props.squadFilter} onChange={(e) => props.setSquadFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+          <select
+            value={props.squadFilter}
+            onChange={(e) => props.setSquadFilter(e.target.value)}
+            className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
+          >
             <option value="">Select a squad</option>
-            {props.squads.map((squad) => <option key={squad} value={squad}>Squad {squad}</option>)}
+            {props.squads.map((squad) => (
+              <option key={squad} value={squad}>
+                Squad {squad}
+              </option>
+            ))}
           </select>
         ) : null}
         {props.mode === "athlete" ? (
-          <select value={props.athleteFilter} onChange={(e) => props.setAthleteFilter(e.target.value)} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
+          <select
+            value={props.athleteFilter}
+            onChange={(e) => props.setAthleteFilter(e.target.value)}
+            className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
+          >
             <option value="">Select a participant</option>
-            {props.cards.map((card) => <option key={card.registration.id} value={card.registration.athlete_id}>{card.athleteName} · {card.teamName}</option>)}
+            {props.cards.map((card) => (
+              <option
+                key={card.registration.id}
+                value={card.registration.athlete_id}
+              >
+                {card.athleteName} · {card.teamName}
+              </option>
+            ))}
           </select>
         ) : null}
         {props.mode === "generic" ? (
           <div className="grid gap-4 rounded-xl border bg-slate-50 p-4 sm:grid-cols-3">
-            <NumberField label="Number of cards" value={props.genericCardCount} min={1} max={200} onChange={props.setGenericCardCount} />
-            <NumberField label="Stations per card" value={props.genericStationCount} min={1} max={15} onChange={props.setGenericStationCount} />
-            <NumberField label="Birds per station" value={props.genericBirdCount} min={1} max={20} onChange={props.setGenericBirdCount} />
+            <NumberField
+              label="Number of cards"
+              value={props.genericCardCount}
+              min={1}
+              max={200}
+              onChange={props.setGenericCardCount}
+            />
+            <NumberField
+              label="Stations per card"
+              value={props.genericStationCount}
+              min={1}
+              max={15}
+              onChange={props.setGenericStationCount}
+            />
+            <NumberField
+              label="Birds per station"
+              value={props.genericBirdCount}
+              min={1}
+              max={20}
+              onChange={props.setGenericBirdCount}
+            />
             <p className="sm:col-span-3 text-xs leading-5 text-slate-500">
-              Generic cards use this layout instead of the saved course. They include the selected event and shoot details, but leave the participant fields blank and do not include a QR code.
+              Generic cards use this layout instead of the saved course. They
+              include the selected event and shoot details, but leave the
+              participant fields blank and do not include a QR code.
             </p>
           </div>
         ) : null}
@@ -691,7 +747,15 @@ function StepPreview(props: {
     <div>
       <h2 className="text-xl font-bold">4. Preview Print Queue</h2>
       <p className="mt-1 text-sm text-slate-500">
-        {generic ? props.genericCardCount : props.cards.length} scorecard{(generic ? props.genericCardCount : props.cards.length) === 1 ? "" : "s"} · {generic ? `${props.genericStationCount} stations · ${props.genericBirdCount} birds each` : props.course?.name ?? "No course"} · {props.shootName}
+        {generic ? props.genericCardCount : props.cards.length} scorecard
+        {(generic ? props.genericCardCount : props.cards.length) === 1
+          ? ""
+          : "s"}{" "}
+        ·{" "}
+        {generic
+          ? `${props.genericStationCount} stations · ${props.genericBirdCount} birds each`
+          : (props.course?.name ?? "No course")}{" "}
+        · {props.shootName}
       </p>
       <div className="mt-5 max-h-[520px] divide-y overflow-y-auto rounded-xl border">
         {generic ? (
@@ -703,16 +767,27 @@ function StepPreview(props: {
             <span className="text-slate-500">{props.shootName}</span>
           </div>
         ) : null}
-        {!generic ? props.cards.slice(0, 200).map((card) => (
-          <div key={card.registration.id} className="grid gap-2 p-4 text-sm sm:grid-cols-5">
-            <span className="font-semibold">{card.athleteName}</span>
-            <span>{card.teamName}</span>
-            <span>{card.squadNumber ? `Squad ${card.squadNumber}` : "No squad"}</span>
-            <span>{card.postLabel || "No post"}</span>
-            <span className="text-slate-500">{card.shootName}</span>
-          </div>
-        )) : null}
-        {!generic && props.cards.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No scorecards are available for this selection.</p> : null}
+        {!generic
+          ? props.cards.slice(0, 200).map((card) => (
+              <div
+                key={card.registration.id}
+                className="grid gap-2 p-4 text-sm sm:grid-cols-5"
+              >
+                <span className="font-semibold">{card.athleteName}</span>
+                <span>{card.teamName}</span>
+                <span>
+                  {card.squadNumber ? `Squad ${card.squadNumber}` : "No squad"}
+                </span>
+                <span>{card.postLabel || "No post"}</span>
+                <span className="text-slate-500">{card.shootName}</span>
+              </div>
+            ))
+          : null}
+        {!generic && props.cards.length === 0 ? (
+          <p className="p-8 text-center text-sm text-slate-500">
+            No scorecards are available for this selection.
+          </p>
+        ) : null}
       </div>
     </div>
   )
@@ -733,7 +808,14 @@ function NumberField(props: {
         min={props.min}
         max={props.max}
         value={props.value}
-        onChange={(event) => props.onChange(Math.max(props.min, Math.min(props.max, Number(event.target.value) || props.min)))}
+        onChange={(event) =>
+          props.onChange(
+            Math.max(
+              props.min,
+              Math.min(props.max, Number(event.target.value) || props.min),
+            ),
+          )
+        }
         className="mt-2 min-h-11 w-full rounded-lg border bg-white px-3 text-sm"
       />
     </label>
@@ -753,11 +835,21 @@ function StepGenerate(props: {
       <FileDown className="mx-auto h-12 w-12 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold">5. Generate Scorecards</h2>
       <p className="mt-2 text-slate-500">
-        {props.count} {props.generic ? "generic " : ""}cards · {Math.ceil(props.count / 2)} landscape pages<br />
+        {props.count} {props.generic ? "generic " : ""}cards ·{" "}
+        {Math.ceil(props.count / 2)} landscape pages
+        <br />
         {props.courseName} · {props.shootName}
       </p>
-      <Button className="mt-6" onClick={() => void props.createPdf()} disabled={props.generating || props.count === 0}>
-        {props.generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+      <Button
+        className="mt-6"
+        onClick={() => void props.createPdf()}
+        disabled={props.generating || props.count === 0}
+      >
+        {props.generating ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileDown className="h-4 w-4" />
+        )}
         Generate PDF
       </Button>
     </div>
@@ -780,12 +872,18 @@ function drawCutLine(pdf: jsPDF) {
 }
 
 function drawRegistrationMarker(pdf: jsPDF, centerX: number, centerY: number) {
-  const outer = 0.30
+  const outer = 0.3
   const middle = outer * (0.105 / 0.18)
   const inner = outer * (0.048 / 0.18)
   const clearance = outer + 0.06
   pdf.setFillColor(255, 255, 255)
-  pdf.rect(centerX - clearance / 2, centerY - clearance / 2, clearance, clearance, "F")
+  pdf.rect(
+    centerX - clearance / 2,
+    centerY - clearance / 2,
+    clearance,
+    clearance,
+    "F",
+  )
   pdf.setFillColor(0, 0, 0)
   pdf.rect(centerX - outer / 2, centerY - outer / 2, outer, outer, "F")
   pdf.setFillColor(255, 255, 255)
@@ -805,7 +903,7 @@ async function drawScorecard(
   shootName: string,
 ) {
   const width = 5.5
-  const margin = 0.30
+  const margin = 0.3
   // Keep every grid/marker coordinate affine-equivalent to existing printed cards.
   const gridScaleX = (width - margin * 2) / (width - 0.16 * 2)
   const gridScaleY = 0.86
@@ -815,7 +913,7 @@ async function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(9.4)
-  pdf.text(data.event.name, x + margin, y + 0.30, {
+  pdf.text(data.event.name, x + margin, y + 0.3, {
     maxWidth: 4.3,
   })
   pdf.setFontSize(7.8)
@@ -829,21 +927,12 @@ async function drawScorecard(
     { maxWidth: 4.3 },
   )
   pdf.text(
-    `Host: ${
-      data.event.host_sponsor ??
-      data.event.sponsor_name ??
-      "Not set"
-    }`,
+    `Host: ${data.event.host_sponsor ?? data.event.sponsor_name ?? "Not set"}`,
     x + margin,
     y + 0.64,
     { maxWidth: 4.3 },
   )
-  pdf.text(
-    `Course: ${course.name}`,
-    x + margin,
-    y + 0.80,
-    { maxWidth: 4.3 },
-  )
+  pdf.text(`Course: ${course.name}`, x + margin, y + 0.8, { maxWidth: 4.3 })
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8.4)
   const instructionX = x + margin
@@ -853,7 +942,7 @@ async function drawScorecard(
   pdf.setFillColor("#000000")
   pdf.rect(instructionX, instructionY, instructionW, instructionH, "F")
   pdf.setTextColor("#ffffff")
-  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.00, {
+  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.0, {
     align: "center",
   })
   pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.16, {
@@ -881,12 +970,14 @@ async function drawScorecard(
   const totalW = 0.68 * gridScaleX
   const runningW = 0.62 * gridScaleX
   const activeStations = stations.filter((station) => station.bird_count > 0)
-  const printableStations = activeStations.length > 0 ? activeStations : stations.slice(0, 1)
+  const printableStations =
+    activeStations.length > 0 ? activeStations : stations.slice(0, 1)
   const birdColumns = Math.min(
     SCORECARD_BIRD_COLUMNS,
     Math.max(1, ...printableStations.map((station) => station.bird_count)),
   )
-  const birdW = (width - margin * 2 - stationW - totalW - runningW) / birdColumns
+  const birdW =
+    (width - margin * 2 - stationW - totalW - runningW) / birdColumns
   const tableW = stationW + birdW * birdColumns + totalW + runningW
 
   pdf.setFont("helvetica", "bold")
@@ -954,7 +1045,12 @@ async function drawScorecard(
     for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
-        pdf.ellipse(cellX + birdW / 2, rowY + rowH / 2, 0.08 * gridScaleX, 0.08 * gridScaleY)
+        pdf.ellipse(
+          cellX + birdW / 2,
+          rowY + rowH / 2,
+          0.08 * gridScaleX,
+          0.08 * gridScaleY,
+        )
       }
     }
 
@@ -1010,8 +1106,7 @@ async function drawScorecard(
   pdf.text("Entered by:________________", tableX, footerY + 0.52)
 
   const identityY = footerY + 0.86
-  const participantLabel =
-    card?.athleteName ?? "____________________________"
+  const participantLabel = card?.athleteName ?? "____________________________"
   const teamLabel = card?.teamName ?? "________________"
   const shootLabel = card?.shootName ?? shootName
   const squadLabel = card?.squadNumber || "____"
@@ -1032,8 +1127,8 @@ async function drawScorecard(
     maxWidth: 2.2,
   })
 
-  pdf.text(`Squad: ${squadLabel}`, tableX, identityY + 0.90)
-  pdf.text(`Post: ${postLabel}`, tableX + 1.25, identityY + 0.90)
+  pdf.text(`Squad: ${squadLabel}`, tableX, identityY + 0.9)
+  pdf.text(`Post: ${postLabel}`, tableX + 1.25, identityY + 0.9)
 
   if (card) {
     const scoringUrl = new URL(
@@ -1046,12 +1141,12 @@ async function drawScorecard(
     scoringUrl.searchParams.set("courseId", course.id)
 
     const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 4,
-      width: 1200,
+      margin: 2,
+      width: SCORECARD_QR_SIZE_PX,
       errorCorrectionLevel: "M",
     })
     const qrY = footerY + 0.22
-    const qrSize = Math.min(2.55, 8.20 - qrY)
+    const qrSize = Math.min(2.55, 8.2 - qrY)
     const qrX = x + width - qrSize - margin
     pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
   }
@@ -1059,7 +1154,7 @@ async function drawScorecard(
   const markerLeft = tableX + 0.08 * gridScaleX
   const markerRight = tableX + tableW - 0.08 * gridScaleX
   const markerTop = tableY - 0.12 * gridScaleY
-  const markerBottom = subtotalY + rowH + 0.10 * gridScaleY
+  const markerBottom = subtotalY + rowH + 0.1 * gridScaleY
   drawRegistrationMarker(pdf, markerLeft, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerTop)
   drawRegistrationMarker(pdf, markerRight, markerBottom)
