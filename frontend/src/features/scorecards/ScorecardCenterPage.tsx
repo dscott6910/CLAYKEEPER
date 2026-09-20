@@ -38,6 +38,7 @@ type PrintableCard = {
   squadNumber: string
   postLabel: string
   shootName: string
+  courseName: string
 }
 
 type PrintableStation = {
@@ -166,6 +167,7 @@ export function ScorecardCenterPage() {
           postLabel:
             member?.position_label ?? (member ? `Post ${member.position}` : ""),
           shootName: selectedShoot?.name ?? "",
+          courseName: squad?.course_name ?? "",
         }
       })
       .filter((card): card is PrintableCard => Boolean(card))
@@ -179,18 +181,26 @@ export function ScorecardCenterPage() {
       )
   }, [data, selectedShoot?.name, selectedShootId])
 
+  const courseCards = useMemo(() => {
+    const selectedCourseName = selectedCourse?.name.trim().toLocaleLowerCase()
+    if (!selectedCourseName) return []
+    return allCards.filter(
+      (card) => card.courseName.trim().toLocaleLowerCase() === selectedCourseName,
+    )
+  }, [allCards, selectedCourse?.name])
+
   const availableTeams = useMemo(() => {
     if (!data) return []
-    const ids = new Set(allCards.map((card) => card.registration.team_id))
+    const ids = new Set(courseCards.map((card) => card.registration.team_id))
     return data.teams.filter((team) => ids.has(team.id))
-  }, [allCards, data])
+  }, [courseCards, data])
 
   const availableSquads = useMemo(
     () =>
       Array.from(
-        new Set(allCards.map((card) => card.squadNumber).filter(Boolean)),
+        new Set(courseCards.map((card) => card.squadNumber).filter(Boolean)),
       ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-    [allCards],
+    [courseCards],
   )
 
   const cards = useMemo(() => {
@@ -198,19 +208,19 @@ export function ScorecardCenterPage() {
       case "generic":
         return []
       case "team":
-        return allCards.filter(
+        return courseCards.filter(
           (card) => card.registration.team_id === teamFilter,
         )
       case "squad":
-        return allCards.filter((card) => card.squadNumber === squadFilter)
+        return courseCards.filter((card) => card.squadNumber === squadFilter)
       case "athlete":
-        return allCards.filter(
+        return courseCards.filter(
           (card) => card.registration.athlete_id === athleteFilter,
         )
       default:
-        return allCards
+        return courseCards
     }
-  }, [allCards, athleteFilter, printMode, squadFilter, teamFilter])
+  }, [athleteFilter, courseCards, printMode, squadFilter, teamFilter])
 
   const genericStations = useMemo<PrintableStation[]>(
     () =>
@@ -419,7 +429,8 @@ export function ScorecardCenterPage() {
               squads={availableSquads}
               squadFilter={squadFilter}
               setSquadFilter={setSquadFilter}
-              cards={allCards}
+              cards={courseCards}
+              selectedCourseName={selectedCourse?.name ?? ""}
               athleteFilter={athleteFilter}
               setAthleteFilter={setAthleteFilter}
               genericCardCount={genericCardCount}
@@ -602,6 +613,7 @@ function StepPrintMode(props: {
   squadFilter: string
   setSquadFilter: (value: string) => void
   cards: PrintableCard[]
+  selectedCourseName: string
   athleteFilter: string
   setAthleteFilter: (value: string) => void
   genericCardCount: number
@@ -615,7 +627,7 @@ function StepPrintMode(props: {
     {
       value: "event",
       title: "Entire Shoot",
-      detail: "Print every eligible participant",
+      detail: "Print every participant assigned to the selected course",
     },
     { value: "team", title: "One Team", detail: "Print one selected team" },
     { value: "squad", title: "One Squad", detail: "Print one selected squad" },
@@ -633,6 +645,10 @@ function StepPrintMode(props: {
   return (
     <div>
       <h2 className="text-xl font-bold">3. Choose Print Mode</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Participant cards are limited to squads assigned to Course{" "}
+        {props.selectedCourseName || "not selected"}.
+      </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {options.map((option) => (
           <button
