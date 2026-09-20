@@ -1109,30 +1109,43 @@ async function drawScorecard(
   )
   pdf.text("Entered by:________________", tableX, footerY + 0.52)
 
-  const identityY = footerY + 0.86
   const participantLabel = card?.athleteName ?? "____________________________"
   const teamLabel = card?.teamName ?? "________________"
   const shootLabel = card?.shootName ?? shootName
   const squadLabel = card?.squadNumber || "____"
   const postLabel = card?.postLabel?.replace(/^Post\s*/i, "") || "____"
 
+  const qrY = footerY + 0.22
+  const qrSize = card ? Math.min(1.8, 8.2 - qrY) : 0
+  const qrX = x + width - qrSize - margin
+  const identityWidth = qrX - tableX - 0.14
+
+  function drawIdentityLine(
+    label: string,
+    value: string,
+    yPosition: number,
+    preferredSize: number,
+  ) {
+    const text = `${label}: ${value}`
+    let fontSize = preferredSize
+    pdf.setFontSize(fontSize)
+    while (fontSize > 10.5 && pdf.getTextWidth(text) > identityWidth) {
+      fontSize -= 0.2
+      pdf.setFontSize(fontSize)
+    }
+    const lines = pdf.splitTextToSize(text, identityWidth)
+    pdf.text(lines, tableX, yPosition, { lineHeightFactor: 1.45 })
+    return yPosition + (lines.length * fontSize * 1.45) / 72 + 0.1
+  }
+
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(10)
-  pdf.text(`Shoot: ${shootLabel}`, tableX, identityY, {
-    maxWidth: 2.2,
-  })
-
-  pdf.setFontSize(10.2)
-  pdf.text(`Participant: ${participantLabel}`, tableX, identityY + 0.34, {
-    maxWidth: 2.2,
-  })
-
-  pdf.text(`Team: ${teamLabel}`, tableX, identityY + 0.62, {
-    maxWidth: 2.2,
-  })
-
-  pdf.text(`Squad: ${squadLabel}`, tableX, identityY + 0.9)
-  pdf.text(`Post: ${postLabel}`, tableX + 1.25, identityY + 0.9)
+  let identityY = footerY + 0.86
+  identityY = drawIdentityLine("Shoot", shootLabel, identityY, 12.8)
+  identityY = drawIdentityLine("Participant", participantLabel, identityY, 12.8)
+  identityY = drawIdentityLine("Team", teamLabel, identityY, 12.8)
+  pdf.setFontSize(12.8)
+  pdf.text(`Squad: ${squadLabel}`, tableX, identityY)
+  pdf.text(`Post: ${postLabel}`, tableX + 1.5, identityY)
 
   if (card) {
     const scoringUrl = new URL(
@@ -1149,9 +1162,6 @@ async function drawScorecard(
       width: SCORECARD_QR_SIZE_PX,
       errorCorrectionLevel: "M",
     })
-    const qrY = footerY + 0.22
-    const qrSize = Math.min(2.55, 8.2 - qrY)
-    const qrX = x + width - qrSize - margin
     pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
   }
 
