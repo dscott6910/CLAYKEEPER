@@ -184,10 +184,17 @@ export function ScorecardCenterPage() {
   const courseCards = useMemo(() => {
     const selectedCourseName = selectedCourse?.name.trim().toLocaleLowerCase()
     if (!selectedCourseName) return []
-    return allCards.filter(
+    const assignedCards = allCards.filter(
       (card) => card.courseName.trim().toLocaleLowerCase() === selectedCourseName,
     )
+    const hasCourseAssignments = allCards.some((card) => card.courseName.trim())
+    return hasCourseAssignments ? assignedCards : allCards
   }, [allCards, selectedCourse?.name])
+
+  const hasCourseAssignments = useMemo(
+    () => allCards.some((card) => card.courseName.trim()),
+    [allCards],
+  )
 
   const availableTeams = useMemo(() => {
     if (!data) return []
@@ -431,6 +438,7 @@ export function ScorecardCenterPage() {
               setSquadFilter={setSquadFilter}
               cards={courseCards}
               selectedCourseName={selectedCourse?.name ?? ""}
+              hasCourseAssignments={hasCourseAssignments}
               athleteFilter={athleteFilter}
               setAthleteFilter={setAthleteFilter}
               genericCardCount={genericCardCount}
@@ -614,6 +622,7 @@ function StepPrintMode(props: {
   setSquadFilter: (value: string) => void
   cards: PrintableCard[]
   selectedCourseName: string
+  hasCourseAssignments: boolean
   athleteFilter: string
   setAthleteFilter: (value: string) => void
   genericCardCount: number
@@ -646,8 +655,9 @@ function StepPrintMode(props: {
     <div>
       <h2 className="text-xl font-bold">3. Choose Print Mode</h2>
       <p className="mt-1 text-sm text-slate-500">
-        Participant cards are limited to squads assigned to Course{" "}
-        {props.selectedCourseName || "not selected"}.
+        {props.hasCourseAssignments
+          ? `Participant cards are limited to squads assigned to Course ${props.selectedCourseName || "not selected"}.`
+          : "No squad course assignments are set yet. All participants will print with the selected course layout."}
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {options.map((option) => (
