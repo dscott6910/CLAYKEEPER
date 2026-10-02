@@ -947,7 +947,28 @@ async function drawScorecard(
   pdf.text(`Course: ${course.name}`, x + margin, y + 0.86, {
     maxWidth: scorecardTitleWidth,
   })
+
+  const startStationBoxSize = 0.46
+  const startStationBoxX = x + width - margin - startStationBoxSize
+  const startStationBoxY = y + 0.45
   pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(8.2)
+  pdf.text("START ON", startStationBoxX - 0.07, startStationBoxY + 0.15, {
+    align: "right",
+  })
+  pdf.text("STATION #", startStationBoxX - 0.07, startStationBoxY + 0.34, {
+    align: "right",
+  })
+  pdf.setLineWidth(0.025)
+  pdf.rect(
+    startStationBoxX,
+    startStationBoxY,
+    startStationBoxSize,
+    startStationBoxSize,
+  )
+
+  pdf.setFont("helvetica", "bold")
+  pdf.setLineWidth(0.012)
   pdf.setFontSize(9.4)
   const instructionX = x + margin
   const instructionY = y + 0.94
