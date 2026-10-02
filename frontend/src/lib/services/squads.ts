@@ -274,44 +274,15 @@ export async function swapMemberPositions(params: {
   firstLabel: string
   secondLabel: string
 }) {
-  const temporaryPosition = 9999
+  const { error } = await supabase.rpc("swap_squad_member_positions", {
+    p_first_member_id: params.firstMemberId,
+    p_second_member_id: params.secondMemberId,
+    p_squad_id: params.squadId,
+    p_first_position: params.firstPosition,
+    p_second_position: params.secondPosition,
+    p_first_label: params.firstLabel,
+    p_second_label: params.secondLabel,
+  })
 
-  const firstTemporary = await supabase
-    .from("squad_members")
-    .update({ position: temporaryPosition, position_label: "Moving" })
-    .eq("id", params.firstMemberId)
-
-  throwIfError(firstTemporary.error)
-
-  const secondUpdate = await supabase
-    .from("squad_members")
-    .update({
-      position: params.firstPosition,
-      position_label: params.firstLabel,
-      assignment_method: "manual",
-    })
-    .eq("id", params.secondMemberId)
-
-  if (secondUpdate.error) {
-    await supabase
-      .from("squad_members")
-      .update({
-        position: params.firstPosition,
-        position_label: params.firstLabel,
-      })
-      .eq("id", params.firstMemberId)
-    throwIfError(secondUpdate.error)
-  }
-
-  const firstFinal = await supabase
-    .from("squad_members")
-    .update({
-      squad_id: params.squadId,
-      position: params.secondPosition,
-      position_label: params.secondLabel,
-      assignment_method: "manual",
-    })
-    .eq("id", params.firstMemberId)
-
-  throwIfError(firstFinal.error)
+  throwIfError(error)
 }
