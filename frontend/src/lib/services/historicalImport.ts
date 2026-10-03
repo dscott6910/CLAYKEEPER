@@ -792,6 +792,7 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
     const teamIndex = indexOf("team short name", "team", "team name")
     const squadIndex = indexOf("squad number", "squad", "squad #")
     const postIndex = indexOf("post", "post number", "post #", "position")
+    const squadPostIndex = indexOf("squad - post", "squad-post", "squad post")
     const startingStationIndex = indexOf("starting station", "start station", "starting station #", "start station #", "startingstation")
     const classIndex = indexOf("class", "category")
     const totalIndex = indexOf("totalscore", "total score", "total")
@@ -825,7 +826,11 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       const team = teamIndex >= 0 ? text(record[teamIndex]) : ""
       const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
       const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
-      const post = postIndex >= 0 ? numberValue(record[postIndex]) : null
+      const squadPostValue = squadPostIndex >= 0 ? text(record[squadPostIndex]) : ""
+      const squadPostMatch = squadPostValue.match(/^\s*(.+?)\s*-\s*(\d+)\s*$/)
+      const combinedSquadNumber = squadPostMatch?.[1]?.trim() ?? ""
+      const combinedPost = squadPostMatch ? Number(squadPostMatch[2]) : null
+      const post = postIndex >= 0 ? numberValue(record[postIndex]) : combinedPost
       const startingStation = startingStationIndex >= 0 ? text(record[startingStationIndex]) : ""
       const suppliedTotal = numberValue(record[totalIndex])
       const importedRoundScores = requiredRoundIndexes.map((item) => item ? numberValue(record[item.index]) : null)
@@ -841,6 +846,10 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       if (!team) warnings.push("Team is blank")
       if (!classCode) warnings.push("Class is blank")
       if (!squadNumber) warnings.push("Squad number is blank; ClayKeeper will create an imported holding squad")
+      if (squadPostValue && !squadPostMatch) errors.push("Squad - Post must use the format 12 - 3")
+      if (squadNumber && combinedSquadNumber && norm(squadNumber) !== norm(combinedSquadNumber)) {
+        errors.push(`Squad ${squadNumber} does not match Squad - Post ${squadPostValue}`)
+      }
       if (post !== null && (!Number.isInteger(post) || post <= 0)) errors.push("Post must be a positive whole number")
       const maximumRoundScore = isTotalOnlyScorecard ? 100 : 25
       scores.forEach((score, index) => {

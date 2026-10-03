@@ -156,8 +156,7 @@ export function ScorecardCenterPage() {
             ? (teamMap.get(registration.team_id)?.name ?? "Unassigned")
             : "Unassigned",
           squadNumber: squad?.squad_number ?? "",
-          postLabel:
-            member?.position_label ?? (member ? `Post ${member.position}` : ""),
+          postLabel: String(member.position),
           startingStation: member?.starting_station?.trim() ?? "",
           shootName: selectedShoot?.name ?? "",
           courseName: squad?.course_name ?? "",
