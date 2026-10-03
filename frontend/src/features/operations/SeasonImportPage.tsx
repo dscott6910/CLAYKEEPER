@@ -580,7 +580,7 @@ export function SeasonImportPage() {
             <label className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center ${trapSetupComplete && !trapImportRunning ? "cursor-pointer border-slate-300 hover:border-amber-500 hover:bg-amber-50/40" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
               {busy ? <Loader2 className="h-8 w-8 animate-spin text-amber-600" /> : <Upload className="h-8 w-8 text-amber-600" />}
               <span className="mt-3 font-medium text-slate-800">Choose participant or score workbook</span>
-              <span className="mt-1 text-xs text-slate-500">Expected columns: last name, first name, team, class, squad number, and total score. Use either one 100-target total for sporting clays or four 25-target round scores for trap. Blank score cells are allowed.</span>
+              <span className="mt-1 text-xs text-slate-500">Expected columns: last name, first name, team, class, squad number, post, starting station, and total score. Use either one 100-target total for sporting clays or four 25-target round scores for trap. Blank score cells are allowed.</span>
               <input className="hidden" type="file" accept=".xlsx,.xls" disabled={!trapSetupComplete || trapImportRunning} onChange={(e) => void handleTrapSeriesFile(e.target.files?.[0])} />
             </label>
 
@@ -607,7 +607,7 @@ export function SeasonImportPage() {
 
               <div className="mt-5 max-h-[520px] overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Match</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Shoot</th><th className="px-3 py-2">Row</th><th className="px-3 py-2">Participant</th><th className="px-3 py-2">Match</th><th className="px-3 py-2">Team</th><th className="px-3 py-2">Class</th><th className="px-3 py-2">Squad</th><th className="px-3 py-2">Post</th><th className="px-3 py-2">Starting station</th><th className="px-3 py-2">Rounds</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr></thead>
                   <tbody>{selectedTrapSheets.flatMap((sheet) => sheet.rows.map((row) => (
                     <tr key={`${sheet.sheetName}-${row.rowNumber}`} className="border-t border-slate-100">
                       <td className="px-3 py-2 font-medium">{sheet.sheetName}</td>
@@ -634,6 +634,8 @@ export function SeasonImportPage() {
                       <td className="px-3 py-2">{row.team || "—"}</td>
                       <td className="px-3 py-2">{row.classCode || "—"}</td>
                       <td className="px-3 py-2">{row.squadNumber || "Auto"}</td>
+                      <td className="px-3 py-2">{row.post ?? "Auto"}</td>
+                      <td className="px-3 py-2">{row.startingStation || "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{row.scores.map((score) => score ?? "—").join(" · ")}</td>
                       <td className="px-3 py-2 font-semibold">{row.total ?? "—"}</td>
                       <td className="px-3 py-2">{row.errors.length ? <span className="inline-flex items-center text-red-600"><XCircle className="mr-1 h-4 w-4" />{row.errors[0]}</span> : row.matchStatus === "possible" && !row.matchedParticipantId ? <span className="text-amber-700">Review match</span> : row.warnings.length ? <span className="text-amber-600">{row.warnings[0]}</span> : <span className="inline-flex items-center text-emerald-600"><CheckCircle2 className="mr-1 h-4 w-4" />Ready</span>}</td>

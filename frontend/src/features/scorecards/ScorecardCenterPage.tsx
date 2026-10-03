@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { jsPDF } from "jspdf"
-import QRCode from "qrcode"
 import {
   ArrowLeft,
   Check,
@@ -24,19 +23,14 @@ import {
 type PrintMode = "event" | "team" | "squad" | "athlete" | "generic"
 type WizardStep = 1 | 2 | 3 | 4 | 5
 const SCORECARD_BIRD_COLUMNS = 20
-// At the printed 2.55-inch size this provides roughly 118 DPI and about five
-// source pixels per QR module for the longest scoring URLs. Keeping this
-// compact is important: a full-event print embeds one unique QR per card.
-const SCORECARD_QR_SIZE_PX = 300
 
 type PrintableCard = {
   registration: ScorecardRegistration
-  memberId: string
-  shootId: string
   athleteName: string
   teamName: string
   squadNumber: string
   postLabel: string
+  startingStation: string
   shootName: string
   courseName: string
 }
@@ -157,8 +151,6 @@ export function ScorecardCenterPage() {
 
         return {
           registration,
-          memberId: member.id,
-          shootId: selectedShootId,
           athleteName: athleteName(athleteMap.get(registration.athlete_id)),
           teamName: registration.team_id
             ? (teamMap.get(registration.team_id)?.name ?? "Unassigned")
@@ -166,6 +158,7 @@ export function ScorecardCenterPage() {
           squadNumber: squad?.squad_number ?? "",
           postLabel:
             member?.position_label ?? (member ? `Post ${member.position}` : ""),
+          startingStation: member?.starting_station?.trim() ?? "",
           shootName: selectedShoot?.name ?? "",
           courseName: squad?.course_name ?? "",
         }
@@ -307,7 +300,7 @@ export function ScorecardCenterPage() {
         if (index > 0 && slot === 0) pdf.addPage("letter", "landscape")
         if (slot === 0) drawCutLine(pdf)
 
-        await drawScorecard(
+        drawScorecard(
           pdf,
           slot === 0 ? 0 : 5.5,
           0,
@@ -315,7 +308,6 @@ export function ScorecardCenterPage() {
           selectedCourse,
           stations,
           printMode === "generic" ? null : cards[index],
-          selectedShoot.name,
         )
       }
 
@@ -896,7 +888,7 @@ function drawCutLine(pdf: jsPDF) {
   pdf.text("✂", centerX, 8.46, { align: "center" })
 }
 
-async function drawScorecard(
+function drawScorecard(
   pdf: jsPDF,
   x: number,
   y: number,
@@ -904,20 +896,17 @@ async function drawScorecard(
   course: ScorecardCourse,
   stations: PrintableStation[],
   card: PrintableCard | null,
-  shootName: string,
 ) {
   const width = 5.5
   const margin = 0.3
-  // Keep every grid/marker coordinate affine-equivalent to existing printed cards.
-  const gridScaleX = (width - margin * 2) / (width - 0.16 * 2)
-  const gridScaleY = 0.86
+  const contentWidth = width - margin * 2
 
   pdf.setDrawColor(20)
   pdf.setLineWidth(0.012)
 
   pdf.setFont("helvetica", "bold")
   const scorecardTitle = data.event.name
-  const scorecardTitleWidth = width - margin * 2
+  const scorecardTitleWidth = contentWidth
   let scorecardTitleSize = 11.2
   pdf.setFontSize(scorecardTitleSize)
   while (
@@ -928,62 +917,58 @@ async function drawScorecard(
     pdf.setFontSize(scorecardTitleSize)
   }
   pdf.text(scorecardTitle, x + width / 2, y + 0.3, { align: "center" })
-  pdf.setFontSize(8.8)
+
+  const metadataY = y + 0.62
+  const metadataFields = [
+    {
+      label: "DATE:",
+      value: formatDate(data.event.start_date),
+      start: x + margin,
+      width: 1.42,
+    },
+    {
+      label: "COURSE:",
+      value: course.name,
+      start: x + margin + 1.5,
+      width: 1.63,
+    },
+    {
+      label: "HOST:",
+      value:
+        data.event.host_sponsor ?? data.event.sponsor_name ?? "Not set",
+      start: x + margin + 3.21,
+      width: contentWidth - 3.21,
+    },
+  ]
+  for (const field of metadataFields) {
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(7.6)
+    pdf.text(field.label, field.start, metadataY)
+    const valueX = field.start + pdf.getTextWidth(field.label) + 0.04
+    const valueWidth = Math.max(0.2, field.width - (valueX - field.start))
+    let valueSize = 7.6
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(valueSize)
+    while (valueSize > 5.6 && pdf.getTextWidth(field.value) > valueWidth) {
+      valueSize -= 0.2
+      pdf.setFontSize(valueSize)
+    }
+    pdf.text(field.value, valueX, metadataY, { maxWidth: valueWidth })
+    pdf.setLineWidth(0.01)
+    pdf.line(valueX, metadataY + 0.035, field.start + field.width, metadataY + 0.035)
+  }
+
+  pdf.setFont("helvetica", "bold")
+  pdf.setFontSize(10.2)
+  pdf.text("INSTRUCTIONS:", x + margin + 0.22, y + 0.98)
+  pdf.setFontSize(9.2)
+  pdf.text("DEAD", x + margin + 1.82, y + 0.86)
   pdf.setFont("helvetica", "normal")
-  pdf.text(
-    `${formatDate(data.event.start_date)}  |  ${
-      data.event.location_name ?? "Location not set"
-    }`,
-    x + margin,
-    y + 0.5,
-    { maxWidth: scorecardTitleWidth },
-  )
-  pdf.text(
-    `Host: ${data.event.host_sponsor ?? data.event.sponsor_name ?? "Not set"}`,
-    x + margin,
-    y + 0.68,
-    { maxWidth: scorecardTitleWidth },
-  )
-  pdf.text(`Course: ${course.name}`, x + margin, y + 0.86, {
-    maxWidth: scorecardTitleWidth,
-  })
-
-  const startStationBoxSize = 0.46
-  const startStationBoxX = x + width - margin - startStationBoxSize
-  const startStationBoxY = y + 0.45
+  pdf.text("= BUBBLE FILLED", x + margin + 2.34, y + 0.86)
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(8.2)
-  pdf.text("START ON", startStationBoxX - 0.07, startStationBoxY + 0.15, {
-    align: "right",
-  })
-  pdf.text("STATION #", startStationBoxX - 0.07, startStationBoxY + 0.34, {
-    align: "right",
-  })
-  pdf.setLineWidth(0.025)
-  pdf.rect(
-    startStationBoxX,
-    startStationBoxY,
-    startStationBoxSize,
-    startStationBoxSize,
-  )
-
-  pdf.setFont("helvetica", "bold")
-  pdf.setLineWidth(0.012)
-  pdf.setFontSize(9.4)
-  const instructionX = x + margin
-  const instructionY = y + 0.94
-  const instructionW = width - margin * 2
-  const instructionH = 0.34
-  pdf.setFillColor("#000000")
-  pdf.rect(instructionX, instructionY, instructionW, instructionH, "F")
-  pdf.setTextColor("#ffffff")
-  pdf.text("INSTRUCTIONS: DEAD = BUBBLE FILL", x + width / 2, y + 1.09, {
-    align: "center",
-  })
-  pdf.text("LOSS = BUBBLE EMPTY", x + width / 2, y + 1.27, {
-    align: "center",
-  })
-  pdf.setTextColor("#141414")
+  pdf.text("LOSS", x + margin + 1.82, y + 1.08)
+  pdf.setFont("helvetica", "normal")
+  pdf.text("= BUBBLE EMPTY OR SLASH /", x + margin + 2.34, y + 1.08)
 
   if (!card) {
     pdf.setFont("helvetica", "bold")
@@ -999,11 +984,7 @@ async function drawScorecard(
   }
 
   const tableX = x + margin
-  const tableY = y + 1.34
-  const rowH = 0.34 * gridScaleY
-  const stationW = 0.62 * gridScaleX
-  const totalW = 0.68 * gridScaleX
-  const runningW = 0.62 * gridScaleX
+  const tableY = y + 1.22
   const activeStations = stations.filter((station) => station.bird_count > 0)
   const printableStations =
     activeStations.length > 0 ? activeStations : stations.slice(0, 1)
@@ -1011,14 +992,23 @@ async function drawScorecard(
     SCORECARD_BIRD_COLUMNS,
     Math.max(1, ...printableStations.map((station) => station.bird_count)),
   )
+  const totalRowH = 0.34
+  const availableTableRowsHeight = 5.88 - tableY - totalRowH
+  const rowH = Math.min(
+    0.29,
+    Math.max(0.13, availableTableRowsHeight / (printableStations.length + 1)),
+  )
+  const stationW = 0.62
+  const totalW = 0.68
+  const runningW = 0.62
   const birdW =
-    (width - margin * 2 - stationW - totalW - runningW) / birdColumns
+    (contentWidth - stationW - totalW - runningW) / birdColumns
   const tableW = stationW + birdW * birdColumns + totalW + runningW
 
   pdf.setFont("helvetica", "bold")
   pdf.rect(tableX, tableY, tableW, rowH)
-  pdf.setFontSize(6.5)
-  pdf.text("STATION", tableX + stationW / 2, tableY + 0.22, {
+  pdf.setFontSize(Math.min(6.5, Math.max(5.2, rowH * 22)))
+  pdf.text("STATION", tableX + stationW / 2, tableY + rowH * 0.7, {
     align: "center",
   })
   for (let bird = 1; bird <= birdColumns; bird += 2) {
@@ -1030,29 +1020,29 @@ async function drawScorecard(
       rowH,
     )
   }
-  pdf.setFontSize(7.4)
+  pdf.setFontSize(Math.min(7.4, Math.max(5.3, birdW * 34)))
   for (let bird = 1; bird <= birdColumns; bird += 1) {
     pdf.text(
       String(bird),
       tableX + stationW + (bird - 1) * birdW + birdW / 2,
-      tableY + 0.21,
+      tableY + rowH * 0.68,
       { align: "center" },
     )
   }
   const stationTotalX = tableX + stationW + birdW * birdColumns
   pdf.rect(stationTotalX, tableY, totalW, rowH)
   pdf.rect(stationTotalX + totalW, tableY, runningW, rowH)
-  pdf.setFontSize(5.9)
-  pdf.text("STATION", stationTotalX + totalW / 2, tableY + 0.16, {
+  pdf.setFontSize(Math.min(5.9, Math.max(4.8, rowH * 20)))
+  pdf.text("STATION", stationTotalX + totalW / 2, tableY + rowH * 0.43, {
     align: "center",
   })
-  pdf.text("SCORE", stationTotalX + totalW / 2, tableY + 0.27, {
+  pdf.text("SCORE", stationTotalX + totalW / 2, tableY + rowH * 0.82, {
     align: "center",
   })
-  pdf.text("RUN", stationTotalX + totalW + runningW / 2, tableY + 0.16, {
+  pdf.text("RUN", stationTotalX + totalW + runningW / 2, tableY + rowH * 0.43, {
     align: "center",
   })
-  pdf.text("SCORE", stationTotalX + totalW + runningW / 2, tableY + 0.27, {
+  pdf.text("SCORE", stationTotalX + totalW + runningW / 2, tableY + rowH * 0.82, {
     align: "center",
   })
 
@@ -1062,8 +1052,8 @@ async function drawScorecard(
     const rowY = tableY + rowH * (row + 1)
 
     pdf.rect(tableX, rowY, tableW, rowH)
-    pdf.setFontSize(7.4)
-    pdf.text(String(stationNumber), tableX + stationW / 2, rowY + 0.22, {
+    pdf.setFontSize(Math.min(7.4, Math.max(5.5, rowH * 25)))
+    pdf.text(String(stationNumber), tableX + stationW / 2, rowY + rowH * 0.7, {
       align: "center",
     })
 
@@ -1080,12 +1070,8 @@ async function drawScorecard(
     for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
-        pdf.ellipse(
-          cellX + birdW / 2,
-          rowY + rowH / 2,
-          0.08 * gridScaleX,
-          0.08 * gridScaleY,
-        )
+        const bubbleRadius = Math.min(0.075, birdW * 0.31, rowH * 0.29)
+        pdf.circle(cellX + birdW / 2, rowY + rowH / 2, bubbleRadius)
       }
     }
 
@@ -1094,7 +1080,6 @@ async function drawScorecard(
   }
 
   const subtotalY = tableY + rowH * (printableStations.length + 1)
-  const totalRowH = rowH * 1.35
   pdf.rect(tableX, subtotalY, tableW, totalRowH)
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8)
@@ -1113,20 +1098,13 @@ async function drawScorecard(
     align: "center",
   })
 
-  const footerY = subtotalY + totalRowH + 0.18 * gridScaleY
+  const footerY = subtotalY + totalRowH + 0.16
   pdf.setFontSize(7.6)
   pdf.setFont("helvetica", "bold")
   pdf.text("MALFUNCTIONS", tableX + 0.34, footerY)
   for (let i = 0; i < 3; i += 1) {
     pdf.rect(tableX + 1.21 + i * 0.24, footerY - 0.13, 0.18, 0.18)
   }
-  pdf.line(
-    stationTotalX + totalW + 0.05,
-    footerY + 0.13,
-    stationTotalX + totalW + runningW - 0.05,
-    footerY + 0.13,
-  )
-
   pdf.setFont("helvetica", "normal")
   pdf.setFontSize(7.1)
   pdf.text(
@@ -1136,59 +1114,62 @@ async function drawScorecard(
   )
   pdf.text("Entered by:________________", tableX, footerY + 0.52)
 
-  const participantLabel = card?.athleteName ?? "____________________________"
-  const teamLabel = card?.teamName ?? "________________"
-  const shootLabel = card?.shootName ?? shootName
-  const squadLabel = card?.squadNumber || "____"
-  const postLabel = card?.postLabel?.replace(/^Post\s*/i, "") || "____"
+  const participantLabel = card?.athleteName ?? ""
+  const teamLabel = card?.teamName ?? ""
+  const squadLabel = card?.squadNumber || ""
+  const postLabel = card?.postLabel?.replace(/^Post\s*/i, "") || ""
+  const startingStationLabel = card?.startingStation || ""
 
-  const qrY = footerY + 0.22
-  const qrSize = card ? Math.min(1.8, 8.2 - qrY) : 0
-  const qrX = x + width - qrSize - margin
-  const identityWidth = qrX - tableX - 0.14
-
-  function drawIdentityLine(
+  function drawFullWidthIdentity(
     label: string,
     value: string,
-    yPosition: number,
-    preferredSize: number,
+    baseline: number,
   ) {
-    const text = `${label}: ${value}`
-    let fontSize = preferredSize
-    pdf.setFontSize(fontSize)
-    while (fontSize > 10.5 && pdf.getTextWidth(text) > identityWidth) {
-      fontSize -= 0.2
-      pdf.setFontSize(fontSize)
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(12.8)
+    pdf.text(`${label}:`, tableX, baseline)
+    const valueX = tableX + pdf.getTextWidth(`${label}:`) + 0.06
+    const valueWidth = tableX + tableW - valueX
+    let valueSize = 12.8
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(valueSize)
+    while (valueSize > 9.2 && pdf.getTextWidth(value) > valueWidth) {
+      valueSize -= 0.2
+      pdf.setFontSize(valueSize)
     }
-    const lines = pdf.splitTextToSize(text, identityWidth)
-    pdf.text(lines, tableX, yPosition, { lineHeightFactor: 1.2 })
-    return yPosition + (lines.length * fontSize * 1.2) / 72 + 0.045
+    if (value) pdf.text(value, valueX + 0.04, baseline)
+    pdf.setLineWidth(0.012)
+    pdf.line(valueX, baseline + 0.035, tableX + tableW, baseline + 0.035)
   }
 
-  pdf.setFont("helvetica", "bold")
-  let identityY = footerY + 0.86
-  identityY = drawIdentityLine("Shoot", shootLabel, identityY, 12.8)
-  identityY = drawIdentityLine("Participant", participantLabel, identityY, 12.8)
-  identityY = drawIdentityLine("Team", teamLabel, identityY, 12.8)
-  pdf.setFontSize(12.8)
-  pdf.text(`Squad: ${squadLabel}`, tableX, identityY)
-  pdf.text(`Post: ${postLabel}`, tableX + 1.5, identityY)
+  drawFullWidthIdentity("PARTICIPANT", participantLabel, y + 7.22)
+  drawFullWidthIdentity("TEAM", teamLabel, y + 7.65)
 
-  if (card) {
-    const scoringUrl = new URL(
-      `/events/${data.event.id}/digital-scoring`,
-      window.location.origin,
-    )
-
-    scoringUrl.searchParams.set("shootId", card.shootId)
-    scoringUrl.searchParams.set("memberId", card.memberId)
-    scoringUrl.searchParams.set("courseId", course.id)
-
-    const qr = await QRCode.toDataURL(scoringUrl.toString(), {
-      margin: 2,
-      width: SCORECARD_QR_SIZE_PX,
-      errorCorrectionLevel: "M",
-    })
-    pdf.addImage(qr, "PNG", qrX, qrY, qrSize, qrSize)
+  const finalLineY = y + 8.08
+  const finalFields = [
+    { label: "SQUAD", value: squadLabel, start: tableX, width: 1.22 },
+    { label: "POST", value: postLabel, start: tableX + 1.3, width: 1.02 },
+    {
+      label: "STARTING STATION",
+      value: startingStationLabel,
+      start: tableX + 2.4,
+      width: tableW - 2.4,
+    },
+  ]
+  for (const field of finalFields) {
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(12.2)
+    pdf.text(`${field.label}:`, field.start, finalLineY)
+    const valueX = field.start + pdf.getTextWidth(`${field.label}:`) + 0.035
+    const valueWidth = Math.max(0.12, field.width - (valueX - field.start))
+    let valueSize = 12.2
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(valueSize)
+    while (valueSize > 8.2 && pdf.getTextWidth(field.value) > valueWidth) {
+      valueSize -= 0.2
+      pdf.setFontSize(valueSize)
+    }
+    if (field.value) pdf.text(field.value, valueX + 0.02, finalLineY)
+    pdf.line(valueX, finalLineY + 0.035, field.start + field.width, finalLineY + 0.035)
   }
 }

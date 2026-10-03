@@ -11,6 +11,7 @@ export type ImportRow = {
   classCode: string
   squadNumber: string
   post: number | null
+  startingStation: string
   scores: Array<number | null>
   total: number | null
   cyssaNumber: string
@@ -35,6 +36,7 @@ const aliases: Record<string, string[]> = {
   classCode: ["class", "category", "division", "classification"],
   squadNumber: ["squad", "squad number", "squad #", "squad no"],
   post: ["post", "position", "station"],
+  startingStation: ["starting station", "start station", "starting station #", "start station #", "startingstation"],
   cyssaNumber: ["cyssa", "cyssa #", "cyssa number", "member number", "membership number"],
   amountPaid: ["amount paid", "paid", "payment", "total paid"],
   paymentStatus: ["payment status", "paid status"],
@@ -68,6 +70,7 @@ export async function parseHistoricalWorkbook(file: File): Promise<ParsedWorkboo
   const classHeader = findHeader(headers, "classCode")
   const squadHeader = findHeader(headers, "squadNumber")
   const postHeader = findHeader(headers, "post")
+  const startingStationHeader = findHeader(headers, "startingStation")
   const cyssaHeader = findHeader(headers, "cyssaNumber")
   const paidHeader = findHeader(headers, "amountPaid")
   const paymentStatusHeader = findHeader(headers, "paymentStatus")
@@ -110,6 +113,7 @@ export async function parseHistoricalWorkbook(file: File): Promise<ParsedWorkboo
       classCode: classHeader ? String(record[classHeader] ?? "").trim().toUpperCase() : "",
       squadNumber: squadHeader ? String(record[squadHeader] ?? "").trim() : "",
       post: postHeader ? numberValue(record[postHeader]) : null,
+      startingStation: startingStationHeader ? String(record[startingStationHeader] ?? "").trim() : "",
       scores,
       total,
       cyssaNumber: cyssaHeader ? String(record[cyssaHeader] ?? "").trim() : "",
@@ -290,6 +294,7 @@ export async function importHistoricalShoot(parsed: ParsedWorkbook, options: His
           registration_shoot_id: registrationShootId,
           position,
           position_label: `Post ${position}`,
+          starting_station: row.startingStation || null,
           assignment_method: "imported",
           status: "completed",
           checked_in: true,
@@ -434,6 +439,7 @@ export async function parseUsOpenWorkbook(file: File): Promise<ParsedUsOpenWorkb
         classCode,
         squadNumber,
         post: null,
+        startingStation: "",
         scores,
         total,
         cyssaNumber: "",
@@ -639,6 +645,7 @@ export async function importUsOpenWorkbook(parsed: ParsedUsOpenWorkbook, options
             registration_shoot_id: registrationShootId,
             position,
             position_label: `Post ${position}`,
+            starting_station: row.startingStation || null,
             assignment_method: "imported",
             status: "completed",
             checked_in: true,
@@ -784,6 +791,8 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
     const firstIndex = indexOf("firstname", "first name")
     const teamIndex = indexOf("team short name", "team", "team name")
     const squadIndex = indexOf("squad number", "squad", "squad #")
+    const postIndex = indexOf("post", "post number", "post #", "position")
+    const startingStationIndex = indexOf("starting station", "start station", "starting station #", "start station #", "startingstation")
     const classIndex = indexOf("class", "category")
     const totalIndex = indexOf("totalscore", "total score", "total")
     const roundIndexes = headers
@@ -816,6 +825,8 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       const team = teamIndex >= 0 ? text(record[teamIndex]) : ""
       const classCode = classIndex >= 0 ? text(record[classIndex]).toUpperCase() : ""
       const squadNumber = squadIndex >= 0 ? text(record[squadIndex]) : ""
+      const post = postIndex >= 0 ? numberValue(record[postIndex]) : null
+      const startingStation = startingStationIndex >= 0 ? text(record[startingStationIndex]) : ""
       const suppliedTotal = numberValue(record[totalIndex])
       const importedRoundScores = requiredRoundIndexes.map((item) => item ? numberValue(record[item.index]) : null)
       const scores = isTotalOnlyScorecard
@@ -830,6 +841,7 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
       if (!team) warnings.push("Team is blank")
       if (!classCode) warnings.push("Class is blank")
       if (!squadNumber) warnings.push("Squad number is blank; ClayKeeper will create an imported holding squad")
+      if (post !== null && (!Number.isInteger(post) || post <= 0)) errors.push("Post must be a positive whole number")
       const maximumRoundScore = isTotalOnlyScorecard ? 100 : 25
       scores.forEach((score, index) => {
         if (score !== null && (score < 0 || score > maximumRoundScore)) errors.push(`Round ${index + 1} score is outside 0-${maximumRoundScore}`)
@@ -850,7 +862,8 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
         team,
         classCode,
         squadNumber,
-        post: null,
+        post,
+        startingStation,
         scores,
         total,
         cyssaNumber: "",
@@ -866,6 +879,18 @@ export async function parseTrapSeriesWorkbook(file: File): Promise<ParsedTrapSer
     }
 
     if (rows.length) {
+      const postOwners = new Map<string, TrapSeriesRow>()
+      for (const row of rows) {
+        if (!row.squadNumber || row.post === null || row.post <= 0) continue
+        const key = `${norm(row.squadNumber)}|${Math.round(row.post)}`
+        const existing = postOwners.get(key)
+        if (existing) {
+          row.errors.push(`Post ${Math.round(row.post)} is already assigned in squad ${row.squadNumber}`)
+          existing.errors.push(`Post ${Math.round(row.post)} is assigned more than once in squad ${row.squadNumber}`)
+        } else {
+          postOwners.set(key, row)
+        }
+      }
       sheets.push({
         sheetName,
         rows,
@@ -1279,12 +1304,13 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
           squadCache.set(effectiveSquad, squadId)
         }
 
-        const position = sheet.rows.filter((candidate, candidateIndex) => {
+        const automaticPosition = sheet.rows.filter((candidate, candidateIndex) => {
           const candidateSquad = candidate.squadNumber || `Imported ${Math.floor(candidateIndex / 5) + 1}`
           return candidateSquad === effectiveSquad && candidateIndex <= rowIndex
         }).length
+        const position = row.post && row.post > 0 ? Math.round(row.post) : automaticPosition
         const { data: existingMember, error: memberLookupError } = await supabase.from("squad_members")
-          .select("id,squad_id,position")
+          .select("id,squad_id,position,starting_station")
           .eq("organization_id", organizationId)
           .eq("registration_shoot_id", registrationShootId)
           .maybeSingle()
@@ -1292,11 +1318,16 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
         let squadMemberId: string
         if (existingMember?.id) {
           squadMemberId = existingMember.id as string
-          if (existingMember.squad_id !== squadId || existingMember.position !== position) {
+          if (
+            existingMember.squad_id !== squadId
+            || existingMember.position !== position
+            || (existingMember.starting_station ?? "") !== row.startingStation
+          ) {
             const { error } = await supabase.from("squad_members").update({
               squad_id: squadId,
               position,
               position_label: `Post ${position}`,
+              starting_station: row.startingStation || null,
               assignment_method: "imported",
             }).eq("id", squadMemberId).eq("organization_id", organizationId)
             if (error) throw error
@@ -1313,6 +1344,7 @@ export async function importTrapSeriesWorkbook(parsed: ParsedTrapSeriesWorkbook,
             registration_shoot_id: registrationShootId,
             position,
             position_label: `Post ${position}`,
+            starting_station: row.startingStation || null,
             assignment_method: "imported",
             status: rowHasScores ? "completed" : "assigned",
             checked_in: rowHasScores,

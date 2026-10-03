@@ -75,6 +75,7 @@ export type ScorecardMember = {
   registration_shoot_id: string
   position: number
   position_label: string | null
+  starting_station: string | null
 }
 
 export type ScorecardCenterData = {
@@ -193,7 +194,7 @@ export async function loadScorecardCenterData(
       ? await supabase
           .from("squad_members")
           .select(
-            "id,squad_id,registration_shoot_id,position,position_label",
+            "id,squad_id,registration_shoot_id,position,position_label,starting_station",
           )
           .in("registration_shoot_id", enrollmentIds)
           .neq("status", "withdrawn")
