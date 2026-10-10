@@ -51,6 +51,33 @@ export type TreasurerEnrollment = {
   total_fee: number
 }
 
+export type TreasurerSeasonRegistration = {
+  id: string
+  season_id: string
+  athlete_id: string
+  status: string
+  payment_status: string
+  amount_due: number
+  amount_paid: number
+  currency: string
+  paid_at: string | null
+  created_at: string
+}
+
+export type TreasurerSeasonPaymentTransaction = {
+  id: string
+  season_registration_id: string
+  transaction_type: string
+  provider: string
+  provider_transaction_id: string | null
+  amount: number
+  currency: string
+  status: string
+  payment_method: string | null
+  receipt_email: string | null
+  processed_at: string
+}
+
 export type TreasurerAthlete = {
   id: string
   first_name: string | null
@@ -96,7 +123,7 @@ async function loadAllRows<T>(
 export async function loadTreasurerData() {
   const organizationId = await getCurrentOrganizationId()
 
-  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes] = await Promise.all([
+  const [seasons, events, shoots, registrations, enrollments, athletes, teams, classes, seasonRegistrations, seasonPaymentTransactions] = await Promise.all([
     loadAllRows<TreasurerSeason>(
       "seasons",
       "id, name, start_date, end_date, status",
@@ -137,6 +164,16 @@ export async function loadTreasurerData() {
       "id, code, display_name",
       organizationId,
     ),
+    loadAllRows<TreasurerSeasonRegistration>(
+      "participant_season_registrations",
+      "id, season_id, athlete_id, status, payment_status, amount_due, amount_paid, currency, paid_at, created_at",
+      organizationId,
+    ),
+    loadAllRows<TreasurerSeasonPaymentTransaction>(
+      "participant_season_payment_transactions",
+      "id, season_registration_id, transaction_type, provider, provider_transaction_id, amount, currency, status, payment_method, receipt_email, processed_at",
+      organizationId,
+    ),
   ])
 
   seasons.sort((a, b) => b.start_date.localeCompare(a.start_date))
@@ -152,5 +189,7 @@ export async function loadTreasurerData() {
     athletes,
     teams,
     classes,
+    seasonRegistrations,
+    seasonPaymentTransactions,
   }
 }

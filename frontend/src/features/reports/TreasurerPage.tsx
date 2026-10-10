@@ -13,6 +13,8 @@ import {
   type TreasurerNamedRecord,
   type TreasurerRegistration,
   type TreasurerSeason,
+  type TreasurerSeasonPaymentTransaction,
+  type TreasurerSeasonRegistration,
   type TreasurerShoot,
 } from "@/lib/services/treasurer"
 
@@ -25,6 +27,8 @@ type Data = {
   athletes: TreasurerAthlete[]
   teams: TreasurerNamedRecord[]
   classes: TreasurerClass[]
+  seasonRegistrations: TreasurerSeasonRegistration[]
+  seasonPaymentTransactions: TreasurerSeasonPaymentTransaction[]
 }
 
 type LedgerRow = {
@@ -52,7 +56,7 @@ type LedgerRow = {
 
 type LedgerSortKey = "participant" | "event" | "teamClass" | "shoots" | "payment" | "registrationFee" | "shootFees" | "organizationFees" | "adjustments" | "expected" | "paid" | "balance"
 
-const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], athletes: [], teams: [], classes: [] }
+const emptyData: Data = { seasons: [], events: [], shoots: [], registrations: [], enrollments: [], athletes: [], teams: [], classes: [], seasonRegistrations: [], seasonPaymentTransactions: [] }
 const inactiveStatuses = new Set(["withdrawn", "cancelled", "disqualified"])
 
 function money(value: number) {
@@ -229,6 +233,41 @@ export function TreasurerPage() {
     })).sort((a, b) => (b.eventDate || "").localeCompare(a.eventDate || ""))
   }, [filteredRows])
 
+  const seasonPaymentRows = useMemo(() => {
+    const athletes = new Map(data.athletes.map((athlete) => [athlete.id, athlete]))
+    const seasons = new Map(data.seasons.map((season) => [season.id, season]))
+
+    return data.seasonRegistrations
+      .filter((registration) => seasonId === "all" || registration.season_id === seasonId)
+      .map((registration) => {
+        const athlete = athletes.get(registration.athlete_id)
+        const expected = Number(registration.amount_due || 0)
+        const paid = Number(registration.amount_paid || 0)
+        return {
+          ...registration,
+          participant: participantName(athlete),
+          participantNumber: athlete?.participant_number || null,
+          seasonName: seasons.get(registration.season_id)?.name || "Unknown season",
+          expected,
+          paid,
+          balance: Math.max(0, expected - paid),
+        }
+      })
+      .filter((row) => {
+        const needle = search.trim().toLowerCase()
+        if (!needle) return true
+        return [row.participant, row.participantNumber || "", row.seasonName, row.payment_status]
+          .some((value) => value.toLowerCase().includes(needle))
+      })
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+  }, [data.athletes, data.seasonRegistrations, data.seasons, search, seasonId])
+
+  const seasonPaymentSummary = useMemo(() => seasonPaymentRows.reduce((total, row) => ({
+    expected: total.expected + row.expected,
+    paid: total.paid + row.paid,
+    balance: total.balance + row.balance,
+  }), { expected: 0, paid: 0, balance: 0 }), [seasonPaymentRows])
+
   function exportCsv() {
     const headers = ["Event", "Date", "Participant", "Participant Number", "Team", "Class", "Shoots", "Payment Status", "Payment Method", "Source", "Registration Fee", "Shoot Fees", "Organization Fees", "Adjustments", "Expected", "Paid", "Balance"]
     const lines = [headers.map(csvValue).join(",")]
@@ -289,6 +328,51 @@ export function TreasurerPage() {
             <Stat icon={Banknote} label={teamFilter === "all" ? "Amount paid" : "Club paid"} value={money(summary.paid)} />
             <Stat icon={AlertCircle} label={teamFilter === "all" ? "Outstanding" : "Club balance"} value={money(summary.balance)} emphasis={summary.balance > 0} />
             <Stat icon={FileSpreadsheet} label="Organization fees" value={money(summary.organizationFees)} />
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+            <header className="flex flex-col gap-3 border-b px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Season Registration Payments</h2>
+                <p className="text-sm text-slate-500">Stripe season-registration charges and outstanding balances.</p>
+              </div>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <span className="rounded-lg bg-slate-100 px-3 py-2">Due <strong>{money(seasonPaymentSummary.expected)}</strong></span>
+                <span className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">Paid <strong>{money(seasonPaymentSummary.paid)}</strong></span>
+                <span className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">Balance <strong>{money(seasonPaymentSummary.balance)}</strong></span>
+              </div>
+            </header>
+            {loading ? (
+              <div className="p-10 text-center text-slate-500">Loading season payments…</div>
+            ) : seasonPaymentRows.length === 0 ? (
+              <div className="p-10 text-center text-slate-500">No season-registration payments match the selected season and search.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[850px] text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr><th className="px-4 py-3">Participant</th><th className="px-4 py-3">Season</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Due</th><th className="px-4 py-3 text-right">Paid</th><th className="px-4 py-3 text-right">Balance</th><th className="px-4 py-3">Paid Date</th></tr>
+                  </thead>
+                  <tbody>
+                    {seasonPaymentRows.map((row) => (
+                      <tr key={row.id} className="border-t">
+                        <td className="px-4 py-3"><p className="font-semibold">{row.participant}</p><p className="text-xs text-slate-500">{row.participantNumber ? `Participant # ${row.participantNumber}` : "No participant number"}</p></td>
+                        <td className="px-4 py-3">{row.seasonName}</td>
+                        <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.payment_status === "paid" ? "bg-emerald-100 text-emerald-700" : row.payment_status === "waived" ? "bg-slate-100 text-slate-700" : "bg-amber-100 text-amber-700"}`}>{row.payment_status}</span></td>
+                        <td className="px-4 py-3 text-right font-medium">{money(row.expected)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-emerald-700">{money(row.paid)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-amber-700">{money(row.balance)}</td>
+                        <td className="px-4 py-3 text-slate-600">{row.paid_at ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(row.paid_at)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {data.seasonPaymentTransactions.length ? (
+              <footer className="border-t bg-slate-50 px-5 py-3 text-xs text-slate-500">
+                {data.seasonPaymentTransactions.length} Stripe payment or refund transaction{data.seasonPaymentTransactions.length === 1 ? "" : "s"} recorded.
+              </footer>
+            ) : null}
           </section>
 
           <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">

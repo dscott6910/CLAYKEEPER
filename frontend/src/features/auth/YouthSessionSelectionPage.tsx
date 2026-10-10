@@ -20,7 +20,6 @@ import {
   type ParticipantSignupOrganization,
 } from "@/lib/services/participantSignup"
 import {
-  YOUTH_SEASON_REGISTRATION_FEE,
   YOUTH_REGISTRATION_SESSIONS,
   youthRegistrationSessionsByIds,
 } from "@/lib/services/youthRegistrationSessions"
@@ -92,7 +91,7 @@ export function YouthSessionSelectionPage() {
 
   const total =
     cartAdded && selectedSessions.length
-      ? YOUTH_SEASON_REGISTRATION_FEE
+      ? organization?.seasonRegistrationFee ?? 0
       : 0
 
   function toggleSession(sessionId: string) {
@@ -348,7 +347,7 @@ export function YouthSessionSelectionPage() {
                       </p>
 
                       <p className="mt-1 text-sm text-slate-600">
-                        Child — ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                        Child — ${organization.seasonRegistrationFee.toFixed(2)}
                       </p>
 
                       <div className="mt-3 space-y-1 border-t border-slate-200 pt-3">

@@ -49,19 +49,26 @@ echo
 echo "3. Applying database migrations..."
 cd "$REPO_DIR"
 if command -v supabase >/dev/null 2>&1; then
-    supabase db push --linked
+    SUPABASE_CLI=(supabase)
 else
     echo "Supabase CLI not found globally; using npx fallback..."
-    npx --yes supabase db push --linked
+    SUPABASE_CLI=(npx --yes supabase)
 fi
 
+"${SUPABASE_CLI[@]}" db push --linked
+
 echo
-echo "4. Installing exact project dependencies..."
+echo "4. Deploying secure payment functions..."
+"${SUPABASE_CLI[@]}" functions deploy create-stripe-checkout
+"${SUPABASE_CLI[@]}" functions deploy stripe-webhook
+
+echo
+echo "5. Installing exact project dependencies..."
 cd "$FRONTEND_DIR"
 npm ci
 
 echo
-echo "5. Building ClayKeeper..."
+echo "6. Building ClayKeeper..."
 npm run build
 
 if [[ ! -f "$FRONTEND_DIR/dist/index.html" ]]; then
@@ -70,11 +77,11 @@ if [[ ! -f "$FRONTEND_DIR/dist/index.html" ]]; then
 fi
 
 echo
-echo "5. Testing Nginx configuration..."
+echo "7. Testing Nginx configuration..."
 sudo nginx -t
 
 echo
-echo "6. Backing up the currently deployed site..."
+echo "8. Backing up the currently deployed site..."
 mkdir -p "$BACKUP_DIR"
 
 BACKUP_PATH="$BACKUP_DIR/claykeeper-$TIMESTAMP.tar.gz"
@@ -116,18 +123,18 @@ rollback_deployment() {
 }
 
 echo
-echo "7. Publishing the new build..."
+echo "9. Publishing the new build..."
 sudo rsync -a --delete "$FRONTEND_DIR/dist/" "$WEB_ROOT/"
 sudo chown -R www-data:www-data "$WEB_ROOT"
 sudo find "$WEB_ROOT" -type d -exec chmod 755 {} \;
 sudo find "$WEB_ROOT" -type f -exec chmod 644 {} \;
 
 echo
-echo "8. Reloading Nginx..."
+echo "10. Reloading Nginx..."
 sudo systemctl reload nginx
 
 echo
-echo "9. Verifying the live website..."
+echo "11. Verifying the live website..."
 
 HTTP_STATUS="$(
     curl -sS         --connect-timeout 10         --max-time 20         -o /dev/null         -w "%{http_code}"         https://claykeeper.live         || printf '000'
@@ -146,7 +153,7 @@ if [[ "$HTTP_STATUS" != "200" ]]; then
 fi
 
 echo
-echo "10. Removing deployment backups older than 14 days..."
+echo "12. Removing deployment backups older than 14 days..."
 find "$BACKUP_DIR" -type f -name "claykeeper-*.tar.gz" -mtime +14 -delete
 
 echo

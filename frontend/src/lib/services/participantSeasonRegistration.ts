@@ -84,7 +84,7 @@ export async function completeParticipantSeasonRegistration(input: {
   signatureType: "drawn" | "typed"
   signatureValue: string
 }) {
-  const { error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     "complete_participant_season_registration",
     {
       p_organization_id: input.organizationId,
@@ -96,4 +96,12 @@ export async function completeParticipantSeasonRegistration(input: {
   )
 
   if (error) throw error
+
+  return data as {
+    id: string
+    organization_id: string
+    payment_status: string
+    amount_due: number
+    amount_paid: number
+  }
 }

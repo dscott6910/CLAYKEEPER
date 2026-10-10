@@ -20,6 +20,7 @@ coverage/
 # Supabase local files
 supabase/temp/
 supabase/.temp/
+supabase/functions/.env
 
 # VS Code
 .vscode/

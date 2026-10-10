@@ -45,6 +45,14 @@ const YouthRegistrationCartPage = lazy(() =>
   })),
 )
 
+const YouthRegistrationPaymentSuccessPage = lazy(() =>
+  import("@/features/auth/YouthRegistrationPaymentSuccessPage").then(
+    (module) => ({
+      default: module.YouthRegistrationPaymentSuccessPage,
+    }),
+  ),
+)
+
 const ReturningShooterRegistrationPage = lazy(() =>
   import("@/features/auth/ReturningShooterRegistrationPage").then(
     (module) => ({
@@ -473,6 +481,15 @@ function App() {
               element={
                 <LazyRoute>
                   <YouthRegistrationCartPage />
+                </LazyRoute>
+              }
+            />
+
+            <Route
+              path="/signup/:organizationSlug/youth/payment/success"
+              element={
+                <LazyRoute>
+                  <YouthRegistrationPaymentSuccessPage />
                 </LazyRoute>
               }
             />

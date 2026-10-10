@@ -8,9 +8,16 @@ export type OrganizationSettingsRecord = {
   support_email: string | null
   report_subtitle: string
   report_footer: string
+  stripe_payments_enabled: boolean
+  season_registration_fee: number
 }
 
-export async function loadOrganizationSettings(): Promise<BrandSettings> {
+export type OrganizationSettings = BrandSettings & {
+  stripePaymentsEnabled: boolean
+  seasonRegistrationFee: number
+}
+
+export async function loadOrganizationSettings(): Promise<OrganizationSettings> {
   const { organizationId } = await getCurrentOrganizationContext()
 
   const [organizationResult, settingsResult] = await Promise.all([
@@ -23,7 +30,7 @@ export async function loadOrganizationSettings(): Promise<BrandSettings> {
     supabase
       .from("organization_settings")
       .select(
-        "organization_id,display_name,support_email,report_subtitle,report_footer",
+        "organization_id,display_name,support_email,report_subtitle,report_footer,stripe_payments_enabled,season_registration_fee",
       )
       .eq("organization_id", organizationId)
       .maybeSingle(),
@@ -57,12 +64,18 @@ export async function loadOrganizationSettings(): Promise<BrandSettings> {
     supportEmail:
       settings?.support_email?.trim() ||
       defaultBrandSettings.supportEmail,
+
+    stripePaymentsEnabled:
+      Boolean(settings?.stripe_payments_enabled),
+
+    seasonRegistrationFee:
+      Number(settings?.season_registration_fee ?? 35),
   }
 }
 
 export async function saveOrganizationSettings(
-  values: BrandSettings,
-): Promise<BrandSettings> {
+  values: OrganizationSettings,
+): Promise<OrganizationSettings> {
   const { organizationId, role } = await getCurrentOrganizationContext()
 
   if (role !== "owner" && role !== "admin") {
@@ -81,6 +94,11 @@ export async function saveOrganizationSettings(
     report_footer:
       values.reportFooter.trim() ||
       defaultBrandSettings.reportFooter,
+    stripe_payments_enabled: values.stripePaymentsEnabled,
+    season_registration_fee: Math.max(
+      0,
+      Number(values.seasonRegistrationFee || 0),
+    ),
   }
 
   const { error } = await supabase
@@ -92,7 +110,7 @@ export async function saveOrganizationSettings(
   return loadOrganizationSettings()
 }
 
-export async function resetOrganizationSettings(): Promise<BrandSettings> {
+export async function resetOrganizationSettings(): Promise<OrganizationSettings> {
   const { organizationId, role } = await getCurrentOrganizationContext()
 
   if (role !== "owner" && role !== "admin") {

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
   CheckCircle2,
@@ -10,19 +10,22 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/features/auth/useAuth"
 import {
   APP_VERSION,
   CLAYKEEPER_LOGO,
 } from "@/lib/branding"
 import {
   createParticipantAccount,
+  completeParticipantSignup,
   loadParticipantSignupOrganization,
+  loadParticipantSignupFromUserMetadata,
   loadPendingParticipantSignup,
   type ParticipantSignupOrganization,
   type ParticipantSignupProfile,
 } from "@/lib/services/participantSignup"
+import { startStripeSeasonCheckout } from "@/lib/services/stripePayments"
 import {
-  YOUTH_SEASON_REGISTRATION_FEE,
   youthRegistrationSessionsByIds,
 } from "@/lib/services/youthRegistrationSessions"
 
@@ -43,6 +46,8 @@ function errorMessage(error: unknown) {
 export function YouthRegistrationCartPage() {
   const { organizationSlug = "" } = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { session } = useAuth()
   const [organization, setOrganization] =
     useState<ParticipantSignupOrganization | null>(null)
   const [profile, setProfile] =
@@ -56,6 +61,8 @@ export function YouthRegistrationCartPage() {
     useState(false)
   const [participantNumber, setParticipantNumber] =
     useState<string | null>(null)
+  const checkoutStartedRef = useRef(false)
+  const paymentCancelled = searchParams.get("payment") === "cancelled"
 
   const selectedIds = useMemo(
     () =>
@@ -82,13 +89,19 @@ export function YouthRegistrationCartPage() {
       setError("")
 
       try {
-        const [organizationResult, pendingProfile] =
+        const [organizationResult, localPendingProfile] =
           await Promise.all([
             loadParticipantSignupOrganization(
               organizationSlug,
             ),
             Promise.resolve(loadPendingParticipantSignup()),
           ])
+
+        const pendingProfile =
+          localPendingProfile ??
+          (session
+            ? await loadParticipantSignupFromUserMetadata()
+            : null)
 
         if (!mounted) return
 
@@ -106,7 +119,80 @@ export function YouthRegistrationCartPage() {
     return () => {
       mounted = false
     }
-  }, [organizationSlug])
+  }, [organizationSlug, session])
+
+  const beginSecureCheckout = useCallback(async (organizationId: string) => {
+    const checkout = await startStripeSeasonCheckout(organizationId)
+
+    if (checkout.alreadyPaid) {
+      navigate(
+        `/signup/${encodeURIComponent(organizationSlug)}/youth/payment/success`,
+        { replace: true },
+      )
+      return
+    }
+
+    if (checkout.url) window.location.assign(checkout.url)
+  }, [navigate, organizationSlug])
+
+  useEffect(() => {
+    if (
+      !session ||
+      !organization ||
+      !profile ||
+      paymentCancelled ||
+      participantNumber ||
+      checkoutStartedRef.current
+    ) {
+      return
+    }
+
+    checkoutStartedRef.current = true
+    let mounted = true
+
+    async function finishConfirmedSignup() {
+      setSubmitting(true)
+      setError("")
+
+      try {
+        const pendingProfile =
+          loadPendingParticipantSignup() ??
+          await loadParticipantSignupFromUserMetadata()
+
+        if (!pendingProfile || !organization) {
+          throw new Error("The pending participant registration could not be found.")
+        }
+
+        const number = await completeParticipantSignup(pendingProfile)
+        if (!mounted) return
+
+        if (organization.stripePaymentsEnabled) {
+          await beginSecureCheckout(organization.organizationId)
+        } else {
+          setParticipantNumber(number)
+        }
+      } catch (caught) {
+        if (!mounted) return
+        checkoutStartedRef.current = false
+        setError(errorMessage(caught))
+      } finally {
+        if (mounted) setSubmitting(false)
+      }
+    }
+
+    void finishConfirmedSignup()
+
+    return () => {
+      mounted = false
+    }
+  }, [
+    organization,
+    beginSecureCheckout,
+    participantNumber,
+    paymentCancelled,
+    profile,
+    session,
+  ])
 
   const sessionParam =
     profile?.selectedDisciplines?.join(",") ||
@@ -125,12 +211,12 @@ export function YouthRegistrationCartPage() {
 
     setError("")
 
-    if (password !== confirmPassword) {
+    if (!session && password !== confirmPassword) {
       setError("Passwords do not match.")
       return
     }
 
-    if (password.length < 8) {
+    if (!session && password.length < 8) {
       setError(
         "Password must contain at least 8 characters.",
       )
@@ -138,21 +224,32 @@ export function YouthRegistrationCartPage() {
     }
 
     setSubmitting(true)
+    checkoutStartedRef.current = true
 
     try {
-      const result = await createParticipantAccount(
-        profile.accountEmail || "",
-        password,
-        profile,
-      )
+      const result = session
+        ? {
+            emailConfirmationRequired: false,
+            participantNumber: await completeParticipantSignup(profile),
+          }
+        : await createParticipantAccount(
+            profile.accountEmail || "",
+            password,
+            profile,
+          )
 
       if (result.emailConfirmationRequired) {
         setConfirmationRequired(true)
         return
       }
 
-      setParticipantNumber(result.participantNumber)
+      if (organization?.stripePaymentsEnabled) {
+        await beginSecureCheckout(organization.organizationId)
+      } else {
+        setParticipantNumber(result.participantNumber)
+      }
     } catch (submitError) {
+      checkoutStartedRef.current = false
       setError(errorMessage(submitError))
     } finally {
       setSubmitting(false)
@@ -215,7 +312,7 @@ export function YouthRegistrationCartPage() {
               {profile?.accountEmail}
             </span>
             . After the email is confirmed, ClayKeeper will
-            finish the participant account.
+            finish the participant account and open secure Stripe checkout.
           </p>
         </section>
       </main>
@@ -328,7 +425,7 @@ export function YouthRegistrationCartPage() {
                   </div>
 
                   <p className="text-lg font-bold text-slate-950">
-                    ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                    ${organization.seasonRegistrationFee.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -344,24 +441,24 @@ export function YouthRegistrationCartPage() {
               </div>
 
               <p className="mt-3 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                Payment collection will live here. For now,
-                ClayKeeper records the $35 season registration
-                and creates the account so the registration flow
-                can be tested end-to-end.
+                {organization.stripePaymentsEnabled
+                  ? `You will continue to Stripe's secure checkout to pay the $${organization.seasonRegistrationFee.toFixed(2)} season registration fee. ClayKeeper never receives or stores your card number.`
+                  : "Online payment is not currently required. ClayKeeper will create the participant account after this step."}
               </p>
             </section>
 
             <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-bold text-slate-950">
-                ClayKeeper login
+                {session ? "ClayKeeper account" : "ClayKeeper login"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                This is the login the shooter or parent will use
-                after registration.
+                {session
+                  ? "Your account is ready. Continue to secure payment to finish registration."
+                  : "This is the login the shooter or parent will use after registration."}
               </p>
 
-              <div className="mt-5 space-y-4">
+              {!session ? <div className="mt-5 space-y-4">
                 <label className="block text-sm font-medium text-slate-700">
                   Email address
                   <div className="relative mt-2">
@@ -406,7 +503,13 @@ export function YouthRegistrationCartPage() {
                     />
                   </div>
                 </label>
-              </div>
+              </div> : null}
+
+              {paymentCancelled ? (
+                <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Payment was not completed. Your participant account and registration information are saved; no charge was made.
+                </div>
+              ) : null}
 
               {error ? (
                 <div
@@ -424,8 +527,10 @@ export function YouthRegistrationCartPage() {
                 onClick={handleSubmit}
               >
                 {submitting
-                  ? "Completing registration..."
-                  : "Complete registration"}
+                  ? "Opening secure checkout..."
+                  : organization.stripePaymentsEnabled
+                    ? "Continue to secure payment"
+                    : "Complete registration"}
               </Button>
             </section>
           </section>
@@ -440,14 +545,14 @@ export function YouthRegistrationCartPage() {
                 <div className="flex items-center justify-between text-slate-600">
                   <span>Season registration</span>
                   <span>
-                    ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                    ${organization.seasonRegistrationFee.toFixed(2)}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-lg font-bold text-slate-950">
                   <span>Total</span>
                   <span>
-                    ${YOUTH_SEASON_REGISTRATION_FEE.toFixed(2)}
+                    ${organization.seasonRegistrationFee.toFixed(2)}
                   </span>
                 </div>
               </div>

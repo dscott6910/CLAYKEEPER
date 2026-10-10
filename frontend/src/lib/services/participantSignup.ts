@@ -4,6 +4,8 @@ export type ParticipantSignupOrganization = {
   organizationId: string
   organizationName: string
   organizationSlug: string
+  stripePaymentsEnabled: boolean
+  seasonRegistrationFee: number
 }
 
 export type ParticipantSignupProfile = {
@@ -61,6 +63,8 @@ export async function loadParticipantSignupOrganization(
     organizationId: String(row.organization_id),
     organizationName: String(row.organization_name),
     organizationSlug: String(row.organization_slug),
+    stripePaymentsEnabled: Boolean(row.stripe_payments_enabled),
+    seasonRegistrationFee: Number(row.season_registration_fee ?? 35),
   }
 }
 
@@ -301,7 +305,11 @@ export async function createParticipantAccount(
     typeof window !== "undefined"
       ? `${window.location.origin}/signup/${encodeURIComponent(
           profile.organizationSlug,
-        )}/youth/profile`
+        )}/youth/cart${
+          profile.selectedDisciplines?.length
+            ? `?session=${encodeURIComponent(profile.selectedDisciplines.join(","))}`
+            : ""
+        }`
       : undefined
 
   const { data, error } = await supabase.auth.signUp({

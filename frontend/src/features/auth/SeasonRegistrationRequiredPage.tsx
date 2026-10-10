@@ -4,11 +4,8 @@ import {
   useState,
   type PointerEvent,
 } from "react"
-import {
-  Navigate,
-  useNavigate,
-  useSearchParams,
-} from "react-router-dom"
+import { CreditCard } from "lucide-react"
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +18,7 @@ import {
   getParticipantSeasonRegistrationStatus,
   type ParticipantSeasonRegistrationStatus,
 } from "@/lib/services/participantSeasonRegistration"
+import { startStripeSeasonCheckout } from "@/lib/services/stripePayments"
 import { YOUTH_REGISTRATION_SESSIONS } from "@/lib/services/youthRegistrationSessions"
 
 const WAIVER_KEYS: WaiverKey[] = [
@@ -266,13 +264,24 @@ export function SeasonRegistrationRequiredPage() {
     setSubmitting(true)
 
     try {
-      await completeParticipantSeasonRegistration({
+      const registration = await completeParticipantSeasonRegistration({
         organizationId: status.organizationId,
         selectedDisciplines,
         waiversAccepted,
         signatureType: signatureMode,
         signatureValue,
       })
+
+      if (registration.payment_status === "pending") {
+        const checkout = await startStripeSeasonCheckout(
+          status.organizationId,
+        )
+
+        if (checkout.url) {
+          window.location.assign(checkout.url)
+          return
+        }
+      }
 
       navigate("/my-profile", { replace: true })
     } catch (caught) {
@@ -298,6 +307,59 @@ export function SeasonRegistrationRequiredPage() {
 
   if (status && !status.registrationRequired) {
     return <Navigate to="/my-profile" replace />
+  }
+
+  if (
+    status?.registrationStatus === "completed" &&
+    status.paymentStatus !== "paid" &&
+    status.paymentStatus !== "waived"
+  ) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center px-4 py-8 sm:px-6">
+        <section className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <CreditCard className="h-8 w-8" />
+          </div>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">
+            Registration information saved
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+            Payment is required to finish
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Your profile, disciplines, waivers, and signature are saved. Continue to Stripe&apos;s secure checkout to complete this season&apos;s registration.
+          </p>
+
+          {error ? (
+            <div role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+
+          <Button
+            type="button"
+            className="mt-6 min-h-11 w-full"
+            disabled={submitting}
+            onClick={async () => {
+              setSubmitting(true)
+              setError("")
+              try {
+                const checkout = await startStripeSeasonCheckout(
+                  status.organizationId,
+                )
+                if (checkout.url) window.location.assign(checkout.url)
+                else navigate("/my-profile", { replace: true })
+              } catch (caught) {
+                setError(errorMessage(caught))
+                setSubmitting(false)
+              }
+            }}
+          >
+            {submitting ? "Opening secure checkout..." : "Continue to secure payment"}
+          </Button>
+        </section>
+      </div>
+    )
   }
 
   return (
