@@ -962,10 +962,7 @@ function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(10.6)
-  pdf.text("DEAD = X", x + width / 2 - 0.7, y + 0.98, {
-    align: "center",
-  })
-  pdf.text("LOSS = O", x + width / 2 + 0.7, y + 0.98, {
+  pdf.text("DEAD/HIT = X      LOSS/MISS = O", x + width / 2, y + 0.98, {
     align: "center",
   })
   pdf.setFont("helvetica", "italic")
@@ -1074,7 +1071,7 @@ function drawScorecard(
     for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
-        const markSize = Math.min(0.14, birdW * 0.62, rowH * 0.58)
+        const markSize = Math.min(0.18, birdW * 0.76, rowH * 0.7)
         pdf.rect(
           cellX + (birdW - markSize) / 2,
           rowY + (rowH - markSize) / 2,
