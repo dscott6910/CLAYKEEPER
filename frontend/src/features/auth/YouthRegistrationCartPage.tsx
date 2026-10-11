@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
   CheckCircle2,
@@ -46,6 +46,7 @@ function errorMessage(error: unknown) {
 export function YouthRegistrationCartPage() {
   const { organizationSlug = "" } = useParams()
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { session } = useAuth()
   const [organization, setOrganization] =
@@ -457,6 +458,20 @@ export function YouthRegistrationCartPage() {
                   ? "Your account is ready. Continue to secure payment to finish registration."
                   : "This is the login the shooter or parent will use after registration."}
               </p>
+
+              {!session ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  Already have a ClayKeeper account?{" "}
+                  <Link
+                    to="/login"
+                    state={{ from: `${location.pathname}${location.search}` }}
+                    className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                  >
+                    Sign in with the existing account
+                  </Link>
+                  {" "}and ClayKeeper will continue this saved registration.
+                </div>
+              ) : null}
 
               {!session ? <div className="mt-5 space-y-4">
                 <label className="block text-sm font-medium text-slate-700">

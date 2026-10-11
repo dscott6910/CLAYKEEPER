@@ -39,6 +39,57 @@ export type ParticipantSignupResult = {
 const PENDING_SIGNUP_KEY =
   "claykeeper:pending-participant-signup"
 
+function isExistingSignupUser(data: unknown) {
+  if (
+    typeof data !== "object" ||
+    !data ||
+    !("user" in data) ||
+    typeof data.user !== "object" ||
+    !data.user ||
+    !("identities" in data.user) ||
+    !Array.isArray(data.user.identities)
+  ) {
+    return false
+  }
+
+  return data.user.identities.length === 0
+}
+
+function isExistingAccountError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === "object" && error && "message" in error
+        ? String(error.message).toLowerCase()
+        : ""
+
+  return (
+    message.includes("already registered") ||
+    message.includes("already exists") ||
+    message.includes("user already") ||
+    message.includes("email already")
+  )
+}
+
+async function signInAndCompleteParticipantSignup(
+  email: string,
+  password: string,
+  profile: ParticipantSignupProfile,
+) {
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error) {
+    throw new Error(
+      "This email already has a ClayKeeper login, but that password did not work. Use the existing account password, reset the password, or sign in before returning to registration.",
+    )
+  }
+
+  return completeParticipantSignup(profile)
+}
+
 export async function loadParticipantSignupOrganization(
   organizationSlug: string,
 ): Promise<ParticipantSignupOrganization | null> {
@@ -324,15 +375,46 @@ export async function createParticipantAccount(
   })
 
   if (error) {
-    clearPendingParticipantSignup()
-    throw error
+    if (!isExistingAccountError(error)) {
+      clearPendingParticipantSignup()
+      throw error
+    }
+
+    const participantNumber =
+      await signInAndCompleteParticipantSignup(
+        cleanEmail,
+        password,
+        pendingProfile,
+      )
+
+    return {
+      emailConfirmationRequired: false,
+      participantNumber,
+    }
+  }
+
+  // With email confirmation enabled, Supabase intentionally returns an
+  // obfuscated user with no identities when the address already belongs to
+  // a confirmed account. No confirmation email is sent in that case.
+  if (isExistingSignupUser(data)) {
+    const participantNumber =
+      await signInAndCompleteParticipantSignup(
+        cleanEmail,
+        password,
+        pendingProfile,
+      )
+
+    return {
+      emailConfirmationRequired: false,
+      participantNumber,
+    }
   }
 
   // When email confirmation is disabled, Supabase creates a
   // session immediately and we can finish registration now.
   if (data.session) {
     const participantNumber =
-      await completeParticipantSignup(profile)
+      await completeParticipantSignup(pendingProfile)
 
     return {
       emailConfirmationRequired: false,

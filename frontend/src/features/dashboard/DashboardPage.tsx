@@ -11,6 +11,7 @@ import {
   Target,
   Trophy,
   Upload,
+  UserCheck,
   UserPlus,
   Users,
 } from "lucide-react"
@@ -20,6 +21,7 @@ import { useOrganization } from "@/features/organization/OrganizationProvider"
 import { DashboardSkeleton } from "@/features/analytics/components/DashboardSkeleton"
 import { loadExecutiveAnalytics, type ExecutiveAnalytics } from "@/lib/services/analytics"
 import { loadDashboardSnapshot, type DashboardSnapshot } from "@/lib/services/dashboard"
+import { loadStaffAccessRequests } from "@/lib/services/staffAccessRequests"
 import {
   hasCapability,
   type OrganizationCapability,
@@ -58,6 +60,8 @@ export function DashboardPage() {
   const [operations, setOperations] = useState<DashboardSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [pendingStaffRequests, setPendingStaffRequests] = useState(0)
+  const canReviewStaffRequests = hasCapability(role, "admin")
 
   async function refresh() {
     setLoading(true)
@@ -69,6 +73,19 @@ export function DashboardPage() {
       ])
       setAnalytics(nextAnalytics)
       setOperations(nextOperations)
+
+      if (canReviewStaffRequests) {
+        try {
+          const staffRequestResult = await loadStaffAccessRequests()
+          setPendingStaffRequests(staffRequestResult.requests.length)
+        } catch {
+          // A staff request permission or data issue should not prevent the
+          // rest of the dashboard from loading.
+          setPendingStaffRequests(0)
+        }
+      } else {
+        setPendingStaffRequests(0)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load the executive dashboard.")
     } finally {
@@ -185,6 +202,16 @@ export function DashboardPage() {
       icon: ClipboardList,
       href: "/reports",
       capability: "manageRegistration",
+    },
+    {
+      label: "Pending Staff Requests",
+      value: pendingStaffRequests,
+      detail: pendingStaffRequests === 1
+        ? "1 request needs approval"
+        : `${pendingStaffRequests} requests need approval`,
+      icon: UserCheck,
+      href: "/staff-requests",
+      capability: "admin",
     },
   ].filter((metric) =>
     hasCapability(role, metric.capability as OrganizationCapability),
