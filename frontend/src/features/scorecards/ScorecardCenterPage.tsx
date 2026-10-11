@@ -928,15 +928,15 @@ function drawScorecard(
     {
       label: "COURSE:",
       value: course.name,
-      start: x + margin + 1.5,
-      width: 1.63,
+      start: x + margin + 1.52,
+      width: 1.23,
     },
     {
       label: "HOST:",
       value:
         data.event.host_sponsor ?? data.event.sponsor_name ?? "Not set",
-      start: x + margin + 3.21,
-      width: contentWidth - 3.21,
+      start: x + margin + 2.83,
+      width: contentWidth - 2.83,
     },
   ]
   for (const field of metadataFields) {
@@ -945,29 +945,34 @@ function drawScorecard(
     pdf.text(field.label, field.start, metadataY)
     const valueX = field.start + pdf.getTextWidth(field.label) + 0.04
     const valueWidth = Math.max(0.2, field.width - (valueX - field.start))
-    let valueSize = 7.6
-    pdf.setFont("helvetica", "normal")
+    let valueSize = 9.4
+    pdf.setFont("helvetica", "bold")
     pdf.setFontSize(valueSize)
-    while (valueSize > 5.6 && pdf.getTextWidth(field.value) > valueWidth) {
+    while (valueSize > 5.2 && pdf.getTextWidth(field.value) > valueWidth - 0.04) {
       valueSize -= 0.2
       pdf.setFontSize(valueSize)
     }
-    pdf.text(field.value, valueX, metadataY, { maxWidth: valueWidth })
+    pdf.text(field.value, valueX + valueWidth / 2, metadataY, {
+      align: "center",
+      maxWidth: valueWidth - 0.04,
+    })
     pdf.setLineWidth(0.01)
     pdf.line(valueX, metadataY + 0.035, field.start + field.width, metadataY + 0.035)
   }
 
   pdf.setFont("helvetica", "bold")
-  pdf.setFontSize(10.2)
-  pdf.text("INSTRUCTIONS:", x + margin + 0.22, y + 0.98)
-  pdf.setFontSize(9.2)
-  pdf.text("DEAD", x + margin + 1.82, y + 0.86)
-  pdf.setFont("helvetica", "normal")
-  pdf.text("= BUBBLE FILLED", x + margin + 2.34, y + 0.86)
-  pdf.setFont("helvetica", "bold")
-  pdf.text("LOSS", x + margin + 1.82, y + 1.08)
-  pdf.setFont("helvetica", "normal")
-  pdf.text("= BUBBLE EMPTY OR SLASH /", x + margin + 2.34, y + 1.08)
+  pdf.setFontSize(10.6)
+  pdf.text("DEAD = X", x + width / 2 - 0.7, y + 0.98, {
+    align: "center",
+  })
+  pdf.text("LOSS = O", x + width / 2 + 0.7, y + 0.98, {
+    align: "center",
+  })
+  pdf.setFont("helvetica", "italic")
+  pdf.setFontSize(6.8)
+  pdf.text("INITIAL ALL CHANGES", x + width / 2, y + 1.13, {
+    align: "center",
+  })
 
   if (!card) {
     pdf.setFont("helvetica", "bold")
@@ -1069,8 +1074,13 @@ function drawScorecard(
     for (let bird = 1; bird <= birdColumns; bird += 1) {
       const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
-        const bubbleRadius = Math.min(0.075, birdW * 0.31, rowH * 0.29)
-        pdf.circle(cellX + birdW / 2, rowY + rowH / 2, bubbleRadius)
+        const markSize = Math.min(0.14, birdW * 0.62, rowH * 0.58)
+        pdf.rect(
+          cellX + (birdW - markSize) / 2,
+          rowY + (rowH - markSize) / 2,
+          markSize,
+          markSize,
+        )
       }
     }
 
@@ -1129,14 +1139,19 @@ function drawScorecard(
     pdf.text(`${label}:`, tableX, baseline)
     const valueX = tableX + pdf.getTextWidth(`${label}:`) + 0.06
     const valueWidth = tableX + tableW - valueX
-    let valueSize = 12.8
+    let valueSize = 14.4
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(valueSize)
-    while (valueSize > 9.2 && pdf.getTextWidth(value) > valueWidth) {
+    while (valueSize > 9.8 && pdf.getTextWidth(value) > valueWidth - 0.08) {
       valueSize -= 0.2
       pdf.setFontSize(valueSize)
     }
-    if (value) pdf.text(value, valueX + 0.04, baseline)
+    if (value) {
+      pdf.text(value, valueX + valueWidth / 2, baseline, {
+        align: "center",
+        maxWidth: valueWidth - 0.08,
+      })
+    }
     pdf.setLineWidth(0.012)
     pdf.line(valueX, baseline + 0.035, tableX + tableW, baseline + 0.035)
   }
@@ -1161,14 +1176,19 @@ function drawScorecard(
     pdf.text(`${field.label}:`, field.start, finalLineY)
     const valueX = field.start + pdf.getTextWidth(`${field.label}:`) + 0.035
     const valueWidth = Math.max(0.12, field.width - (valueX - field.start))
-    let valueSize = 12.2
+    let valueSize = 14
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(valueSize)
-    while (valueSize > 8.2 && pdf.getTextWidth(field.value) > valueWidth) {
+    while (valueSize > 8.8 && pdf.getTextWidth(field.value) > valueWidth - 0.04) {
       valueSize -= 0.2
       pdf.setFontSize(valueSize)
     }
-    if (field.value) pdf.text(field.value, valueX + 0.02, finalLineY)
+    if (field.value) {
+      pdf.text(field.value, valueX + valueWidth / 2, finalLineY, {
+        align: "center",
+        maxWidth: valueWidth - 0.04,
+      })
+    }
     pdf.line(valueX, finalLineY + 0.035, field.start + field.width, finalLineY + 0.035)
   }
 }
