@@ -1069,11 +1069,20 @@ function drawScorecard(
     }
 
     for (let bird = 1; bird <= birdColumns; bird += 1) {
-      const cellX = tableX + stationW + (bird - 1) * birdW
       if (bird <= birdCount) {
         const markSize = Math.min(0.18, birdW * 0.76, rowH * 0.7)
+        const pairStartBird = bird % 2 === 1 ? bird : bird - 1
+        const pairBirdCount = Math.min(2, birdColumns - pairStartBird + 1)
+        const pairX = tableX + stationW + (pairStartBird - 1) * birdW
+        const pairWidth = birdW * pairBirdCount
+        const markGap = Math.min(0.06, birdW * 0.18, markSize * 0.35)
+        const marksWidth =
+          markSize * pairBirdCount + markGap * (pairBirdCount - 1)
+        const markIndex = bird - pairStartBird
         pdf.rect(
-          cellX + (birdW - markSize) / 2,
+          pairX +
+            (pairWidth - marksWidth) / 2 +
+            markIndex * (markSize + markGap),
           rowY + (rowH - markSize) / 2,
           markSize,
           markSize,
