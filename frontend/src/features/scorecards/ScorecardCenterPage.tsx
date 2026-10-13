@@ -962,7 +962,7 @@ function drawScorecard(
 
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(10.6)
-  pdf.text("DEAD/HIT = X      LOSS/MISS = O", x + width / 2, y + 0.98, {
+  pdf.text("DEAD = X      LOSS = O", x + width / 2, y + 0.98, {
     align: "center",
   })
   pdf.setFont("helvetica", "italic")
