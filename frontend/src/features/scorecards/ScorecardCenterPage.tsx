@@ -999,9 +999,9 @@ function drawScorecard(
     0.29,
     Math.max(0.13, availableTableRowsHeight / (printableStations.length + 1)),
   )
-  const stationW = 0.62
-  const totalW = 0.68
-  const runningW = 0.62
+  const stationW = 0.48
+  const totalW = 0.52
+  const runningW = 0.48
   const birdW =
     (contentWidth - stationW - totalW - runningW) / birdColumns
   const tableW = stationW + birdW * birdColumns + totalW + runningW
@@ -1093,10 +1093,10 @@ function drawScorecard(
   pdf.rect(tableX, subtotalY, tableW, totalRowH)
   pdf.setFont("helvetica", "bold")
   pdf.setFontSize(8)
-  pdf.text("SUB", tableX + 0.44, subtotalY + totalRowH * 0.38, {
+  pdf.text("SUB", tableX + stationW / 2, subtotalY + totalRowH * 0.38, {
     align: "center",
   })
-  pdf.text("TOTAL", tableX + 0.44, subtotalY + totalRowH * 0.78, {
+  pdf.text("TOTAL", tableX + stationW / 2, subtotalY + totalRowH * 0.78, {
     align: "center",
   })
   pdf.rect(stationTotalX, subtotalY, totalW, totalRowH)
