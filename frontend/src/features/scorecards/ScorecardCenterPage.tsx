@@ -1058,35 +1058,30 @@ function drawScorecard(
       align: "center",
     })
 
+    const activeBirds = Math.min(birdCount, birdColumns)
     for (let bird = 1; bird <= birdColumns; bird += 2) {
       const pairBirds = Math.min(2, birdColumns - bird + 1)
-      pdf.rect(
-        tableX + stationW + (bird - 1) * birdW,
-        rowY,
-        birdW * pairBirds,
-        rowH,
+      const pairX = tableX + stationW + (bird - 1) * birdW
+      const pairWidth = birdW * pairBirds
+      const activeBirdsInPair = Math.max(
+        0,
+        Math.min(pairBirds, activeBirds - bird + 1),
       )
-    }
 
-    for (let bird = 1; bird <= birdColumns; bird += 1) {
-      if (bird <= birdCount) {
-        const markSize = Math.min(0.18, birdW * 0.76, rowH * 0.7)
-        const pairStartBird = bird % 2 === 1 ? bird : bird - 1
-        const pairBirdCount = Math.min(2, birdColumns - pairStartBird + 1)
-        const pairX = tableX + stationW + (pairStartBird - 1) * birdW
-        const pairWidth = birdW * pairBirdCount
-        const markGap = Math.min(0.06, birdW * 0.18, markSize * 0.35)
-        const marksWidth =
-          markSize * pairBirdCount + markGap * (pairBirdCount - 1)
-        const markIndex = bird - pairStartBird
-        pdf.rect(
-          pairX +
-            (pairWidth - marksWidth) / 2 +
-            markIndex * (markSize + markGap),
-          rowY + (rowH - markSize) / 2,
-          markSize,
-          markSize,
-        )
+      if (activeBirdsInPair < pairBirds) {
+        const unusedX = pairX + activeBirdsInPair * birdW
+        const unusedWidth = (pairBirds - activeBirdsInPair) * birdW
+        pdf.setFillColor(224, 224, 224)
+        pdf.rect(unusedX, rowY, unusedWidth, rowH, "F")
+        pdf.setFillColor(255, 255, 255)
+      }
+
+      pdf.rect(pairX, rowY, pairWidth, rowH)
+
+      if (activeBirdsInPair > 0 && pairBirds === 2) {
+        pdf.setLineDashPattern([0.018, 0.018], 0)
+        pdf.line(pairX + birdW, rowY, pairX + birdW, rowY + rowH)
+        pdf.setLineDashPattern([], 0)
       }
     }
 
