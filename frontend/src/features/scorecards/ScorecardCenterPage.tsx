@@ -1071,7 +1071,7 @@ function drawScorecard(
       if (activeBirdsInPair < pairBirds) {
         const unusedX = pairX + activeBirdsInPair * birdW
         const unusedWidth = (pairBirds - activeBirdsInPair) * birdW
-        pdf.setFillColor(224, 224, 224)
+        pdf.setFillColor(166, 166, 166)
         pdf.rect(unusedX, rowY, unusedWidth, rowH, "F")
         pdf.setFillColor(255, 255, 255)
       }
