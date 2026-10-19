@@ -187,15 +187,12 @@ export async function markScoringMemberNoShow(params: {
   organizationId: string
   memberId: string
 }) {
-  const { data, error } = await supabase
-    .from("squad_members")
-    .update({ status: "no_show", assignment_method: "manual" })
-    .eq("id", params.memberId)
-    .eq("organization_id", params.organizationId)
-    .select("id")
-    .single()
+  const { data, error } = await supabase.rpc("mark_registration_no_show_from_scoring", {
+    p_organization_id: params.organizationId,
+    p_squad_member_id: params.memberId,
+  })
   throwIfError(error)
-  if (!data?.id) throw new Error("The participant could not be marked as a no-show.")
+  if (!data) throw new Error("The participant could not be marked as a no-show.")
 }
 
 export async function withdrawScoringEnrollment(params: {
