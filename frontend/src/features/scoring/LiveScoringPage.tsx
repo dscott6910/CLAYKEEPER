@@ -445,6 +445,58 @@ export function LiveScoringPage() {
             <Stat icon={Trophy} label="Shoot-offs" value={data.shootOffRounds.length} />
           </section>
 
+          <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4"><div><h2 className="text-lg font-semibold">{selectedSquad ? `Squad ${selectedSquad.squad_number}` : "Select a squad"}</h2><p className="text-sm text-slate-500">{selectedShoot ? `${selectedShoot.targets_per_round} targets per round · ${selectedShoot.number_of_rounds} rounds` : ""}</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => void loadShoot()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button><Button onClick={() => void addShootOff()} disabled={!shootId}><Plus />Add shoot-off</Button></div></header>
+
+            {loading ? <div className="p-12 text-center text-slate-500">Loading scoring data…</div> : squadMembers.length === 0 ? <div className="p-12 text-center text-slate-500">No participants are assigned to this squad. Use Shoot-day changes below to register or assign someone here.</div> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1180px] border-collapse text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="sticky left-0 z-10 min-w-60 border-r bg-slate-50 px-4 py-3">Participant</th>
+                      <th className="px-3 py-3">Team</th>
+                      <th className="px-3 py-3">Class</th>
+                      <th className="min-w-60 px-3 py-3">Squad / post</th>
+                      <th className="min-w-28 px-3 py-3">Start station</th>
+                      {Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => <th key={i} className="px-2 py-3 text-center">R{i + 1}</th>)}
+                      <th className="px-3 py-3 text-center">Total</th>
+                      {data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-1"><span>{round.label || `SO${round.round_number}`}</span><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete shoot-off round" onClick={() => void removeShootOff(round)}><Trash2 className="h-3.5 w-3.5" /></button></div></th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {squadMembers.map((member) => {
+                      const participant = participantFor(member)
+                      const memberSquad = data.squads.find((squad) => squad.id === member.squad_id)
+                      const currentAssignment: AssignmentOption = {
+                        value: `${member.squad_id}:${member.position}`,
+                        squadId: member.squad_id,
+                        position: member.position,
+                        label: `Squad ${memberSquad?.squad_number ?? "—"} · ${member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}${memberSquad?.course_name ? ` · ${memberSquad.course_name}` : ""}`,
+                      }
+                      const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0)
+                      return <tr id={`score-member-${member.id}`} key={member.id} className="border-t hover:bg-slate-50/60">
+                        <td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.team?.name || "No team assigned"}</div></td>
+                        <td className="px-3 py-3">{participant.team?.name || "—"}</td>
+                        <td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td>
+                        <td className="px-3 py-2">
+                          <select aria-label={`Squad and post for ${displayName(participant.athlete)}`} className="w-full rounded-lg border bg-white px-2 py-2 text-sm font-medium" value={currentAssignment.value} disabled={managementBusy} onChange={(event) => void changeMemberAssignment(member, event.target.value)}>
+                            <option value={currentAssignment.value}>{currentAssignment.label}</option>
+                            {assignmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2"><input aria-label={`Starting station for ${displayName(participant.athlete)}`} className="w-24 rounded-lg border px-2 py-2 text-center font-semibold" defaultValue={member.starting_station ?? ""} placeholder="—" disabled={managementBusy} onBlur={(event) => void commitStartingStation(member, event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }} /></td>
+                        {Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => { const round = i + 1; const key = `${member.id}:${round}`; return <td key={round} className="px-2 py-2"><div className="relative"><input ref={(node) => { inputRefs.current[key] = node }} inputMode="numeric" className="h-10 w-16 rounded-lg border px-2 text-center text-base font-semibold focus:border-slate-900 focus:ring-2 focus:ring-slate-200" value={scoreValue(member.id, round)} onChange={(e) => setDrafts((current) => ({ ...current, [key]: e.target.value.replace(/[^0-9]/g, "") }))} onBlur={() => void commitRound(member.id, round)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitRound(member.id, round, true) } }} maxLength={3} />{savingKey === key ? <Save className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-slate-500" /> : null}</div></td> })}
+                        <td className="px-3 py-3 text-center text-lg font-bold">{total}</td>
+                        {data.shootOffRounds.map((round) => { const current = shootOffScoreMap.get(`${member.id}:${round.id}`); return <td key={round.id} className="px-2 py-2"><input data-shoot-off aria-label={`Shoot-off ${round.round_number} for ${displayName(participant.athlete)}`} inputMode="numeric" defaultValue={current ?? ""} className="h-10 w-16 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-base font-semibold" onBlur={(e) => void commitShootOff(member.id, round, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} /></td> })}
+                      </tr>
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          <p className="text-xs text-slate-500">Scores save automatically when you press Enter or leave a field. Pressing Enter advances from R1 to R2, then through the remaining rounds.</p>
+
           <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
             <button type="button" className="flex w-full items-center justify-between gap-4 bg-emerald-50 px-5 py-4 text-left" onClick={() => setShowShootDayTools((current) => !current)}>
               <span>
@@ -504,58 +556,6 @@ export function LiveScoringPage() {
               </div>
             </div> : null}
           </section>
-
-          <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4"><div><h2 className="text-lg font-semibold">{selectedSquad ? `Squad ${selectedSquad.squad_number}` : "Select a squad"}</h2><p className="text-sm text-slate-500">{selectedShoot ? `${selectedShoot.targets_per_round} targets per round · ${selectedShoot.number_of_rounds} rounds` : ""}</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => void loadShoot()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} />Refresh</Button><Button onClick={() => void addShootOff()} disabled={!shootId}><Plus />Add shoot-off</Button></div></header>
-
-            {loading ? <div className="p-12 text-center text-slate-500">Loading scoring data…</div> : squadMembers.length === 0 ? <div className="p-12 text-center text-slate-500">No participants are assigned to this squad. Use Shoot-day changes above to register or assign someone here.</div> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px] border-collapse text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="sticky left-0 z-10 min-w-60 border-r bg-slate-50 px-4 py-3">Participant</th>
-                      <th className="px-3 py-3">Team</th>
-                      <th className="px-3 py-3">Class</th>
-                      <th className="min-w-60 px-3 py-3">Squad / post</th>
-                      <th className="min-w-28 px-3 py-3">Start station</th>
-                      {Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => <th key={i} className="px-2 py-3 text-center">R{i + 1}</th>)}
-                      <th className="px-3 py-3 text-center">Total</th>
-                      {data.shootOffRounds.map((round) => <th key={round.id} className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-1"><span>{round.label || `SO${round.round_number}`}</span><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete shoot-off round" onClick={() => void removeShootOff(round)}><Trash2 className="h-3.5 w-3.5" /></button></div></th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {squadMembers.map((member) => {
-                      const participant = participantFor(member)
-                      const memberSquad = data.squads.find((squad) => squad.id === member.squad_id)
-                      const currentAssignment: AssignmentOption = {
-                        value: `${member.squad_id}:${member.position}`,
-                        squadId: member.squad_id,
-                        position: member.position,
-                        label: `Squad ${memberSquad?.squad_number ?? "—"} · ${member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}${memberSquad?.course_name ? ` · ${memberSquad.course_name}` : ""}`,
-                      }
-                      const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0)
-                      return <tr id={`score-member-${member.id}`} key={member.id} className="border-t hover:bg-slate-50/60">
-                        <td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.team?.name || "No team assigned"}</div></td>
-                        <td className="px-3 py-3">{participant.team?.name || "—"}</td>
-                        <td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td>
-                        <td className="px-3 py-2">
-                          <select aria-label={`Squad and post for ${displayName(participant.athlete)}`} className="w-full rounded-lg border bg-white px-2 py-2 text-sm font-medium" value={currentAssignment.value} disabled={managementBusy} onChange={(event) => void changeMemberAssignment(member, event.target.value)}>
-                            <option value={currentAssignment.value}>{currentAssignment.label}</option>
-                            {assignmentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2"><input aria-label={`Starting station for ${displayName(participant.athlete)}`} className="w-24 rounded-lg border px-2 py-2 text-center font-semibold" defaultValue={member.starting_station ?? ""} placeholder="—" disabled={managementBusy} onBlur={(event) => void commitStartingStation(member, event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }} /></td>
-                        {Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => { const round = i + 1; const key = `${member.id}:${round}`; return <td key={round} className="px-2 py-2"><div className="relative"><input ref={(node) => { inputRefs.current[key] = node }} inputMode="numeric" className="h-10 w-16 rounded-lg border px-2 text-center text-base font-semibold focus:border-slate-900 focus:ring-2 focus:ring-slate-200" value={scoreValue(member.id, round)} onChange={(e) => setDrafts((current) => ({ ...current, [key]: e.target.value.replace(/[^0-9]/g, "") }))} onBlur={() => void commitRound(member.id, round)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitRound(member.id, round, true) } }} maxLength={3} />{savingKey === key ? <Save className="absolute -right-1 -top-1 h-3.5 w-3.5 animate-pulse text-slate-500" /> : null}</div></td> })}
-                        <td className="px-3 py-3 text-center text-lg font-bold">{total}</td>
-                        {data.shootOffRounds.map((round) => { const current = shootOffScoreMap.get(`${member.id}:${round.id}`); return <td key={round.id} className="px-2 py-2"><input data-shoot-off aria-label={`Shoot-off ${round.round_number} for ${displayName(participant.athlete)}`} inputMode="numeric" defaultValue={current ?? ""} className="h-10 w-16 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-base font-semibold" onBlur={(e) => void commitShootOff(member.id, round, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} /></td> })}
-                      </tr>
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-          <p className="text-xs text-slate-500">Scores save automatically when you press Enter or leave a field. Pressing Enter advances from R1 to R2, then through the remaining rounds.</p>
         </div>
       </PageContainer>
     </div>
