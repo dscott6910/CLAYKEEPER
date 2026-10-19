@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, Plus, RefreshCw, Save, Shuffle, Trash2, Trophy, UserPlus, Users } from "lucide-react"
+import { AlertCircle, CheckCircle2, ChevronDown, Loader2, Plus, RefreshCw, Save, Shuffle, Trash2, Trophy, UserMinus, UserPlus, Users, UserX } from "lucide-react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { rankIndividuals, type AwardParticipant } from "@/lib/services/awardsEngine"
@@ -12,10 +12,12 @@ import {
   deleteShootOffRound,
   loadScoringBaseData,
   loadShootScoringData,
+  markScoringMemberNoShow,
   registerAthleteForScoring,
   saveRoundScore,
   saveShootOffScore,
   updateScoringMemberStartingStation,
+  withdrawScoringEnrollment,
   type ScoreEntry,
   type DigitalScoreTotal,
   type ScoringAthlete,
@@ -80,6 +82,7 @@ export function LiveScoringPage() {
   const [managementBusy, setManagementBusy] = useState(false)
   const [unassignedEnrollmentId, setUnassignedEnrollmentId] = useState("")
   const [unassignedAssignment, setUnassignedAssignment] = useState("")
+  const [participantActionMemberId, setParticipantActionMemberId] = useState("")
   const [quickMode, setQuickMode] = useState<"existing" | "new">("existing")
   const [participantSearch, setParticipantSearch] = useState("")
   const [quickAthleteId, setQuickAthleteId] = useState("")
@@ -123,8 +126,11 @@ export function LiveScoringPage() {
       .filter(Boolean).join(" ").toLowerCase().includes(query)).slice(0, 100)
   }, [data.athletes, participantSearch, teamById])
   const squadMembers = useMemo(() => data.members
-    .filter((member) => member.squad_id === squadId && participantFor(member).registration?.checked_in)
+    .filter((member) => member.squad_id === squadId && !["withdrawn", "no_show", "disqualified"].includes(member.status) && participantFor(member).registration?.checked_in)
     .sort((a, b) => a.position - b.position), [data.members, squadId, enrollmentById, registrationById])
+  const participantActionMembers = useMemo(() => data.members
+    .filter((member) => !["withdrawn", "no_show", "disqualified"].includes(member.status))
+    .sort((a, b) => displayName(participantFor(a).athlete).localeCompare(displayName(participantFor(b).athlete))), [data.members, data.enrollments, data.registrations])
   const scoreMap = useMemo(() => {
     const map = new Map(data.scores.map((row) => [`${row.squad_member_id}:${row.round_number}`, row.score]))
     if (selectedShoot?.discipline?.toLowerCase().includes("sporting") && selectedShoot.number_of_rounds === 1) {
@@ -135,12 +141,12 @@ export function LiveScoringPage() {
     }
     return map
   }, [data.digitalTotals, data.scores, selectedShoot])
-  const checkedInMemberCount = useMemo(() => data.members.filter((member) => participantFor(member).registration?.checked_in).length, [data.members, data.enrollments, data.registrations])
+  const checkedInMemberCount = useMemo(() => data.members.filter((member) => !["withdrawn", "no_show", "disqualified"].includes(member.status) && participantFor(member).registration?.checked_in).length, [data.members, data.enrollments, data.registrations])
   const shootOffScoreMap = useMemo(() => new Map(data.shootOffScores.map((row) => [`${row.squad_member_id}:${row.shoot_off_round_id}`, row.score])), [data.shootOffScores])
   const tiedMembers = useMemo(() => {
     if (!selectedShoot) return [] as Array<{ total: number; names: string[] }>
     const classes = new Map<string, AwardParticipant[]>()
-    data.members.filter((member) => participantFor(member).registration?.checked_in).forEach((member) => {
+    data.members.filter((member) => !["withdrawn", "no_show", "disqualified"].includes(member.status) && participantFor(member).registration?.checked_in).forEach((member) => {
       const scores = Array.from({ length: selectedShoot.number_of_rounds }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`))
       if (scores.some((score) => score === undefined || score === null)) return
       const numericScores = scores as number[]
@@ -273,6 +279,37 @@ export function LiveScoringPage() {
       setData((current) => ({ ...current, members: current.members.map((row) => row.id === member.id ? { ...row, starting_station: nextValue } : row) }))
       toast.success("Starting station updated.")
     } catch (err) { toast.error(err instanceof Error ? err.message : "Starting station could not be updated.") }
+    finally { setManagementBusy(false) }
+  }
+
+  async function markNoShow(member: ScoringMember) {
+    const participant = participantFor(member)
+    const name = displayName(participant.athlete)
+    if (!window.confirm(`Mark ${name} as a no-show for ${selectedShoot?.name || "this shoot"}?\n\nThey will be removed from active scoring and their squad position will become available. Any scores already entered will be preserved.`)) return
+    setManagementBusy(true)
+    try {
+      await markScoringMemberNoShow({ organizationId, memberId: member.id })
+      toast.success(`${name} marked as a no-show.`)
+      setParticipantActionMemberId("")
+      await loadShoot()
+    } catch (err) { toast.error(err instanceof Error ? err.message : "The participant could not be marked as a no-show.") }
+    finally { setManagementBusy(false) }
+  }
+
+  async function removeFromShoot(member: ScoringMember) {
+    const participant = participantFor(member)
+    const name = displayName(participant.athlete)
+    if (!window.confirm(`Remove ${name} from ${selectedShoot?.name || "this shoot"}?\n\nThis removes only this shoot assignment. The participant, event registration, payment record, and any scores already entered will be preserved.`)) return
+    setManagementBusy(true)
+    try {
+      await withdrawScoringEnrollment({
+        organizationId,
+        enrollmentId: member.registration_shoot_id,
+      })
+      toast.success(`${name} removed from this shoot.`)
+      setParticipantActionMemberId("")
+      await loadShoot()
+    } catch (err) { toast.error(err instanceof Error ? err.message : "The participant could not be removed from this shoot.") }
     finally { setManagementBusy(false) }
   }
 
@@ -419,8 +456,11 @@ export function LiveScoringPage() {
     finally { setSavingKey("") }
   }
 
-  const scoredMemberIds = new Set<string>(data.scores.filter((score) => score.score !== null).map((score) => score.squad_member_id))
-  data.digitalTotals.filter((row) => row.total_score !== null).forEach((row) => scoredMemberIds.add(row.squad_member_id))
+  const activeScoringMemberIds = new Set(data.members
+    .filter((member) => !["withdrawn", "no_show", "disqualified"].includes(member.status) && participantFor(member).registration?.checked_in)
+    .map((member) => member.id))
+  const scoredMemberIds = new Set<string>(data.scores.filter((score) => activeScoringMemberIds.has(score.squad_member_id) && score.score !== null).map((score) => score.squad_member_id))
+  data.digitalTotals.filter((row) => activeScoringMemberIds.has(row.squad_member_id) && row.total_score !== null).forEach((row) => scoredMemberIds.add(row.squad_member_id))
   const completedScores = scoredMemberIds.size
   const expectedScores = checkedInMemberCount * (selectedShoot?.number_of_rounds ?? 0)
 
@@ -501,7 +541,7 @@ export function LiveScoringPage() {
             <button type="button" className="flex w-full items-center justify-between gap-4 bg-emerald-50 px-5 py-4 text-left" onClick={() => setShowShootDayTools((current) => !current)}>
               <span>
                 <span className="flex items-center gap-2 text-lg font-semibold text-emerald-950"><Shuffle className="h-5 w-5" />Shoot-day changes</span>
-                <span className="mt-1 block text-sm text-emerald-800">Register walk-ups, place unassigned participants, or correct squad, post, and starting-station assignments without leaving scoring.</span>
+                <span className="mt-1 block text-sm text-emerald-800">Register walk-ups, place unassigned participants, correct assignments, or handle no-shows without leaving scoring.</span>
               </span>
               <ChevronDown className={`h-5 w-5 shrink-0 text-emerald-800 transition ${showShootDayTools ? "rotate-180" : ""}`} />
             </button>
@@ -553,6 +593,23 @@ export function LiveScoringPage() {
                   <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Starting station<input className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900" value={quickStartingStation} onChange={(event) => setQuickStartingStation(event.target.value)} placeholder="Optional" /></label>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-xs text-slate-500">New shoot-day registrations are marked unpaid so the amount remains visible for collection in Treasury. Existing payment status is preserved.</p><Button onClick={() => void registerAndAssignParticipant()} disabled={managementBusy || !quickAssignment}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserPlus />}Register &amp; assign</Button></div>
+              </div>
+
+              <div className="rounded-xl border bg-slate-50 p-4 xl:col-span-2">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-white p-2 shadow-sm"><UserX className="h-5 w-5" /></div>
+                  <div><h3 className="font-semibold">No-show or remove from shoot</h3><p className="text-sm text-slate-500">Both actions remove the participant from active scoring and free the squad position. Existing scores and payment history are preserved.</p></div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Participant
+                    <select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900" value={participantActionMemberId} onChange={(event) => setParticipantActionMemberId(event.target.value)}>
+                      <option value="">Choose participant</option>
+                      {participantActionMembers.map((member) => { const participant = participantFor(member); const squad = data.squads.find((row) => row.id === member.squad_id); return <option key={member.id} value={member.id}>{displayName(participant.athlete)} · Squad {squad?.squad_number || "—"} · {member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}</option> })}
+                    </select>
+                  </label>
+                  <Button type="button" variant="outline" className="self-end border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void markNoShow(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserX />}No Show</Button>
+                  <Button type="button" variant="outline" className="self-end border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void removeFromShoot(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserMinus />}Remove from shoot</Button>
+                </div>
               </div>
             </div> : null}
           </section>

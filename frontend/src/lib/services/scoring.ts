@@ -183,6 +183,36 @@ export async function updateScoringMemberStartingStation(memberId: string, start
   throwIfError(error)
 }
 
+export async function markScoringMemberNoShow(params: {
+  organizationId: string
+  memberId: string
+}) {
+  const { data, error } = await supabase
+    .from("squad_members")
+    .update({ status: "no_show", assignment_method: "manual" })
+    .eq("id", params.memberId)
+    .eq("organization_id", params.organizationId)
+    .select("id")
+    .single()
+  throwIfError(error)
+  if (!data?.id) throw new Error("The participant could not be marked as a no-show.")
+}
+
+export async function withdrawScoringEnrollment(params: {
+  organizationId: string
+  enrollmentId: string
+}) {
+  const { data, error } = await supabase
+    .from("registration_shoots")
+    .update({ status: "withdrawn", squad_assignment_status: "unassigned" })
+    .eq("id", params.enrollmentId)
+    .eq("organization_id", params.organizationId)
+    .select("id")
+    .single()
+  throwIfError(error)
+  if (!data?.id) throw new Error("The participant could not be removed from this shoot.")
+}
+
 export async function saveRoundScore(params: { organizationId: string; eventId: string; shootId: string; squadMemberId: string; roundNumber: number; score: number | null }) {
   if (params.score === null) {
     const { error } = await supabase.from("score_entries").delete().eq("squad_member_id", params.squadMemberId).eq("round_number", params.roundNumber)
