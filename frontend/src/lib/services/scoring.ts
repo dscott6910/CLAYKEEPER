@@ -2,12 +2,12 @@ import { supabase } from "@/lib/supabase"
 import { getCurrentOrganizationId } from "@/lib/services/organizationContext"
 
 export type ScoringEvent = { id: string; organization_id: string; name: string; start_date: string | null; status: string | null }
-export type ScoringShoot = { id: string; organization_id: string; event_id: string; name: string; discipline: string; shoot_date: string | null; targets_per_round: number; number_of_rounds: number; allow_score_entry: boolean; status: string | null }
-export type ScoringSquad = { id: string; shoot_id: string; squad_number: string; name: string | null; house_number: string | null; course_name: string | null; station_name: string | null; status: string; sort_order: number }
-export type ScoringMember = { id: string; squad_id: string; registration_shoot_id: string; position: number; position_label: string | null; status: string }
-export type ScoringEnrollment = { id: string; registration_id: string }
-export type ScoringRegistration = { id: string; athlete_id: string; team_id: string | null; class_id: string | null; checked_in: boolean | null }
-export type ScoringAthlete = { id: string; first_name: string | null; last_name: string | null; preferred_name: string | null; cyssa_number: string | null }
+export type ScoringShoot = { id: string; organization_id: string; event_id: string; name: string; discipline: string; shoot_date: string | null; targets_per_round: number; number_of_rounds: number; allow_score_entry: boolean; status: string | null; entry_fee: number | null; organization_fee: number | null }
+export type ScoringSquad = { id: string; shoot_id: string; squad_number: string; name: string | null; house_number: string | null; course_name: string | null; station_name: string | null; status: string; sort_order: number; capacity: number; is_locked: boolean }
+export type ScoringMember = { id: string; squad_id: string; registration_shoot_id: string; position: number; position_label: string | null; starting_station: string | null; status: string }
+export type ScoringEnrollment = { id: string; registration_id: string; shoot_id: string; status: string; squad_assignment_status: string | null }
+export type ScoringRegistration = { id: string; athlete_id: string; team_id: string | null; class_id: string | null; registration_number: string | null; status: string; checked_in: boolean | null }
+export type ScoringAthlete = { id: string; first_name: string | null; last_name: string | null; preferred_name: string | null; cyssa_number: string | null; class_id: string | null; team_id: string | null; active: boolean | null }
 export type ScoringNamedRecord = { id: string; name: string }
 export type ScoringClass = { id: string; code: string; display_name: string }
 export type ScoreEntry = { id: string; squad_member_id: string; round_number: number; score: number | null; status: string }
@@ -24,16 +24,16 @@ export async function loadScoringBaseData() {
 
   const [eventsResult, shootsResult] = await Promise.all([
     supabase.from("events").select("id, organization_id, name, start_date, status").eq("organization_id", organizationId).order("start_date", { ascending: false }),
-    supabase.from("shoots").select("id, organization_id, event_id, name, discipline, shoot_date, targets_per_round, number_of_rounds, allow_score_entry, status").eq("organization_id", organizationId).eq("active", true).order("shoot_date"),
+    supabase.from("shoots").select("id, organization_id, event_id, name, discipline, shoot_date, targets_per_round, number_of_rounds, allow_score_entry, status, entry_fee, organization_fee").eq("organization_id", organizationId).eq("active", true).order("shoot_date"),
   ])
   throwIfError(eventsResult.error); throwIfError(shootsResult.error)
   return { organizationId, events: (eventsResult.data ?? []) as ScoringEvent[], shoots: (shootsResult.data ?? []) as ScoringShoot[] }
 }
 
 export async function loadShootScoringData(organizationId: string, eventId: string, shootId: string) {
-  const [squads, members, enrollments, registrations, athletes, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores] = await Promise.all([
-    supabase.from("squads").select("id, shoot_id, squad_number, name, house_number, course_name, station_name, status, sort_order").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
-    supabase.from("squad_members").select("id, squad_id, registration_shoot_id, position, position_label, status").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
+  const [squads, members, enrollments, registrations, athletes, athleteTeams, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores] = await Promise.all([
+    supabase.from("squads").select("id, shoot_id, squad_number, name, house_number, course_name, station_name, status, sort_order, capacity, is_locked").eq("organization_id", organizationId).eq("shoot_id", shootId).order("sort_order").order("squad_number"),
+    supabase.from("squad_members").select("id, squad_id, registration_shoot_id, position, position_label, starting_station, status").eq("organization_id", organizationId).eq("shoot_id", shootId).order("position"),
     supabase.rpc("get_operational_registration_shoots", {
       p_organization_id: organizationId,
       p_event_id: eventId,
@@ -42,7 +42,8 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
       p_organization_id: organizationId,
       p_event_id: eventId,
     }),
-    Promise.resolve({ data: [], error: null }),
+    supabase.from("athletes").select("id, first_name, last_name, preferred_name, cyssa_number, class_id, active").eq("organization_id", organizationId).eq("active", true).order("last_name").order("first_name"),
+    supabase.from("athlete_teams").select("athlete_id, team_id").eq("organization_id", organizationId).eq("is_primary", true).is("end_date", null),
     supabase.from("teams").select("id, name").eq("organization_id", organizationId),
     supabase.from("classes").select("id, code, display_name").eq("organization_id", organizationId),
     supabase.from("score_entries").select("id, squad_member_id, round_number, score, status").eq("organization_id", organizationId).eq("shoot_id", shootId),
@@ -50,29 +51,16 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
     supabase.from("shoot_off_rounds").select("id, round_number, label").eq("organization_id", organizationId).eq("shoot_id", shootId).order("round_number"),
     supabase.from("shoot_off_scores").select("id, shoot_off_round_id, squad_member_id, score").eq("organization_id", organizationId).eq("shoot_id", shootId),
   ])
-  for (const result of [squads, members, enrollments, registrations, athletes, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores]) throwIfError(result.error)
+  for (const result of [squads, members, enrollments, registrations, athletes, athleteTeams, teams, classes, scores, digitalTotals, shootOffRounds, shootOffScores]) throwIfError(result.error)
 
   const registrationRows = (registrations.data ?? []) as ScoringRegistration[]
-  const athleteIds = [
-    ...new Set(
-      registrationRows
-        .map((registration) => registration.athlete_id)
-        .filter(Boolean),
-    ),
-  ]
-
-  let athleteRows: ScoringAthlete[] = []
-
-  if (athleteIds.length > 0) {
-    const athletesResult = await supabase
-      .from("athletes")
-      .select("id, first_name, last_name, preferred_name, cyssa_number")
-      .eq("organization_id", organizationId)
-      .in("id", athleteIds)
-
-    throwIfError(athletesResult.error)
-    athleteRows = (athletesResult.data ?? []) as ScoringAthlete[]
-  }
+  const teamByAthlete = new Map(
+    ((athleteTeams.data ?? []) as Array<{ athlete_id: string; team_id: string }>).map((row) => [row.athlete_id, row.team_id]),
+  )
+  const athleteRows = ((athletes.data ?? []) as Array<Omit<ScoringAthlete, "team_id">>).map((athlete) => ({
+    ...athlete,
+    team_id: teamByAthlete.get(athlete.id) ?? null,
+  }))
 
   return {
     squads: (squads.data ?? []) as ScoringSquad[], members: (members.data ?? []) as ScoringMember[], enrollments: (enrollments.data ?? []).filter(
@@ -81,6 +69,118 @@ export async function loadShootScoringData(organizationId: string, eventId: stri
     registrations: registrationRows, athletes: athleteRows, teams: (teams.data ?? []) as ScoringNamedRecord[], classes: (classes.data ?? []) as ScoringClass[],
     scores: (scores.data ?? []) as ScoreEntry[], digitalTotals: (digitalTotals.data ?? []) as DigitalScoreTotal[], shootOffRounds: (shootOffRounds.data ?? []) as ShootOffRound[], shootOffScores: (shootOffScores.data ?? []) as ShootOffScore[],
   }
+}
+
+export async function registerAthleteForScoring(params: {
+  organizationId: string
+  eventId: string
+  shoot: ScoringShoot
+  athleteId: string
+  teamId: string | null
+  classId: string | null
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  throwIfError(authError)
+  if (!authData.user) throw new Error("Your login session has expired. Please sign in again.")
+
+  const existingRegistration = await supabase
+    .from("registrations")
+    .select("id")
+    .eq("organization_id", params.organizationId)
+    .eq("event_id", params.eventId)
+    .eq("athlete_id", params.athleteId)
+    .maybeSingle()
+  throwIfError(existingRegistration.error)
+
+  let registrationId = existingRegistration.data?.id as string | undefined
+  if (registrationId) {
+    const { error } = await supabase
+      .from("registrations")
+      .update({
+        team_id: params.teamId,
+        class_id: params.classId,
+        status: "registered",
+      })
+      .eq("id", registrationId)
+      .eq("organization_id", params.organizationId)
+    throwIfError(error)
+  } else {
+    const result = await supabase
+      .from("registrations")
+      .insert({
+        organization_id: params.organizationId,
+        event_id: params.eventId,
+        athlete_id: params.athleteId,
+        team_id: params.teamId,
+        class_id: params.classId,
+        status: "registered",
+        registration_source: "manual",
+        payment_status: "unpaid",
+        amount_paid: 0,
+        notes: "Shoot-day registration added from round score entry.",
+        created_by: authData.user.id,
+      })
+      .select("id")
+      .single()
+    throwIfError(result.error)
+    if (!result.data?.id) throw new Error("The shoot-day registration could not be created.")
+    registrationId = result.data.id as string
+  }
+
+  const attendance = await supabase.rpc("update_registration_attendance", {
+    p_organization_id: params.organizationId,
+    p_registration_ids: [registrationId],
+    p_attendance_status: "checked_in",
+    p_attendance_notes: "Checked in from round score entry.",
+  })
+  throwIfError(attendance.error)
+
+  const existingEnrollment = await supabase
+    .from("registration_shoots")
+    .select("id")
+    .eq("organization_id", params.organizationId)
+    .eq("shoot_id", params.shoot.id)
+    .eq("registration_id", registrationId)
+    .maybeSingle()
+  throwIfError(existingEnrollment.error)
+
+  if (existingEnrollment.data?.id) {
+    const { error } = await supabase
+      .from("registration_shoots")
+      .update({ status: "registered" })
+      .eq("id", existingEnrollment.data.id)
+      .eq("organization_id", params.organizationId)
+    throwIfError(error)
+    return existingEnrollment.data.id as string
+  }
+
+  const enrollment = await supabase
+    .from("registration_shoots")
+    .insert({
+      organization_id: params.organizationId,
+      event_id: params.eventId,
+      registration_id: registrationId,
+      shoot_id: params.shoot.id,
+      status: "registered",
+      entry_fee: Number(params.shoot.entry_fee ?? 0),
+      organization_fee: Number(params.shoot.organization_fee ?? 0),
+      fee_adjustment: 0,
+      squad_assignment_status: "unassigned",
+      notes: "Added at the shoot from round score entry.",
+    })
+    .select("id")
+    .single()
+  throwIfError(enrollment.error)
+  if (!enrollment.data?.id) throw new Error("The participant could not be added to the selected shoot.")
+  return enrollment.data.id as string
+}
+
+export async function updateScoringMemberStartingStation(memberId: string, startingStation: string | null) {
+  const { error } = await supabase
+    .from("squad_members")
+    .update({ starting_station: startingStation })
+    .eq("id", memberId)
+  throwIfError(error)
 }
 
 export async function saveRoundScore(params: { organizationId: string; eventId: string; shootId: string; squadMemberId: string; roundNumber: number; score: number | null }) {
