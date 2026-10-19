@@ -547,6 +547,23 @@ export function LiveScoringPage() {
             </button>
 
             {showShootDayTools ? <div className="grid gap-5 p-5 xl:grid-cols-2">
+              <div className="rounded-xl border bg-slate-50 p-4 xl:col-span-2">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-white p-2 shadow-sm"><UserX className="h-5 w-5" /></div>
+                  <div><h3 className="font-semibold">No-show or remove from shoot</h3><p className="text-sm text-slate-500">Both actions remove the participant from active scoring and free the squad position. Existing scores and payment history are preserved.</p></div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Participant
+                    <select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900" value={participantActionMemberId} onChange={(event) => setParticipantActionMemberId(event.target.value)}>
+                      <option value="">Choose participant</option>
+                      {participantActionMembers.map((member) => { const participant = participantFor(member); const squad = data.squads.find((row) => row.id === member.squad_id); return <option key={member.id} value={member.id}>{displayName(participant.athlete)} · Squad {squad?.squad_number || "—"} · {member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}</option> })}
+                    </select>
+                  </label>
+                  <Button type="button" variant="outline" className="self-end border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void markNoShow(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserX />}No Show</Button>
+                  <Button type="button" variant="outline" className="self-end border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void removeFromShoot(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserMinus />}Remove from shoot</Button>
+                </div>
+              </div>
+
               <div className="rounded-xl border bg-slate-50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-white p-2 shadow-sm"><Users className="h-5 w-5" /></div>
@@ -595,22 +612,6 @@ export function LiveScoringPage() {
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="max-w-xl text-xs text-slate-500">New shoot-day registrations are marked unpaid so the amount remains visible for collection in Treasury. Existing payment status is preserved.</p><Button onClick={() => void registerAndAssignParticipant()} disabled={managementBusy || !quickAssignment}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserPlus />}Register &amp; assign</Button></div>
               </div>
 
-              <div className="rounded-xl border bg-slate-50 p-4 xl:col-span-2">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-white p-2 shadow-sm"><UserX className="h-5 w-5" /></div>
-                  <div><h3 className="font-semibold">No-show or remove from shoot</h3><p className="text-sm text-slate-500">Both actions remove the participant from active scoring and free the squad position. Existing scores and payment history are preserved.</p></div>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
-                  <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Participant
-                    <select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900" value={participantActionMemberId} onChange={(event) => setParticipantActionMemberId(event.target.value)}>
-                      <option value="">Choose participant</option>
-                      {participantActionMembers.map((member) => { const participant = participantFor(member); const squad = data.squads.find((row) => row.id === member.squad_id); return <option key={member.id} value={member.id}>{displayName(participant.athlete)} · Squad {squad?.squad_number || "—"} · {member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}</option> })}
-                    </select>
-                  </label>
-                  <Button type="button" variant="outline" className="self-end border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void markNoShow(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserX />}No Show</Button>
-                  <Button type="button" variant="outline" className="self-end border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void removeFromShoot(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserMinus />}Remove from shoot</Button>
-                </div>
-              </div>
             </div> : null}
           </section>
         </div>
