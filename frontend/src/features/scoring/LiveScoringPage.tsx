@@ -515,7 +515,7 @@ export function LiveScoringPage() {
                       }
                       const total = Array.from({ length: selectedShoot?.number_of_rounds ?? 0 }, (_, i) => scoreMap.get(`${member.id}:${i + 1}`) ?? 0).reduce((a, b) => a + b, 0)
                       return <tr id={`score-member-${member.id}`} key={member.id} className="border-t hover:bg-slate-50/60">
-                        <td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.team?.name || "No team assigned"}</div></td>
+                        <td className="sticky left-0 z-10 border-r bg-white px-4 py-3"><div className="flex items-center justify-between gap-2"><div className="min-w-0"><div className="font-semibold">{displayName(participant.athlete)}</div><div className="text-xs text-slate-500">{participant.team?.name || "No team assigned"}</div></div><button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50" title={`Mark ${displayName(participant.athlete)} as a no-show`} disabled={managementBusy} onClick={() => void markNoShow(member)}><UserX className="h-3.5 w-3.5" />No Show</button></div></td>
                         <td className="px-3 py-3">{participant.team?.name || "—"}</td>
                         <td className="px-3 py-3">{participant.cls?.display_name || participant.cls?.code || "—"}</td>
                         <td className="px-3 py-2">
@@ -549,17 +549,16 @@ export function LiveScoringPage() {
             {showShootDayTools ? <div className="grid gap-5 p-5 xl:grid-cols-2">
               <div className="rounded-xl border bg-slate-50 p-4 xl:col-span-2">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-white p-2 shadow-sm"><UserX className="h-5 w-5" /></div>
-                  <div><h3 className="font-semibold">No-show or remove from shoot</h3><p className="text-sm text-slate-500">Both actions remove the participant from active scoring and free the squad position. Existing scores and payment history are preserved.</p></div>
+                  <div className="rounded-lg bg-white p-2 shadow-sm"><UserMinus className="h-5 w-5" /></div>
+                  <div><h3 className="font-semibold">Remove from shoot</h3><p className="text-sm text-slate-500">Use the No Show button beside a participant's name in the scoring table above. Removing a participant here preserves existing scores and payment history.</p></div>
                 </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                   <label className="space-y-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Participant
                     <select className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900" value={participantActionMemberId} onChange={(event) => setParticipantActionMemberId(event.target.value)}>
                       <option value="">Choose participant</option>
                       {participantActionMembers.map((member) => { const participant = participantFor(member); const squad = data.squads.find((row) => row.id === member.squad_id); return <option key={member.id} value={member.id}>{displayName(participant.athlete)} · Squad {squad?.squad_number || "—"} · {member.position_label || assignmentLabel(selectedShoot?.discipline, member.position)}</option> })}
                     </select>
                   </label>
-                  <Button type="button" variant="outline" className="self-end border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void markNoShow(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserX />}No Show</Button>
                   <Button type="button" variant="outline" className="self-end border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800" disabled={managementBusy || !participantActionMemberId} onClick={() => { const member = participantActionMembers.find((row) => row.id === participantActionMemberId); if (member) void removeFromShoot(member) }}>{managementBusy ? <Loader2 className="animate-spin" /> : <UserMinus />}Remove from shoot</Button>
                 </div>
               </div>
