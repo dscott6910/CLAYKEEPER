@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react"
-import { CreditCard, RotateCcw, Save, Settings } from "lucide-react"
+import {
+  BellRing,
+  CreditCard,
+  RotateCcw,
+  Save,
+  Settings,
+  ShieldCheck,
+  UserRoundCheck,
+} from "lucide-react"
+import { Link } from "react-router-dom"
 
 import { AppHeader } from "@/app/AppHeader"
 import { Button } from "@/components/ui/button"
@@ -15,6 +24,11 @@ import {
   saveOrganizationSettings,
   type OrganizationSettings,
 } from "@/lib/services/organizationSettings"
+import {
+  loadRegistrationNotificationRecipients,
+  saveRegistrationNotificationRecipient,
+  type RegistrationNotificationRecipient,
+} from "@/lib/services/registrationNotifications"
 
 export function SettingsPage() {
   const [form, setForm] = useState<OrganizationSettings>({
@@ -25,6 +39,11 @@ export function SettingsPage() {
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingRecipientId, setSavingRecipientId] = useState<
+    string | null
+  >(null)
+  const [notificationRecipients, setNotificationRecipients] =
+    useState<RegistrationNotificationRecipient[]>([])
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -35,11 +54,15 @@ export function SettingsPage() {
       setError("")
 
       try {
-        const settings = await loadOrganizationSettings()
+        const [settings, recipients] = await Promise.all([
+          loadOrganizationSettings(),
+          loadRegistrationNotificationRecipients(),
+        ])
 
         if (cancelled) return
 
         setForm(settings)
+        setNotificationRecipients(recipients)
         saveBrandSettings(settings)
       } catch (caught) {
         if (cancelled) return
@@ -108,6 +131,39 @@ export function SettingsPage() {
     }
   }
 
+  async function updateNotificationRecipient(
+    recipient: RegistrationNotificationRecipient,
+    changes: Partial<
+      Pick<
+        RegistrationNotificationRecipient,
+        "notifyStaffRequests" | "notifyParticipantRegistrations"
+      >
+    >,
+  ) {
+    const updatedRecipient = { ...recipient, ...changes }
+
+    setSavingRecipientId(recipient.userId)
+    setMessage("")
+    setError("")
+
+    try {
+      const recipients =
+        await saveRegistrationNotificationRecipient(updatedRecipient)
+      setNotificationRecipients(recipients)
+      setMessage(
+        `Registration email preferences for ${recipient.email || "this administrator"} were saved.`,
+      )
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Registration email preferences could not be saved.",
+      )
+    } finally {
+      setSavingRecipientId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/70">
       <AppHeader title="Settings" description="Configure organization branding and report preferences" />
@@ -169,6 +225,154 @@ export function SettingsPage() {
                   Require Stripe payment
                 </label>
               </div>
+            </section>
+
+            <section className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700">
+                  <BellRing className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-950">
+                    Registration email notifications
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Choose which owners and administrators receive new
+                    participant notices and staff approval emails.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {notificationRecipients.length === 0 && !loading ? (
+                  <div className="px-4 py-5 text-sm text-slate-600">
+                    No active owners or administrators are available.
+                  </div>
+                ) : (
+                  notificationRecipients.map((recipient) => {
+                    const savingThisRecipient =
+                      savingRecipientId === recipient.userId
+
+                    return (
+                      <div
+                        key={recipient.userId}
+                        className="border-b border-slate-100 p-4 last:border-b-0"
+                      >
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-950">
+                              {recipient.email || recipient.userId}
+                            </p>
+                            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              {recipient.role === "owner"
+                                ? "Organization owner"
+                                : "Administrator"}
+                            </p>
+                          </div>
+
+                          {savingThisRecipient ? (
+                            <span className="text-sm font-medium text-emerald-700">
+                              Saving…
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              checked={
+                                recipient.notifyParticipantRegistrations
+                              }
+                              onChange={(event) =>
+                                void updateNotificationRecipient(
+                                  recipient,
+                                  {
+                                    notifyParticipantRegistrations:
+                                      event.target.checked,
+                                  },
+                                )
+                              }
+                              disabled={
+                                loading || savingRecipientId !== null
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span>
+                              <span className="flex items-center gap-2 font-semibold text-slate-900">
+                                <UserRoundCheck className="h-4 w-4 text-emerald-700" />
+                                Participant registrations
+                              </span>
+                              <span className="mt-1 block text-xs leading-5 text-slate-500">
+                                Sends a notice when a participant creates
+                                a ClayKeeper account.
+                              </span>
+                            </span>
+                          </label>
+
+                          <label
+                            className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                              recipient.canReviewStaffRequests
+                                ? "border-slate-200 text-slate-800"
+                                : "border-slate-200 bg-slate-50 text-slate-400"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={recipient.notifyStaffRequests}
+                              onChange={(event) =>
+                                void updateNotificationRecipient(
+                                  recipient,
+                                  {
+                                    notifyStaffRequests:
+                                      event.target.checked,
+                                  },
+                                )
+                              }
+                              disabled={
+                                !recipient.canReviewStaffRequests ||
+                                loading ||
+                                savingRecipientId !== null
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span>
+                              <span className="flex items-center gap-2 font-semibold">
+                                <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                                Staff approval requests
+                              </span>
+                              <span className="mt-1 block text-xs leading-5">
+                                Coach, admin, scorekeeper, and volunteer
+                                requests, plus reminders while pending.
+                              </span>
+                              {!recipient.canReviewStaffRequests ? (
+                                <span className="mt-1 block text-xs font-medium text-amber-700">
+                                  This admin must first be selected as an
+                                  approver on the Staff Access Requests
+                                  page.
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <p className="mt-4 text-xs leading-5 text-slate-500">
+                Staff approval authority is managed separately on the{" "}
+                <Link
+                  to="/staff-requests"
+                  className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                >
+                  Staff Access Requests
+                </Link>{" "}
+                page. Participant registrations are created immediately,
+                so those emails are informational and do not require an
+                approval.
+              </p>
             </section>
 
             {loading ? (

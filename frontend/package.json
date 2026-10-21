@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "send:registration-notifications": "node scripts/send-staff-request-notifications.mjs",
     "send:staff-request-notifications": "node scripts/send-staff-request-notifications.mjs"
   },
   "dependencies": {
