@@ -28,11 +28,11 @@ echo "This is a one-time server setup. Recipient choices will then be"
 echo "managed inside ClayKeeper under Settings."
 echo
 
-read -rsp "Supabase service-role key: " SUPABASE_SERVICE_ROLE_KEY
+read -rsp "Supabase backend Secret key (or legacy service-role key): " SUPABASE_SERVICE_ROLE_KEY
 echo
 
 if [[ -z "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
-  echo "A Supabase service-role key is required. No changes were made."
+  echo "A Supabase backend Secret key is required. No changes were made."
   exit 1
 fi
 
