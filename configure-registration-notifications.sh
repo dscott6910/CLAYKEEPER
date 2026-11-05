@@ -20,6 +20,13 @@ if ! command -v crontab >/dev/null 2>&1; then
   exit 1
 fi
 
+NODE_BIN="$(command -v node 2>/dev/null || true)"
+
+if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
+  echo "Node.js is not available in this shell, so notification delivery cannot be configured." >&2
+  exit 1
+fi
+
 echo "========================================"
 echo " ClayKeeper Registration Email Setup"
 echo "========================================"
@@ -57,6 +64,7 @@ umask 077
   printf 'RESEND_API_KEY=%q\n' "$RESEND_API_KEY"
   printf 'REGISTRATION_EMAIL_FROM=%q\n' "$REGISTRATION_EMAIL_FROM"
   printf 'CLAYKEEPER_APP_URL=%q\n' "https://claykeeper.live"
+  printf 'CLAYKEEPER_NODE_BIN=%q\n' "$NODE_BIN"
 } > "$CONFIG_FILE"
 
 unset SUPABASE_SERVICE_ROLE_KEY RESEND_API_KEY

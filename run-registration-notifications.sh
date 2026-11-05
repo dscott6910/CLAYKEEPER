@@ -19,5 +19,33 @@ set -a
 source "$CONFIG_FILE"
 set +a
 
+NODE_BIN="${CLAYKEEPER_NODE_BIN:-}"
+
+if [[ -z "$NODE_BIN" ]]; then
+  NODE_BIN="$(command -v node 2>/dev/null || true)"
+fi
+
+if [[ -z "$NODE_BIN" ]]; then
+  shopt -s nullglob
+  NODE_CANDIDATES=(
+    "$HOME"/.nvm/versions/node/*/bin/node
+    "$HOME"/.local/share/fnm/node-versions/*/installation/bin/node
+    "$HOME"/.volta/bin/node
+    "$HOME"/.asdf/shims/node
+  )
+  shopt -u nullglob
+
+  for candidate in "${NODE_CANDIDATES[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      NODE_BIN="$candidate"
+    fi
+  done
+fi
+
+if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
+  echo "[registration-notifications] Node.js could not be found. Run configure-registration-notifications.sh again from an interactive shell." >&2
+  exit 1
+fi
+
 cd "$REPO_DIR/frontend"
-exec node scripts/send-staff-request-notifications.mjs "$@"
+exec "$NODE_BIN" scripts/send-staff-request-notifications.mjs "$@"
