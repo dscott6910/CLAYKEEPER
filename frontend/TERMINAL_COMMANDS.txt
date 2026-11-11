@@ -1,4 +1,4 @@
-CLAYKEEPER 45 - User-Selected ActiveNet Files v2.7.1
+CLAYKEEPER - Complete ActiveNet Participant Import
 
 From inside the frontend folder:
 
@@ -9,6 +9,8 @@ Normal startup after dependencies are installed:
 
 npm run dev
 
-No new Supabase SQL migration is required for this release.
+Apply the Supabase migrations before using the updated ActiveNet import. The
+20261105010000_activenet_registration_report_fields.sql migration preserves
+the complete source row and adds participant/update counts to import history.
 
 Preserve your existing frontend/.env file. No ActiveNet spreadsheet is included in this project package; select your own export from the ActiveNet import screen.

@@ -1,35 +1,13 @@
-import * as XLSX from "xlsx"
-
 import { getCurrentOrganizationContext } from "@/lib/services/organizationContext"
 import { supabase } from "@/lib/supabase"
+import {
+  parseActiveNetWorkbook,
+  type ActiveNetDiscipline,
+  type ParsedActiveNetWorkbook,
+} from "@/lib/services/activeNetWorkbook"
 
-export type ActiveNetDiscipline = "american_trap" | "skeet" | "sporting_clays" | "bunker"
-
-export type ActiveNetRow = {
-  rowNumber: number
-  participantName: string
-  firstName: string
-  lastName: string
-  gender: string
-  guardianName: string
-  seasonName: string
-  sessionName: string
-  discipline: ActiveNetDiscipline | null
-  age: number | null
-  balance: number
-  warnings: string[]
-  errors: string[]
-}
-
-export type ParsedActiveNetWorkbook = {
-  kind: "activenet"
-  fileName: string
-  sheetName: string
-  rows: ActiveNetRow[]
-  headers: string[]
-  columnMapping: Record<string, string>
-  workbookErrors: string[]
-}
+export { parseActiveNetWorkbook }
+export type { ActiveNetDiscipline, ActiveNetRow, ParsedActiveNetWorkbook } from "@/lib/services/activeNetWorkbook"
 
 export type ActiveNetImportOptions = {
   seasonId: string
@@ -59,127 +37,6 @@ export class ActiveNetImportCancelledError extends Error {
 }
 
 const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
-const text = (value: unknown) => String(value ?? "").trim()
-
-function numberValue(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null
-  const parsed = Number(String(value).replace(/[$,]/g, "").trim())
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function splitParticipantName(fullName: string): { firstName: string; lastName: string } {
-  const clean = fullName.replace(/\s+/g, " ").trim()
-  if (!clean) return { firstName: "", lastName: "" }
-  if (clean.includes(",")) {
-    const [last, ...firstParts] = clean.split(",")
-    return { firstName: firstParts.join(" ").trim(), lastName: last.trim() }
-  }
-  const parts = clean.split(" ")
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" }
-  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) ?? "" }
-}
-
-function disciplineFromSession(sessionName: string): ActiveNetDiscipline | null {
-  const session = normalize(sessionName)
-  if (/\btrap\b/.test(session)) return "american_trap"
-  if (/\bskeet\b/.test(session)) return "skeet"
-  if (/sporting\s*clays?/.test(session)) return "sporting_clays"
-  if (/\bbunker\b/.test(session)) return "bunker"
-  return null
-}
-
-const aliases: Record<string, string[]> = {
-  participantName: ["participant name", "participant: name", "name", "athlete name"],
-  gender: ["participant gender", "participant: gender", "gender"],
-  guardianName: ["primary p g name", "primary p/g: name", "primary parent guardian name", "parent guardian", "guardian name"],
-  seasonName: ["season name", "season"],
-  sessionName: ["session name", "session", "program name", "activity name"],
-  age: ["participant age as of today", "participant: age as of today", "participant age", "age"],
-  balance: ["balance", "outstanding balance", "amount due"],
-}
-
-function findHeader(headers: string[], field: keyof typeof aliases): number {
-  const normalizedHeaders = headers.map(normalize)
-  const candidates = aliases[field].map(normalize)
-  return normalizedHeaders.findIndex((header) => candidates.includes(header))
-}
-
-export async function parseActiveNetWorkbook(file: File): Promise<ParsedActiveNetWorkbook> {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true })
-  const sheetName = workbook.SheetNames[0]
-  if (!sheetName) throw new Error("The ActiveNet file does not contain a worksheet.")
-
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: "", raw: false })
-  const headerRowIndex = matrix.findIndex((row) => row.some((cell) => aliases.participantName.map(normalize).includes(normalize(cell))))
-  if (headerRowIndex < 0) throw new Error("ClayKeeper could not find an ActiveNet participant-name column.")
-
-  const headers = matrix[headerRowIndex].map(text)
-  const indexes = {
-    participantName: findHeader(headers, "participantName"),
-    gender: findHeader(headers, "gender"),
-    guardianName: findHeader(headers, "guardianName"),
-    seasonName: findHeader(headers, "seasonName"),
-    sessionName: findHeader(headers, "sessionName"),
-    age: findHeader(headers, "age"),
-    balance: findHeader(headers, "balance"),
-  }
-
-  const workbookErrors: string[] = []
-  if (indexes.participantName < 0) workbookErrors.push("Participant: Name")
-  if (indexes.sessionName < 0) workbookErrors.push("Session name")
-  if (indexes.seasonName < 0) workbookErrors.push("Season name")
-
-  const rows: ActiveNetRow[] = []
-  for (let rowIndex = headerRowIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
-    const record = matrix[rowIndex]
-    const participantName = indexes.participantName >= 0 ? text(record[indexes.participantName]) : ""
-    const sessionName = indexes.sessionName >= 0 ? text(record[indexes.sessionName]) : ""
-    const seasonName = indexes.seasonName >= 0 ? text(record[indexes.seasonName]) : ""
-    const gender = indexes.gender >= 0 ? text(record[indexes.gender]) : ""
-    const guardianName = indexes.guardianName >= 0 ? text(record[indexes.guardianName]) : ""
-    const age = indexes.age >= 0 ? numberValue(record[indexes.age]) : null
-    const balance = indexes.balance >= 0 ? numberValue(record[indexes.balance]) ?? 0 : 0
-
-    if (!participantName && !sessionName && !seasonName && !gender && !guardianName && age === null && balance === 0) continue
-
-    const { firstName, lastName } = splitParticipantName(participantName)
-    const discipline = disciplineFromSession(sessionName)
-    const warnings: string[] = []
-    const errors: string[] = []
-    if (!firstName || !lastName) errors.push("Participant first and last name are required")
-    if (!sessionName) errors.push("Session name is missing")
-    else if (!discipline) errors.push(`Unsupported ActiveNet session: ${sessionName}`)
-    if (!seasonName) warnings.push("ActiveNet season name is blank")
-    if (!guardianName) warnings.push("Primary parent/guardian is blank")
-    if (age !== null && (age < 0 || age > 100)) errors.push("Participant age is outside the expected range")
-    if (balance < 0) warnings.push("Balance is negative")
-
-    rows.push({
-      rowNumber: rowIndex + 1,
-      participantName,
-      firstName,
-      lastName,
-      gender,
-      guardianName,
-      seasonName,
-      sessionName,
-      discipline,
-      age,
-      balance,
-      warnings,
-      errors,
-    })
-  }
-
-  const columnMapping = Object.fromEntries(
-    Object.entries(indexes)
-      .filter(([, index]) => index >= 0)
-      .map(([key, index]) => [key, headers[index]])
-  )
-
-  if (!rows.length && !workbookErrors.length) throw new Error("No ActiveNet registration rows were found.")
-  return { kind: "activenet", fileName: file.name, sheetName, rows, headers, columnMapping, workbookErrors }
-}
 
 function throwIfCancelled(control?: ActiveNetImportControl) {
   if (control?.isCancelled?.()) throw new ActiveNetImportCancelledError()
