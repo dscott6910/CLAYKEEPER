@@ -516,7 +516,7 @@ export function AwardsPage() {
           </section>}
 
           <section id="awards-report" className={`awards-print-area scroll-mt-6 rounded-3xl border p-6 shadow-sm ${tvMode ? "border-slate-800 bg-slate-900" : "bg-white"}`}>
-            <div className={`award-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5 ${tvMode ? "rounded-xl bg-white px-5 pt-4 text-slate-950" : ""}`}>
+            <div className={`award-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5 ${tab === "overallSeriesTeam" ? "print:hidden" : ""} ${tvMode ? "rounded-xl bg-white px-5 pt-4 text-slate-950" : ""}`}>
               <div className="flex min-w-0 items-center gap-4">
                 <img src={CLAYKEEPER_LOGO} alt="ClayKeeper TMK" className="h-20 w-28 shrink-0 object-contain" />
                 <div className="min-w-0">
@@ -526,7 +526,7 @@ export function AwardsPage() {
               </div>
               <div className="flex gap-3"><Stat icon={<Users className="h-5 w-5" />} value={rows.length} label="Participants" /><Stat icon={<Medal className="h-5 w-5" />} value={rows.filter((row) => row.complete).length} label="Complete" /></div>
             </div>
-            <div className="mb-6"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
+            <div className={`mb-6 ${tab === "overallSeriesTeam" ? "print:hidden" : ""}`}><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
 
             {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam', discipline === 'trap' ? 'Series Team High 5' : 'Series Team High 3'],['overallSeriesTeam', 'Overall Series Team']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 
@@ -611,7 +611,7 @@ export function AwardsPage() {
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
               {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" pointAwards note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. First through third earn 3, 2, and 1 point respectively. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
-              {!tvMode && tab === "overallSeriesTeam" && <OverallSeriesTeamTable rows={overallSeriesTeams} seriesEventCount={seriesEvents.length} />}
+              {!tvMode && tab === "overallSeriesTeam" && <OverallSeriesTeamTable rows={overallSeriesTeams} seriesEventCount={seriesEvents.length} organizationName={brand.organizationName} year={selectedEvent?.event_year} />}
             </div>}
           </section>
         </div>
@@ -620,11 +620,16 @@ export function AwardsPage() {
   )
 }
 
-function OverallSeriesTeamTable({ rows, seriesEventCount }: { rows: ReturnType<typeof calculateOverallSeriesTeams>; seriesEventCount: number }) {
+function OverallSeriesTeamTable({ rows, seriesEventCount, organizationName, year }: { rows: ReturnType<typeof calculateOverallSeriesTeams>; seriesEventCount: number; organizationName: string; year: number | null | undefined }) {
   return (
     <div className="space-y-5">
+      <header className="hidden border-b-2 border-slate-900 pb-5 text-center print:block">
+        <p className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">{organizationName}</p>
+        <h1 className="mt-2 text-3xl font-black text-slate-950">{year ? `${year} ` : ""}Series Team Championship</h1>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-slate-600">Official Final Results · All {seriesEventCount} Series Shoots</p>
+      </header>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="print:hidden">
           <h2 className="text-xl font-bold">Overall Series Team Standings</h2>
           <p className="mt-1 text-sm text-slate-500">Final cumulative results for the full series.</p>
         </div>
@@ -632,7 +637,7 @@ function OverallSeriesTeamTable({ rows, seriesEventCount }: { rows: ReturnType<t
           <Printer className="mr-2 h-4 w-4" />Print / Save PDF
         </Button>
       </div>
-      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 print:hidden">
         This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. Only clubs that earned points are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
       </p>
       <div className="overflow-hidden rounded-2xl border">
@@ -649,7 +654,7 @@ function OverallSeriesTeamTable({ rows, seriesEventCount }: { rows: ReturnType<t
             <span className="font-bold">{index + 1}</span>
             <div>
               <p className="font-semibold">{row.team}{row.unresolvedTie && <span className="ml-2 text-xs text-red-600">Tie unresolved</span>}</p>
-              <p className="text-xs text-slate-500">{row.shoots} eligible team {row.shoots === 1 ? "entry" : "entries"}</p>
+              <p className="text-xs text-slate-500 print:hidden">{row.shoots} eligible team {row.shoots === 1 ? "entry" : "entries"}</p>
             </div>
             <span className="text-xl font-black">{row.points}</span>
             <span className="text-xl font-black">{row.claysBroken}</span>
