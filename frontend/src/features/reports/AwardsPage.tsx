@@ -144,13 +144,27 @@ export function AwardsPage() {
     if (!selectedEvent) return []
 
     return events.filter((event) => {
-      if (!/^Series [1-6]$/.test(event.event_type || "")) return false
-      if (selectedEvent.season_id) return event.season_id === selectedEvent.season_id
+      const seriesLabel = [event.event_type, event.series_name, event.name]
+        .filter(Boolean)
+        .join(" ")
+      if (!/\bSeries\s*[1-6]\b/i.test(seriesLabel)) return false
 
-      return event.event_year === selectedEvent.event_year &&
-        normalizeDiscipline(event.discipline) === discipline
+      const hasMatchingDisciplineShoot = shoots.some(
+        (shoot) => shoot.event_id === event.id && normalizeDiscipline(shoot.discipline) === discipline,
+      )
+      const sameYearAndDiscipline =
+        event.event_year === selectedEvent.event_year &&
+        (normalizeDiscipline(event.discipline) === discipline || hasMatchingDisciplineShoot)
+      const sameSeason = Boolean(
+        selectedEvent.season_id && event.season_id === selectedEvent.season_id,
+      )
+
+      // Older Series events may not have been linked to the season when they
+      // were created. Include those same-year, same-discipline events so all
+      // six Series shoots are always part of the championship calculation.
+      return sameSeason || sameYearAndDiscipline
     })
-  }, [discipline, events, selectedEvent])
+  }, [discipline, events, selectedEvent, shoots])
   const seriesShootOptions = useMemo(
     () => seriesEvents.flatMap((event) =>
       shoots
