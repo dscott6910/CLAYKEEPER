@@ -11,7 +11,7 @@ Implemented from the supplied Sporting Clays, Skeet, and Trap awards notes.
 - Series Team High 3 for Sporting Clays and Skeet, and Series Team High 5 for Trap.
 - Team results are ranked separately for VR, JV, and the combined IA / IE / R category. YA and CS shooters remain in individual results but are excluded from team totals.
 - Team results show contributing shooters and the next available shooter as a team tie-break reference.
-- Overall Series Team standings total every club's earned Team High points across all Series 1 through Series 6 events in the same season. VR, JV, and IA / IE / R are ranked separately; YA and CS are excluded. Clubs with no points are omitted, and equal point totals are ranked by the sum of each shoot's Top 3 team clays broken across the series.
+- Overall Series Team standings total every club's earned Team High points across all Series 1 through Series 6 events in the same season. VR, JV, and IA / IE / R are ranked separately; YA and CS are excluded. Clubs with no points are omitted, and equal point totals are ranked by High 3 clays broken across the series.
 - CSV and print output for every report view.
 
 ## Rules still requiring an official decision

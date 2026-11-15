@@ -654,7 +654,7 @@ function OverallSeriesTeamTable({ rows, seriesEventCount, organizationName, year
         </Button>
       </div>
       <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 print:hidden">
-        This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. VR, JV, and IA / IE / R are ranked separately. Only clubs that earned points are shown. For each Series shoot, only a club's top three eligible scores count toward clays broken. When clubs have the same points, the club with the most Top 3 clays broken across the series wins the tie-break.
+        This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. VR, JV, and IA / IE / R are ranked separately. Only clubs that earned points are shown. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
       </p>
       {rows.length === 0 ? (
         <p className="rounded-2xl border px-5 py-6 text-sm text-slate-500">No clubs have earned series points yet.</p>
@@ -668,7 +668,7 @@ function OverallSeriesTeamTable({ rows, seriesEventCount, organizationName, year
             <span>Rank</span>
             <span>Team / Club</span>
             <span>Points</span>
-            <span>Top 3 clays broken</span>
+            <span>Clays broken</span>
           </div>
           {categoryRows.map((row, index) => (
             <div key={row.team} className="grid grid-cols-[90px_1fr_120px_150px] items-center border-t px-5 py-4">
