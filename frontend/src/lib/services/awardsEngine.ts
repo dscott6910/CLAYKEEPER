@@ -94,8 +94,12 @@ export function classAwardGroups(rows: AwardParticipant[], meetType: MeetType) {
   }))
 }
 
-function teamHighEligible(classCode: string) {
-  return !["YA", "CS"].includes(classCode.toUpperCase())
+function teamHighCategory(classCode: string) {
+  const code = classCode.toUpperCase()
+  if (code === "VR") return "VR"
+  if (code === "JV") return "JV"
+  if (["IA", "IE", "R"].includes(code)) return "IA / IE / R"
+  return null
 }
 
 function compareGroup(a: Omit<GroupResult, "place" | "unresolvedTie">, b: Omit<GroupResult, "place" | "unresolvedTie">) {
@@ -148,12 +152,13 @@ function finalizeGroups(rows: Array<Omit<GroupResult, "place" | "unresolvedTie">
 export function calculateTeamHigh(
   rows: AwardParticipant[],
   discipline: DisciplineKey,
-  category: string,
 ): GroupResult[] {
   const teamSize = discipline === "trap" ? 5 : 3
   const grouped = new Map<string, AwardParticipant[]>()
-  rows.filter((row) => row.complete && row.team !== "No team" && teamHighEligible(row.classCode)).forEach((row) => {
-    const key = `${category}|||${row.team}`
+  rows.filter((row) => row.complete && row.team !== "No team").forEach((row) => {
+    const division = teamHighCategory(row.classCode)
+    if (!division) return
+    const key = `${division}|||${row.team}`
     grouped.set(key, [...(grouped.get(key) || []), row])
   })
   const results = Array.from(grouped.entries()).map(([key, participants]) => {
@@ -173,11 +178,11 @@ export function calculateTeamHigh(
 }
 
 export function calculateStateTeams(rows: AwardParticipant[], discipline: DisciplineKey): GroupResult[] {
-  return calculateTeamHigh(rows, discipline, "State")
+  return calculateTeamHigh(rows, discipline)
 }
 
 export function calculateSeriesTeams(rows: AwardParticipant[], discipline: DisciplineKey): GroupResult[] {
-  return calculateTeamHigh(rows, discipline, "Series")
+  return calculateTeamHigh(rows, discipline)
 }
 
 export function calculateSquads(rows: AwardParticipant[], _discipline: DisciplineKey): GroupResult[] {

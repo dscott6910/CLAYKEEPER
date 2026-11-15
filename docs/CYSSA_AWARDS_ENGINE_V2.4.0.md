@@ -9,7 +9,7 @@ Implemented from the supplied Sporting Clays, Skeet, and Trap awards notes.
 - Squad awards by class with 3-person senior squads and 2-or-3-person junior squads.
 - State Team High 3 for Sporting Clays and Skeet, and State Team High 5 for Trap.
 - Series Team High 3 for Sporting Clays and Skeet, and Series Team High 5 for Trap.
-- Team results combine all eligible classes into one category. YA and CS shooters remain in individual results but are excluded from team totals.
+- Team results are ranked separately for VR, JV, and the combined IA / IE / R category. YA and CS shooters remain in individual results but are excluded from team totals.
 - Team results show contributing shooters and the next available shooter as a team tie-break reference.
 - CSV and print output for every report view.
 
