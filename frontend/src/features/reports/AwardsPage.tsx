@@ -623,6 +623,15 @@ export function AwardsPage() {
 function OverallSeriesTeamTable({ rows, seriesEventCount }: { rows: ReturnType<typeof calculateOverallSeriesTeams>; seriesEventCount: number }) {
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Overall Series Team Standings</h2>
+          <p className="mt-1 text-sm text-slate-500">Final cumulative results for the full series.</p>
+        </div>
+        <Button type="button" variant="outline" className="print:hidden" onClick={() => window.print()}>
+          <Printer className="mr-2 h-4 w-4" />Print / Save PDF
+        </Button>
+      </div>
       <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
         This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. Only clubs that earned points are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
       </p>
