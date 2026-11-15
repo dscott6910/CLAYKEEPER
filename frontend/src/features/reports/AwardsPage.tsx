@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 import { loadAwardAdministration, saveAwardPublication, type AwardPublication } from "@/lib/services/awards"
 import {
-  calculateSeriesTeamPoints,
+  calculateSeriesTeams,
   calculateSquads,
   calculateStateTeams,
   CYSSA_CLASSES,
@@ -18,7 +18,6 @@ import {
   type AwardParticipant,
   type DisciplineKey,
   type MeetType,
-  type SeriesShootTeam,
 } from "@/lib/services/awardsEngine"
 import { loadReportBaseData, loadShootReportData, type ReportAthlete, type ReportEvent, type ReportShoot } from "@/lib/services/reports"
 
@@ -36,7 +35,6 @@ function participantName(athlete?: ReportAthlete) {
   if (!athlete) return "Unknown participant"
   return `${athlete.preferred_name?.trim() || athlete.first_name?.trim() || ""} ${athlete.last_name?.trim() || ""}`.trim() || "Unnamed participant"
 }
-
 function csvValue(value: string | number | null) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`
 }
@@ -120,7 +118,6 @@ export function AwardsPage() {
   const [eventId, setEventId] = useState("")
   const [shootId, setShootId] = useState("")
   const [report, setReport] = useState<ReportPayload | null>(null)
-  const [eventReports, setEventReports] = useState<SeriesShootTeam[]>([])
   const [publication, setPublication] = useState<AwardPublication | null>(null)
   const [meetType, setMeetType] = useState<MeetType>("series")
   const [overallPlaces, setOverallPlaces] = useState(2)
@@ -185,12 +182,6 @@ export function AwardsPage() {
       if (settings?.overallPlaces) setOverallPlaces(settings.overallPlaces)
       if (settings?.classPlaces) setClassPlaces(settings.classPlaces)
 
-      const allReports = await Promise.all(eventShoots.map(async (shoot) => ({
-        shootId: shoot.id,
-        shootName: shoot.name,
-        rows: buildRows(await loadShootReportData(organizationId, eventId, shoot.id), shoot),
-      })))
-      setEventReports(allReports)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to calculate awards.")
     } finally {
@@ -217,7 +208,7 @@ export function AwardsPage() {
   )
   const squadResults = useMemo(() => calculateSquads(rows, discipline), [rows, discipline])
   const stateTeams = useMemo(() => calculateStateTeams(rows, discipline), [rows, discipline])
-  const seriesTeams = useMemo(() => calculateSeriesTeamPoints(eventReports, discipline), [eventReports, discipline])
+  const seriesTeams = useMemo(() => calculateSeriesTeams(rows, discipline), [rows, discipline])
   const displayIndividualAwards = useMemo(() => {
     const query = individualAwardSearch.trim().toLowerCase()
 
@@ -409,11 +400,8 @@ export function AwardsPage() {
       individualGroups.forEach((group) => group.rows.forEach((row) => lines.push([
         group.classCode, row.place, row.name, row.total, row.shootOffs.filter((score) => score >= 0).join("/"), row.team, row.squad, row.unresolvedTie ? "Unresolved" : "Resolved",
       ].map(csvValue).join(","))))
-    } else if (tab === "seriesTeam") {
-      lines.push(["Category", "Team", "Points", "Shoot Breakdown", "Tie Status"].map(csvValue).join(","))
-      seriesTeams.forEach((row) => lines.push([row.category, row.team, row.points, row.shootPoints.map((shoot) => `${shoot.shootName}: ${shoot.points}`).join("; "), row.unresolvedTie ? "Manual decision required" : "Resolved"].map(csvValue).join(",")))
     } else {
-      const groups = tab === "squad" ? squadResults : stateTeams
+      const groups = tab === "squad" ? squadResults : tab === "stateTeam" ? stateTeams : seriesTeams
       lines.push(["Category", "Place", "Name", "Score", "Members", "Tie Breaker", "Tie Status"].map(csvValue).join(","))
       groups.forEach((row) => lines.push([row.category, row.place, row.label, row.total, row.members.map((member) => member.name).join("; "), row.tieBreakerScore, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
     }
@@ -499,7 +487,7 @@ export function AwardsPage() {
             </div>
             <div className="mb-6"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
 
-            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam','Series Team Points']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
+            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam', discipline === 'trap' ? 'Series Team High 5' : 'Series Team High 3']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 
             {!tvMode && (tab === "overall" || tab === "individual") && (
               <div className="awards-controls mb-5 flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
@@ -580,8 +568,8 @@ export function AwardsPage() {
                 </div>
               )}
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
-              {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team and category. The next shooter is displayed as the team tie-break score when available.`} />}
-              {!tvMode && tab === "seriesTeam" && <SeriesTable rows={seriesTeams} />}
+              {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
+              {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
             </div>}
           </section>
         </div>
@@ -589,7 +577,6 @@ export function AwardsPage() {
     </div>
   )
 }
-
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
   return <div className="rounded-2xl bg-slate-100 p-4 text-slate-900">{icon}<p className="text-2xl font-bold">{value}</p><p className="text-xs">{label}</p></div>
 }
@@ -825,219 +812,6 @@ function GroupTable({ rows, label, note }: { rows: ReturnType<typeof calculateSq
 
                   <span>{row.members.length}</span>
                   <span className="text-xl font-black">{row.total}</span>
-                </div>
-              ))
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function SeriesTable({ rows }: { rows: ReturnType<typeof calculateSeriesTeamPoints> }) {
-  type SortKey = "rank" | "team" | "points"
-
-  const [search, setSearch] = useState("")
-  const [sortKey, setSortKey] = useState<SortKey>("rank")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
-
-  const categories = Array.from(new Set(rows.map((row) => row.category)))
-
-  const officialRankByKey = new Map<string, number>()
-
-  for (const category of categories) {
-    rows
-      .filter((row) => row.category === category)
-      .forEach((row, index) => {
-        officialRankByKey.set(`${category}:${row.team}`, index + 1)
-      })
-  }
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDirection((current) => current === "asc" ? "desc" : "asc")
-      return
-    }
-
-    setSortKey(key)
-    setSortDirection("asc")
-  }
-
-  function SortIcon({ column }: { column: SortKey }) {
-    if (sortKey !== column) {
-      return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5" />
-    }
-
-    return sortDirection === "asc"
-      ? <ArrowUp className="ml-1 inline h-3.5 w-3.5" />
-      : <ArrowDown className="ml-1 inline h-3.5 w-3.5" />
-  }
-
-  const query = search.trim().toLowerCase()
-
-  const displayRows = [...rows]
-    .filter((row) => {
-      if (!query) return true
-
-      return [
-        row.category,
-        row.team,
-        row.points,
-        row.unresolvedTie ? "tie needs rule" : "resolved",
-        row.shootPoints
-          .map(
-            (shoot) =>
-              `${shoot.shootName} ${shoot.points} ${shoot.score}`,
-          )
-          .join(" "),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    })
-    .sort((left, right) => {
-      const rankFor = (row: (typeof rows)[number]) =>
-        officialRankByKey.get(`${row.category}:${row.team}`) ??
-        Number.MAX_SAFE_INTEGER
-
-      let result: number
-
-      if (sortKey === "rank") {
-        result = rankFor(left) - rankFor(right)
-      } else if (sortKey === "team") {
-        result = left.team.localeCompare(right.team, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        })
-      } else {
-        result = left.points - right.points
-      }
-
-      if (result === 0) {
-        result = rankFor(left) - rankFor(right)
-      }
-
-      return sortDirection === "asc" ? result : -result
-    })
-
-  return (
-    <div className="space-y-5">
-      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-        Each series shoot awards 3 points for first, 2 for second, and 1 for
-        third. Teams tied for third both receive 1 point. A season points tie
-        is marked for manual resolution because the supplied rules do not yet
-        define the final tie-breaker.
-      </p>
-
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
-        <label className="min-w-[240px] flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Search results
-          <div className="relative mt-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Team, category, shoot, points, score..."
-              className="h-10 w-full rounded-lg border bg-white pl-9 pr-3 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-400"
-            />
-          </div>
-        </label>
-
-        {search ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSearch("")}
-          >
-            Clear
-          </Button>
-        ) : null}
-      </div>
-
-      {categories.map((category) => {
-        const categoryRows = displayRows.filter(
-          (row) => row.category === category,
-        )
-
-        return (
-          <div
-            key={category}
-            className="overflow-hidden rounded-2xl border"
-          >
-            <div className="border-b bg-slate-50 px-5 py-3 font-bold">
-              {category}
-            </div>
-
-            <div className="grid grid-cols-[70px_1fr_100px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
-              <button
-                type="button"
-                className="text-left"
-                onClick={() => toggleSort("rank")}
-              >
-                Rank
-                <SortIcon column="rank" />
-              </button>
-
-              <button
-                type="button"
-                className="text-left"
-                onClick={() => toggleSort("team")}
-              >
-                Team
-                <SortIcon column="team" />
-              </button>
-
-              <button
-                type="button"
-                className="text-left"
-                onClick={() => toggleSort("points")}
-              >
-                Points
-                <SortIcon column="points" />
-              </button>
-            </div>
-
-            {categoryRows.length === 0 ? (
-              <p className="border-t px-5 py-6 text-sm text-slate-500">
-                No matching results.
-              </p>
-            ) : (
-              categoryRows.map((row) => (
-                <div
-                  key={`${category}-${row.team}`}
-                  className="grid grid-cols-[70px_1fr_100px] items-start border-t px-5 py-4"
-                >
-                  <span className="font-bold">
-                    {officialRankByKey.get(`${category}:${row.team}`) ?? "—"}
-                  </span>
-
-                  <div>
-                    <p className="font-semibold">
-                      {row.team}
-                      {row.unresolvedTie && (
-                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                          Tie needs rule
-                        </span>
-                      )}
-                    </p>
-
-                    <p className="text-xs text-slate-500">
-                      {row.shootPoints
-                        .map(
-                          (shoot) =>
-                            `${shoot.shootName}: ${shoot.points} pt${
-                              shoot.points === 1 ? "" : "s"
-                            } (${shoot.score})`,
-                        )
-                        .join(" · ")}
-                    </p>
-                  </div>
-
-                  <span className="text-2xl font-black">
-                    {row.points}
-                  </span>
                 </div>
               ))
             )}
