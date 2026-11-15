@@ -192,6 +192,7 @@ export type SeriesTeamShoot = {
 }
 
 export type OverallSeriesTeam = {
+  category: string
   team: string
   points: number
   claysBroken: number
@@ -209,7 +210,9 @@ export function calculateOverallSeriesTeams(
     calculateSeriesTeams(shoot.rows, discipline)
       .filter((result) => result.eligible)
       .forEach((result) => {
-        const current = standings.get(result.label) || {
+        const key = `${result.category}|||${result.label}`
+        const current = standings.get(key) || {
+          category: result.category,
           team: result.label,
           points: 0,
           claysBroken: 0,
@@ -218,29 +221,35 @@ export function calculateOverallSeriesTeams(
         current.claysBroken += result.total
         current.shoots += 1
         if (result.place) current.points += 4 - result.place
-        standings.set(result.label, current)
+        standings.set(key, current)
       })
   })
 
-  const ranked = [...standings.values()]
-    .filter((team) => team.points > 0)
-    .sort((left, right) =>
+  const byCategory = new Map<string, Omit<OverallSeriesTeam, "unresolvedTie">[]>()
+  standings.forEach((team) => {
+    if (team.points <= 0) return
+    byCategory.set(team.category, [...(byCategory.get(team.category) || []), team])
+  })
+
+  return ["VR", "JV", "IA / IE / R"].flatMap((category) => {
+    const ranked = (byCategory.get(category) || []).sort((left, right) =>
       right.points - left.points ||
       right.claysBroken - left.claysBroken ||
       left.team.localeCompare(right.team),
     )
 
-  return ranked.map((team, index) => ({
-    ...team,
-    unresolvedTie: Boolean(
-      (ranked[index - 1] &&
-        ranked[index - 1].points === team.points &&
-        ranked[index - 1].claysBroken === team.claysBroken) ||
-      (ranked[index + 1] &&
-        ranked[index + 1].points === team.points &&
-        ranked[index + 1].claysBroken === team.claysBroken),
-    ),
-  }))
+    return ranked.map((team, index) => ({
+      ...team,
+      unresolvedTie: Boolean(
+        (ranked[index - 1] &&
+          ranked[index - 1].points === team.points &&
+          ranked[index - 1].claysBroken === team.claysBroken) ||
+        (ranked[index + 1] &&
+          ranked[index + 1].points === team.points &&
+          ranked[index + 1].claysBroken === team.claysBroken),
+      ),
+    }))
+  })
 }
 
 export function calculateSquads(rows: AwardParticipant[], _discipline: DisciplineKey): GroupResult[] {

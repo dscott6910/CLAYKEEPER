@@ -438,8 +438,8 @@ export function AwardsPage() {
         group.classCode, row.place, row.name, row.total, row.shootOffs.filter((score) => score >= 0).join("/"), row.team, row.squad, row.unresolvedTie ? "Unresolved" : "Resolved",
       ].map(csvValue).join(","))))
     } else if (tab === "overallSeriesTeam") {
-      lines.push(["Rank", "Team", "Points", "Clays Broken", "Eligible Team Entries", "Tie Status"].map(csvValue).join(","))
-      overallSeriesTeams.forEach((row, index) => lines.push([index + 1, row.team, row.points, row.claysBroken, row.shoots, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
+      lines.push(["Category", "Rank", "Team", "Points", "Clays Broken", "Eligible Team Entries", "Tie Status"].map(csvValue).join(","))
+      ;["VR", "JV", "IA / IE / R"].forEach((category) => overallSeriesTeams.filter((row) => row.category === category).forEach((row, index) => lines.push([category, index + 1, row.team, row.points, row.claysBroken, row.shoots, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(","))))
     } else {
       const groups = tab === "squad" ? squadResults : tab === "stateTeam" ? stateTeams : seriesTeams
       const usesPoints = tab === "seriesTeam"
@@ -621,6 +621,8 @@ export function AwardsPage() {
 }
 
 function OverallSeriesTeamTable({ rows, seriesEventCount, organizationName, year }: { rows: ReturnType<typeof calculateOverallSeriesTeams>; seriesEventCount: number; organizationName: string; year: number | null | undefined }) {
+  const categories = ["VR", "JV", "IA / IE / R"]
+
   return (
     <div className="space-y-5">
       <header className="hidden border-b-2 border-slate-900 pb-5 text-center print:block">
@@ -638,29 +640,35 @@ function OverallSeriesTeamTable({ rows, seriesEventCount, organizationName, year
         </Button>
       </div>
       <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 print:hidden">
-        This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. Only clubs that earned points are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
+        This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. VR, JV, and IA / IE / R are ranked separately. Only clubs that earned points are shown. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
       </p>
-      <div className="overflow-hidden rounded-2xl border">
-        <div className="grid grid-cols-[90px_1fr_120px_150px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
-          <span>Rank</span>
-          <span>Team / Club</span>
-          <span>Points</span>
-          <span>Clays broken</span>
-        </div>
-        {rows.length === 0 ? (
-          <p className="border-t px-5 py-6 text-sm text-slate-500">No clubs have earned series points yet.</p>
-        ) : rows.map((row, index) => (
-          <div key={row.team} className="grid grid-cols-[90px_1fr_120px_150px] items-center border-t px-5 py-4">
-            <span className="font-bold">{index + 1}</span>
-            <div>
-              <p className="font-semibold">{row.team}{row.unresolvedTie && <span className="ml-2 text-xs text-red-600">Tie unresolved</span>}</p>
-              <p className="text-xs text-slate-500 print:hidden">{row.shoots} eligible team {row.shoots === 1 ? "entry" : "entries"}</p>
-            </div>
-            <span className="text-xl font-black">{row.points}</span>
-            <span className="text-xl font-black">{row.claysBroken}</span>
+      {rows.length === 0 ? (
+        <p className="rounded-2xl border px-5 py-6 text-sm text-slate-500">No clubs have earned series points yet.</p>
+      ) : categories.map((category) => {
+        const categoryRows = rows.filter((row) => row.category === category)
+        if (!categoryRows.length) return null
+
+        return <div key={category} className="overflow-hidden rounded-2xl border">
+          <div className="border-b bg-slate-50 px-5 py-3 font-bold">{category}</div>
+          <div className="grid grid-cols-[90px_1fr_120px_150px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
+            <span>Rank</span>
+            <span>Team / Club</span>
+            <span>Points</span>
+            <span>Clays broken</span>
           </div>
-        ))}
-      </div>
+          {categoryRows.map((row, index) => (
+            <div key={row.team} className="grid grid-cols-[90px_1fr_120px_150px] items-center border-t px-5 py-4">
+              <span className="font-bold">{index + 1}</span>
+              <div>
+                <p className="font-semibold">{row.team}{row.unresolvedTie && <span className="ml-2 text-xs text-red-600">Tie unresolved</span>}</p>
+                <p className="text-xs text-slate-500 print:hidden">{row.shoots} eligible team {row.shoots === 1 ? "entry" : "entries"}</p>
+              </div>
+              <span className="text-xl font-black">{row.points}</span>
+              <span className="text-xl font-black">{row.claysBroken}</span>
+            </div>
+          ))}
+        </div>
+      })}
     </div>
   )
 }
