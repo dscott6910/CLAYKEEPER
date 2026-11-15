@@ -402,8 +402,9 @@ export function AwardsPage() {
       ].map(csvValue).join(","))))
     } else {
       const groups = tab === "squad" ? squadResults : tab === "stateTeam" ? stateTeams : seriesTeams
-      lines.push(["Category", "Place", "Name", "Score", "Members", "Tie Breaker", "Tie Status"].map(csvValue).join(","))
-      groups.forEach((row) => lines.push([row.category, row.place, row.label, row.total, row.members.map((member) => member.name).join("; "), row.tieBreakerScore, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
+      const usesPoints = tab === "seriesTeam"
+      lines.push(["Category", usesPoints ? "Points" : "Place", "Name", "Score", "Members", "Tie Breaker", "Tie Status"].map(csvValue).join(","))
+      groups.forEach((row) => lines.push([row.category, usesPoints && row.place ? 4 - row.place : row.place, row.label, row.total, row.members.map((member) => member.name).join("; "), row.tieBreakerScore, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
     }
     const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }))
     const anchor = document.createElement("a")
@@ -569,7 +570,7 @@ export function AwardsPage() {
               )}
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
-              {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
+              {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" pointAwards note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. First through third earn 3, 2, and 1 point respectively. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
             </div>}
           </section>
         </div>
@@ -589,7 +590,7 @@ function PlaceBadge({ place }: { place: number }) {
   return <div className={`flex h-10 w-10 items-center justify-center rounded-full font-bold ${place === 1 ? "bg-amber-400 text-slate-950" : place === 2 ? "bg-slate-300 text-slate-950" : place === 3 ? "bg-amber-700 text-white" : "bg-slate-100 text-slate-900"}`}>{place}</div>
 }
 
-function GroupTable({ rows, label, note }: { rows: ReturnType<typeof calculateSquads>; label: string; note: string }) {
+function GroupTable({ rows, label, note, pointAwards = false }: { rows: ReturnType<typeof calculateSquads>; label: string; note: string; pointAwards?: boolean }) {
   type SortKey = "place" | "label" | "members" | "total" | "tieBreaker"
 
   const [search, setSearch] = useState("")
@@ -738,7 +739,7 @@ function GroupTable({ rows, label, note }: { rows: ReturnType<typeof calculateSq
                 className="text-left"
                 onClick={() => toggleSort("place")}
               >
-                Place
+                {pointAwards ? "Points" : "Place"}
                 <SortIcon column="place" />
               </button>
 
@@ -782,7 +783,7 @@ function GroupTable({ rows, label, note }: { rows: ReturnType<typeof calculateSq
                     !row.eligible ? "bg-slate-50 text-slate-400" : ""
                   }`}
                 >
-                  <span className="font-bold">{row.place ?? "—"}</span>
+                  <span className="font-bold">{pointAwards && row.place ? `${4 - row.place} pts` : row.place ?? "—"}</span>
 
                   <div>
                     <p className="font-semibold">
