@@ -4,6 +4,10 @@ import { supabase } from "@/lib/supabase"
 export type ReportEvent = {
   id: string
   name: string
+  season_id: string | null
+  event_year: number | null
+  discipline: string | null
+  event_type: string | null
   start_date: string | null
   end_date: string | null
   status: string | null
@@ -83,7 +87,7 @@ export async function loadReportBaseData() {
   const [eventsResult, shootsResult] = await Promise.all([
     supabase
       .from("events")
-      .select("id, name, start_date, end_date, status")
+      .select("id, name, season_id, event_year, discipline, event_type, start_date, end_date, status")
       .eq("organization_id", organizationId)
       .order("start_date", { ascending: false }),
     supabase

@@ -140,6 +140,25 @@ export function AwardsPage() {
   const selectedEvent = events.find((event) => event.id === eventId)
   const selectedShoot = shoots.find((shoot) => shoot.id === shootId)
   const discipline = normalizeDiscipline(selectedShoot?.discipline)
+  const seriesEvents = useMemo(() => {
+    if (!selectedEvent) return []
+
+    return events.filter((event) => {
+      if (!/^Series [1-6]$/.test(event.event_type || "")) return false
+      if (selectedEvent.season_id) return event.season_id === selectedEvent.season_id
+
+      return event.event_year === selectedEvent.event_year &&
+        normalizeDiscipline(event.discipline) === discipline
+    })
+  }, [discipline, events, selectedEvent])
+  const seriesShootOptions = useMemo(
+    () => seriesEvents.flatMap((event) =>
+      shoots
+        .filter((shoot) => shoot.event_id === event.id && normalizeDiscipline(shoot.discipline) === discipline)
+        .map((shoot) => ({ eventId: event.id, shoot })),
+    ),
+    [discipline, seriesEvents, shoots],
+  )
   const locked = publication?.status === "published"
 
   useEffect(() => {
@@ -174,13 +193,11 @@ export function AwardsPage() {
         loadShootReportData(organizationId, eventId, shootId),
         loadAwardAdministration(shootId),
         Promise.all(
-          eventShoots
-            .filter((shoot) => normalizeDiscipline(shoot.discipline) === discipline)
-            .map(async (shoot) => ({
+          seriesShootOptions.map(async ({ eventId: seriesEventId, shoot }) => ({
               shootId: shoot.id,
               shootName: shoot.name,
               rows: buildRows(
-                await loadShootReportData(organizationId, eventId, shoot.id),
+                await loadShootReportData(organizationId, seriesEventId, shoot.id),
                 shoot,
               ),
             })),
@@ -594,7 +611,7 @@ export function AwardsPage() {
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
               {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" pointAwards note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. First through third earn 3, 2, and 1 point respectively. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
-              {!tvMode && tab === "overallSeriesTeam" && <OverallSeriesTeamTable rows={overallSeriesTeams} />}
+              {!tvMode && tab === "overallSeriesTeam" && <OverallSeriesTeamTable rows={overallSeriesTeams} seriesEventCount={seriesEvents.length} />}
             </div>}
           </section>
         </div>
@@ -603,11 +620,11 @@ export function AwardsPage() {
   )
 }
 
-function OverallSeriesTeamTable({ rows }: { rows: ReturnType<typeof calculateOverallSeriesTeams> }) {
+function OverallSeriesTeamTable({ rows, seriesEventCount }: { rows: ReturnType<typeof calculateOverallSeriesTeams>; seriesEventCount: number }) {
   return (
     <div className="space-y-5">
       <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-        Only clubs that earned points during the series are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
+        This combines all {seriesEventCount} Series events in the season, regardless of the weekly event selected above. Only clubs that earned points are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
       </p>
       <div className="overflow-hidden rounded-2xl border">
         <div className="grid grid-cols-[90px_1fr_120px_150px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
