@@ -185,6 +185,64 @@ export function calculateSeriesTeams(rows: AwardParticipant[], discipline: Disci
   return calculateTeamHigh(rows, discipline)
 }
 
+export type SeriesTeamShoot = {
+  shootId: string
+  shootName: string
+  rows: AwardParticipant[]
+}
+
+export type OverallSeriesTeam = {
+  team: string
+  points: number
+  claysBroken: number
+  shoots: number
+  unresolvedTie: boolean
+}
+
+export function calculateOverallSeriesTeams(
+  shoots: SeriesTeamShoot[],
+  discipline: DisciplineKey,
+): OverallSeriesTeam[] {
+  const standings = new Map<string, Omit<OverallSeriesTeam, "unresolvedTie">>()
+
+  shoots.forEach((shoot) => {
+    calculateSeriesTeams(shoot.rows, discipline)
+      .filter((result) => result.eligible)
+      .forEach((result) => {
+        const current = standings.get(result.label) || {
+          team: result.label,
+          points: 0,
+          claysBroken: 0,
+          shoots: 0,
+        }
+        current.claysBroken += result.total
+        current.shoots += 1
+        if (result.place) current.points += 4 - result.place
+        standings.set(result.label, current)
+      })
+  })
+
+  const ranked = [...standings.values()]
+    .filter((team) => team.points > 0)
+    .sort((left, right) =>
+      right.points - left.points ||
+      right.claysBroken - left.claysBroken ||
+      left.team.localeCompare(right.team),
+    )
+
+  return ranked.map((team, index) => ({
+    ...team,
+    unresolvedTie: Boolean(
+      (ranked[index - 1] &&
+        ranked[index - 1].points === team.points &&
+        ranked[index - 1].claysBroken === team.claysBroken) ||
+      (ranked[index + 1] &&
+        ranked[index + 1].points === team.points &&
+        ranked[index + 1].claysBroken === team.claysBroken),
+    ),
+  }))
+}
+
 export function calculateSquads(rows: AwardParticipant[], _discipline: DisciplineKey): GroupResult[] {
   const grouped = new Map<string, AwardParticipant[]>()
   rows.filter((row) => row.complete && row.squad !== "Unassigned").forEach((row) => {

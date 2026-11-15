@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { CLAYKEEPER_LOGO, useBrandSettings } from "@/lib/branding"
 import { loadAwardAdministration, saveAwardPublication, type AwardPublication } from "@/lib/services/awards"
 import {
+  calculateOverallSeriesTeams,
   calculateSeriesTeams,
   calculateSquads,
   calculateStateTeams,
@@ -18,11 +19,12 @@ import {
   type AwardParticipant,
   type DisciplineKey,
   type MeetType,
+  type SeriesTeamShoot,
 } from "@/lib/services/awardsEngine"
 import { loadReportBaseData, loadShootReportData, type ReportAthlete, type ReportEvent, type ReportShoot } from "@/lib/services/reports"
 
 type ReportPayload = Awaited<ReturnType<typeof loadShootReportData>>
-type TabKey = "overall" | "individual" | "squad" | "stateTeam" | "seriesTeam"
+type TabKey = "overall" | "individual" | "squad" | "stateTeam" | "seriesTeam" | "overallSeriesTeam"
 type IndividualAwardSortKey =
   | "place"
   | "participant"
@@ -118,6 +120,7 @@ export function AwardsPage() {
   const [eventId, setEventId] = useState("")
   const [shootId, setShootId] = useState("")
   const [report, setReport] = useState<ReportPayload | null>(null)
+  const [seriesTeamShoots, setSeriesTeamShoots] = useState<SeriesTeamShoot[]>([])
   const [publication, setPublication] = useState<AwardPublication | null>(null)
   const [meetType, setMeetType] = useState<MeetType>("series")
   const [overallPlaces, setOverallPlaces] = useState(2)
@@ -167,11 +170,24 @@ export function AwardsPage() {
     setError("")
     setMessage("")
     try {
-      const [nextReport, admin] = await Promise.all([
+      const [nextReport, admin, allSeriesTeamShoots] = await Promise.all([
         loadShootReportData(organizationId, eventId, shootId),
         loadAwardAdministration(shootId),
+        Promise.all(
+          eventShoots
+            .filter((shoot) => normalizeDiscipline(shoot.discipline) === discipline)
+            .map(async (shoot) => ({
+              shootId: shoot.id,
+              shootName: shoot.name,
+              rows: buildRows(
+                await loadShootReportData(organizationId, eventId, shoot.id),
+                shoot,
+              ),
+            })),
+        ),
       ])
       setReport(nextReport)
+      setSeriesTeamShoots(allSeriesTeamShoots)
       setPublication(admin.publication)
       const settings = admin.publication?.settings as {
         meetType?: MeetType
@@ -209,6 +225,10 @@ export function AwardsPage() {
   const squadResults = useMemo(() => calculateSquads(rows, discipline), [rows, discipline])
   const stateTeams = useMemo(() => calculateStateTeams(rows, discipline), [rows, discipline])
   const seriesTeams = useMemo(() => calculateSeriesTeams(rows, discipline), [rows, discipline])
+  const overallSeriesTeams = useMemo(
+    () => calculateOverallSeriesTeams(seriesTeamShoots, discipline),
+    [seriesTeamShoots, discipline],
+  )
   const displayIndividualAwards = useMemo(() => {
     const query = individualAwardSearch.trim().toLowerCase()
 
@@ -400,6 +420,9 @@ export function AwardsPage() {
       individualGroups.forEach((group) => group.rows.forEach((row) => lines.push([
         group.classCode, row.place, row.name, row.total, row.shootOffs.filter((score) => score >= 0).join("/"), row.team, row.squad, row.unresolvedTie ? "Unresolved" : "Resolved",
       ].map(csvValue).join(","))))
+    } else if (tab === "overallSeriesTeam") {
+      lines.push(["Rank", "Team", "Points", "Clays Broken", "Eligible Team Entries", "Tie Status"].map(csvValue).join(","))
+      overallSeriesTeams.forEach((row, index) => lines.push([index + 1, row.team, row.points, row.claysBroken, row.shoots, row.unresolvedTie ? "Unresolved" : "Resolved"].map(csvValue).join(",")))
     } else {
       const groups = tab === "squad" ? squadResults : tab === "stateTeam" ? stateTeams : seriesTeams
       const usesPoints = tab === "seriesTeam"
@@ -488,7 +511,7 @@ export function AwardsPage() {
             </div>
             <div className="mb-6"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">{selectedEvent?.name}</p><h1 className={tvMode ? "text-5xl font-black" : "text-3xl font-bold"}>{selectedShoot?.name || "Select a shoot"}</h1><p className="mt-1 text-sm text-slate-500">{disciplineLabel(discipline)} · {meetType === "state" ? "State Shoot" : "Series Shoot"}</p></div>
 
-            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam', discipline === 'trap' ? 'Series Team High 5' : 'Series Team High 3']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
+            {!tvMode && <div className="mb-5 flex flex-wrap gap-2">{([['overall','Overall Awards'],['individual','Class Awards'],['squad','Squad Awards'],['stateTeam', discipline === 'trap' ? 'State Team High 5' : 'State Team High 3'],['seriesTeam', discipline === 'trap' ? 'Series Team High 5' : 'Series Team High 3'],['overallSeriesTeam', 'Overall Series Team']] as const).map(([key, label]) => <Button key={key} variant={tab === key ? "default" : "outline"} onClick={() => setTab(key)}>{label}</Button>)}</div>}
 
             {!tvMode && (tab === "overall" || tab === "individual") && (
               <div className="awards-controls mb-5 flex flex-wrap items-end gap-3 rounded-xl border bg-slate-50 p-3 print:hidden">
@@ -571,10 +594,42 @@ export function AwardsPage() {
               {!tvMode && tab === "squad" && <GroupTable rows={squadResults} label="Squad" note="JV/VR/YA require 3 participants. IA/IE/R allow 2 or 3 participants. Results are ranked within each class." />}
               {!tvMode && tab === "stateTeam" && <GroupTable rows={stateTeams} label="Team" note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
               {!tvMode && tab === "seriesTeam" && <GroupTable rows={seriesTeams} label="Team" pointAwards note={`${discipline === "trap" ? "Highest 5" : "Highest 3"} complete scores per team. First through third earn 3, 2, and 1 point respectively. YA and CS competitors remain in their individual results but do not count toward this team award. The next shooter is displayed as the team tie-break score when available.`} />}
+              {!tvMode && tab === "overallSeriesTeam" && <OverallSeriesTeamTable rows={overallSeriesTeams} />}
             </div>}
           </section>
         </div>
       </PageContainer>
+    </div>
+  )
+}
+
+function OverallSeriesTeamTable({ rows }: { rows: ReturnType<typeof calculateOverallSeriesTeams> }) {
+  return (
+    <div className="space-y-5">
+      <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+        Only clubs that earned points during the series are shown. Points from every eligible VR, JV, and IA / IE / R Team High entry are combined. When clubs have the same points, the club with the most High 3 clays broken across the series wins the tie-break.
+      </p>
+      <div className="overflow-hidden rounded-2xl border">
+        <div className="grid grid-cols-[90px_1fr_120px_150px] bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
+          <span>Rank</span>
+          <span>Team / Club</span>
+          <span>Points</span>
+          <span>Clays broken</span>
+        </div>
+        {rows.length === 0 ? (
+          <p className="border-t px-5 py-6 text-sm text-slate-500">No clubs have earned series points yet.</p>
+        ) : rows.map((row, index) => (
+          <div key={row.team} className="grid grid-cols-[90px_1fr_120px_150px] items-center border-t px-5 py-4">
+            <span className="font-bold">{index + 1}</span>
+            <div>
+              <p className="font-semibold">{row.team}{row.unresolvedTie && <span className="ml-2 text-xs text-red-600">Tie unresolved</span>}</p>
+              <p className="text-xs text-slate-500">{row.shoots} eligible team {row.shoots === 1 ? "entry" : "entries"}</p>
+            </div>
+            <span className="text-xl font-black">{row.points}</span>
+            <span className="text-xl font-black">{row.claysBroken}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
